@@ -45,5 +45,10 @@ int main(int argc, char *argv[])
     // 安装窗口钩子（监听前台窗口状态变化）
     sysHelper.installWindowHook();
 
+    // 应用开机自启设置
+    if (config.get("startWithSystem", false).toBool()) {
+        sysHelper.setAutoStart(true);
+    }
+
     return app.exec();
 }

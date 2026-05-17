@@ -37,6 +37,7 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
     setCursor(Qt::PointingHandCursor);
     setToolTip(displayName);
     setMouseTracking(true);
+    setAcceptDrops(true);
 
     // 加载图标：优先绝对路径，其次主题图标，最后占位符
     if (!iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
@@ -168,6 +169,57 @@ void DockItem::mouseMoveEvent(QMouseEvent *event)
     drag->setMimeData(mimeData);
     drag->setPixmap(m_icon.scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     drag->exec(Qt::MoveAction);
+}
+
+void DockItem::dragEnterEvent(QDragEnterEvent *event)
+{
+    // 接受文件拖入（URL 列表或文本路径）
+    if (event->mimeData()->hasUrls() || event->mimeData()->hasText()) {
+        event->acceptProposedAction();
+        m_isHovered = true;
+        update();
+    }
+}
+
+void DockItem::dragMoveEvent(QDragMoveEvent *event)
+{
+    event->acceptProposedAction();
+}
+
+void DockItem::dropEvent(QDropEvent *event)
+{
+    m_isHovered = false;
+    update();
+
+    if (m_execPath.isEmpty()) return;
+
+    // 提取文件路径列表
+    QStringList filePaths;
+    if (event->mimeData()->hasUrls()) {
+        for (const QUrl &url : event->mimeData()->urls()) {
+            if (url.isLocalFile()) {
+                filePaths << url.toLocalFile();
+            }
+        }
+    } else if (event->mimeData()->hasText()) {
+        filePaths << event->mimeData()->text();
+    }
+
+    if (filePaths.isEmpty()) return;
+
+    // 用应用打开文件
+    QStringList parts = m_execPath.split(' ');
+    QString program = parts.takeFirst();
+    // 移除已有的参数（如 %f），用实际文件路径替换
+    QStringList args = parts;
+    args.removeAll("%f");
+    args.removeAll("%F");
+    args.removeAll("%u");
+    args.removeAll("%U");
+    args.append(filePaths);
+
+    QProcess::startDetached(program, args);
+    event->acceptProposedAction();
 }
 
 void DockItem::contextMenuEvent(QContextMenuEvent *event)

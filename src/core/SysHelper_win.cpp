@@ -56,3 +56,15 @@ bool SysHelper::getForegroundWindowState()
     // 全屏判断: 窗口尺寸 == 屏幕尺寸
     return false;
 }
+
+bool SysHelper::setAutoStart(bool enabled)
+{
+    // Windows: 写入注册表 HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+    Q_UNUSED(enabled);
+    return false;
+}
+
+bool SysHelper::isAutoStartEnabled() const
+{
+    return false;
+}

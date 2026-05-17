@@ -36,6 +36,12 @@ public:
     /** @brief 返回当前前台窗口是否最大化或全屏 */
     bool getForegroundWindowState();
 
+    /** @brief 设置开机自启（Linux: ~/.config/autostart/*.desktop） */
+    bool setAutoStart(bool enabled);
+
+    /** @brief 检查是否已设置开机自启 */
+    bool isAutoStartEnabled() const;
+
 signals:
     /** @brief 前台窗口状态变化 signal */
     void foregroundWindowChanged(bool isMaximizedOrFullscreen);

@@ -17,6 +17,7 @@
 #include <QProcess>
 #include <QDebug>
 #include <QRegularExpression>
+#include <QCoreApplication>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -247,4 +248,51 @@ bool SysHelper::installKeyboardHook()
 void SysHelper::uninstallKeyboardHook()
 {
     // 存根
+}
+
+bool SysHelper::setAutoStart(bool enabled)
+{
+    // Linux: 写入 ~/.config/autostart/dock-wmac.desktop
+    QString autostartDir = QDir::homePath() + "/.config/autostart";
+    QString desktopPath = autostartDir + "/dock-wmac.desktop";
+
+    if (!enabled) {
+        // 移除自启文件
+        return QFile::remove(desktopPath);
+    }
+
+    // 创建自启目录
+    QDir().mkpath(autostartDir);
+
+    // 获取当前可执行文件路径
+    QString execPath = QCoreApplication::applicationFilePath();
+
+    // 写入 .desktop 文件
+    QString content = QStringLiteral(
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=Dock_WMac\n"
+        "Comment=macOS 风格桌面 Dock 栏\n"
+        "Exec=%1\n"
+        "Hidden=false\n"
+        "NoDisplay=false\n"
+        "X-GNOME-Autostart-enabled=true\n"
+    ).arg(execPath);
+
+    QFile file(desktopPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "无法写入自启文件:" << desktopPath;
+        return false;
+    }
+    file.write(content.toUtf8());
+    file.close();
+
+    qInfo() << "已设置开机自启:" << desktopPath;
+    return true;
+}
+
+bool SysHelper::isAutoStartEnabled() const
+{
+    QString desktopPath = QDir::homePath() + "/.config/autostart/dock-wmac.desktop";
+    return QFile::exists(desktopPath);
 }

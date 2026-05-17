@@ -13,6 +13,8 @@ endif()
 
 enable_testing()
 
+find_package(Qt5 REQUIRED COMPONENTS Test)
+
 # 平台源文件
 if(WIN32)
     set(PLATFORM_SRC ${CMAKE_SOURCE_DIR}/src/core/SysHelper_win.cpp)
@@ -33,7 +35,7 @@ set(CORE_SOURCES
 )
 
 # 链接库
-set(TEST_LIBS GTest::GTest GTest::Main Qt5::Widgets)
+set(TEST_LIBS GTest::GTest GTest::Main Qt5::Widgets Qt5::Test)
 if(NOT WIN32)
     list(APPEND TEST_LIBS ${X11_LIBRARIES})
 endif()

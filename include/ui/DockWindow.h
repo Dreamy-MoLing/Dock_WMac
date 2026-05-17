@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QHBoxLayout>
 #include <QMap>
+#include <QScreen>
 #include "core/Types.h"
 
 class DockItem;
@@ -36,6 +37,12 @@ public:
     /** @brief 清空所有 DockItem */
     void clearItems();
 
+    /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
+    void setMonitor(int index);
+
+    /** @brief 移动到指定屏幕并重新定位 */
+    void moveToScreen(QScreen *screen);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void enterEvent(QEvent *event) override;
@@ -43,6 +50,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
 
 private slots:
     void onItemAdded(const DockItemData &data);
@@ -54,6 +62,8 @@ private:
     void applyFishEyeEffect(int hoveredIndex);
     void resetFishEyeEffect();
     void updatePosition();
+    void updateDpiScale();
+    void checkRunningApps();  // 定期检测应用运行状态
 
     QHBoxLayout *m_layout;
     QMap<QString, DockItem *> m_itemMap;
@@ -62,6 +72,7 @@ private:
     int m_iconSize;
     qreal m_opacity;
     bool m_isHidden;
+    int m_monitorIndex;  // -1 = 跟随鼠标所在屏幕
 };
 
 #endif // DOCKWINDOW_H
