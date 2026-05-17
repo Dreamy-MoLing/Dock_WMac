@@ -1,23 +1,69 @@
-# 构建产物
+# ===== 构建产物 =====
 build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
 *.o
 *.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
 *.exe
+*.out
+*.app
+
+# Qt 自动生成
 moc_*.cpp
 qrc_*.cpp
+ui_*.h
+*.moc
+*_autogen/
 
-# 系统文件
-.DS_Store
-Thumbs.db
+# ===== 用户隐私与配置 =====
+# 运行时生成的用户配置（含本地路径、个人偏好）
+config.json
+*.log
+*.log.old
 
-# IDE
+# 密钥/凭据
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.env
+.env.*
+
+# ===== IDE / 编辑器 =====
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.cproject
+.settings/
+*.code-workspace
 
 # Qt Creator
 CMakeLists.txt.user*
 
-# Claude Code
+# ===== OS 文件 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ===== Claude Code =====
 .claude/
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
+*.cache
+*.pid
