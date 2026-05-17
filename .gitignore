@@ -1,0 +1,23 @@
+# 构建产物
+build/
+*.o
+*.obj
+*.exe
+moc_*.cpp
+qrc_*.cpp
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Qt Creator
+CMakeLists.txt.user*
+
+# Claude Code
+.claude/
