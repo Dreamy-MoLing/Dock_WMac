@@ -83,6 +83,7 @@ void DockItem::setScaleFactor(qreal factor)
     int baseSize = 48;
     int newSize = static_cast<int>(baseSize * factor);
     setFixedSize(newSize, newSize);
+    m_scaledIcon = QPixmap();  // 清除缓存，下次绘制时重新缩放
     update();
 }
 
@@ -96,9 +97,13 @@ void DockItem::paintEvent(QPaintEvent *event)
     int size = qMin(width(), height()) - 4;
     int offset = (width() - size) / 2;
 
-    // 绘制图标
-    painter.drawPixmap(offset, offset, size, size,
-        m_icon.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    // 绘制图标（缓存缩放结果，尺寸变化时才重新缩放）
+    QSize targetSize(size, size);
+    if (m_scaledIcon.isNull() || m_scaledSize != targetSize) {
+        m_scaledIcon = m_icon.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        m_scaledSize = targetSize;
+    }
+    painter.drawPixmap(offset, offset, m_scaledIcon);
 
     // 按下效果（下沉 2px）
     if (m_isHovered && QApplication::mouseButtons() & Qt::LeftButton) {

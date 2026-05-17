@@ -10,6 +10,8 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
+#include <QStandardPaths>
 #include <QApplication>
 #include "core/ConfigManager.h"
 
@@ -42,6 +44,11 @@ QApplication *ConfigManagerTest::app = nullptr;
 
 TEST_F(ConfigManagerTest, DefaultValues)
 {
+    // 删除已有配置文件，确保测试默认值
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
+                         + "/config.json";
+    QFile::remove(configPath);
+
     config->load();
 
     // 默认配置应包含所有标准字段

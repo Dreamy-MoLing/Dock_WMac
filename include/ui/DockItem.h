@@ -53,6 +53,8 @@ private:
     QString m_displayName;
     QString m_execPath;
     QPixmap m_icon;
+    QPixmap m_scaledIcon;  // 缓存缩放后的图标，避免每帧重新缩放
+    QSize   m_scaledSize;
     bool    m_isRunning;
     int     m_badgeCount;
     bool    m_isHovered;

@@ -23,10 +23,15 @@ int main(int argc, char *argv[])
     // 初始化日志系统
     Logger::init();
 
-    // 单实例检测
+    // 单实例检测（如果残留则先清理）
     QSharedMemory singleInstance("Dock_WMac_Instance");
     if (!singleInstance.create(1)) {
-        return 0;  // 已有实例运行
+        // 可能是残留段，尝试附加后分离再创建
+        singleInstance.attach();
+        singleInstance.detach();
+        if (!singleInstance.create(1)) {
+            return 0;  // 确实有另一个实例在运行
+        }
     }
 
     // 初始化核心层

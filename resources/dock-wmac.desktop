@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Dock WMac
+Comment=macOS 风格 Dock 栏
+Exec=dock-wmac
+Icon=dock-wmac
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=false

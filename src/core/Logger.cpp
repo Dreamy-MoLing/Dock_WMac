@@ -20,6 +20,8 @@
 static QFile s_logFile;
 static QMutex s_mutex;
 static const qint64 kMaxLogSize = 5 * 1024 * 1024;  // 5MB
+static int s_unflushed = 0;
+static const int kFlushInterval = 50;  // 每 50 条日志 flush 一次
 
 static const char* levelString(QtMsgType type)
 {
@@ -64,7 +66,10 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
             s_logFile.open(QIODevice::Append | QIODevice::Text);
         }
         s_logFile.write(line);
-        s_logFile.flush();
+        if (++s_unflushed >= kFlushInterval) {
+            s_logFile.flush();
+            s_unflushed = 0;
+        }
     }
 
     if (type == QtFatalMsg) {

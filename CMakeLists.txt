@@ -44,6 +44,24 @@ if(NOT WIN32)
     target_include_directories(dock_wmac PRIVATE ${X11_INCLUDE_DIR})
 endif()
 
+# 安装规则 (make install)
+include(GNUInstallDirs)
+
+install(TARGETS dock_wmac
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+if(NOT WIN32)
+    # .desktop 文件
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/dock-wmac.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+    # 应用图标
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/icons/dock-wmac.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+    )
+endif()
+
 # 可选测试
 option(BUILD_TESTS "Build unit tests" OFF)
 if(BUILD_TESTS)

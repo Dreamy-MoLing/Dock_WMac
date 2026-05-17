@@ -22,9 +22,11 @@
 #include <QCursor>
 #include <QDebug>
 #include <QTimer>
-#include <QProcess>
 #include <QWindow>
 #include <QFileInfo>
+#include <QDir>
+#include <QFile>
+#include <QSet>
 
 DockWindow::DockWindow(QWidget *parent)
     : QWidget(parent)
@@ -328,23 +330,42 @@ void DockWindow::updateDpiScale()
 
 void DockWindow::checkRunningApps()
 {
-    // 通过 /proc 检测已注册应用是否仍在运行
+    if (m_itemMap.isEmpty()) return;
+
+    // 收集所有需要检测的进程名
+    QStringList processNames;
+    QList<DockItem*> items;
     for (auto it = m_itemMap.begin(); it != m_itemMap.end(); ++it) {
         DockItem *item = it.value();
         if (item->execPath().isEmpty()) continue;
-
         QString execName = item->execPath().split(' ').first();
-        // 提取可执行文件名（去掉路径）
         QFileInfo fi(execName);
-        QString processName = fi.fileName();
+        processNames << fi.fileName();
+        items << item;
+    }
 
-        // 使用 pgrep 检测进程
-        QProcess pgrep;
-        pgrep.start("pgrep", {"-x", processName});
-        pgrep.waitForFinished(500);
-        bool running = (pgrep.exitCode() == 0);
+    if (processNames.isEmpty()) return;
 
-        item->setRunning(running);
+    // 单次读取 /proc 目录，避免多次 fork pgrep
+    QDir procDir("/proc");
+    QSet<QString> runningProcs;
+    const auto entries = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entry : entries) {
+        // 只检查数字目录（进程 PID）
+        bool isPid;
+        entry.toInt(&isPid);
+        if (!isPid) continue;
+
+        QFile cmdFile("/proc/" + entry + "/comm");
+        if (cmdFile.open(QIODevice::ReadOnly)) {
+            QString name = QString::fromUtf8(cmdFile.readLine().trimmed());
+            runningProcs.insert(name);
+        }
+    }
+
+    // 更新每个 DockItem 的运行状态
+    for (int i = 0; i < items.size(); ++i) {
+        items[i]->setRunning(runningProcs.contains(processNames[i]));
     }
 }
 
