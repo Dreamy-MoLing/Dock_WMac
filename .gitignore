@@ -72,3 +72,18 @@ ehthumbs.db
 *.bak
 *.cache
 *.pid
+build_win/
+.hermes/
+
+# 内部文档（不上传 GitHub）
+AGENTS.md
+CLAUDE.md
+V5_REVIEW_PLAN.md
+plan.md
+plan_legacy.md
+
+# Qt Creator user settings
+CMakeLists.txt.user*
+
+# Clangd / LSP
+.cache/

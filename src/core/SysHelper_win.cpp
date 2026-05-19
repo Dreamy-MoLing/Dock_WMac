@@ -460,9 +460,9 @@ bool SysHelper::activateWindow(const QString &wmClass)
 
     // 激活窗口
     AllowSetForegroundWindow(ASFW_ANY);
-    SetForegroundWindow(targetHwnd);
-    ShowWindow(targetHwnd, SW_RESTORE);
-    SetFocus(targetHwnd);
+    SetForegroundWindow(ctx.hwnd);
+    ShowWindow(ctx.hwnd, SW_RESTORE);
+    SetFocus(ctx.hwnd);
     return true;
 }
 

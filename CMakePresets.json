@@ -19,14 +19,12 @@
     },
     {
       "name": "windows-cross",
-      "displayName": "Windows (vcpkg cross-compile)",
-      "description": "Cross-compile for Windows x64 using vcpkg + mingw",
+      "displayName": "Windows (MXE cross-compile)",
+      "description": "Cross-compile for Windows x64 using MXE (Docker image: dock-wmac-mxe)",
       "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build_mxe",
+      "binaryDir": "${sourceDir}/build_win",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-mxe-win64.cmake",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
-        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-windows-x64.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "OFF"
       }

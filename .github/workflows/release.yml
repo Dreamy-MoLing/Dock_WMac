@@ -43,7 +43,7 @@ jobs:
 
   # ---- Windows cross-compilation (tag only) ----
   windows:
-    name: Windows (vcpkg cross-compile)
+    name: Windows (MXE cross-compile)
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/')
 
@@ -53,29 +53,34 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build vcpkg Docker image (with cache)
+      - name: Build MXE Docker image (with cache)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: false
           load: true
-          tags: dock-wmac-vcpkg:ci
-          cache-from: type=gha,scope=vcpkg
-          cache-to: type=gha,scope=vcpkg,mode=max
-          # Reduce image size by not keeping intermediate build artifacts
+          tags: dock-wmac-mxe:ci
+          cache-from: type=gha,scope=mxe
+          cache-to: type=gha,scope=mxe,mode=max
           provenance: false
 
       - name: Cross-compile dock_wmac.exe
         run: |
-          docker run --rm -v ${{ github.workspace }}:/src dock-wmac-vcpkg:ci \
-            sh -c "cmake --preset windows-cross -S /src && cmake --build --preset windows-cross"
+          docker run --rm -v ${{ github.workspace }}:/src dock-wmac-mxe:ci \
+            sh -c "cmake \
+              -DCMAKE_TOOLCHAIN_FILE=/src/cmake/toolchain-mxe-win64.cmake \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_TESTS=OFF \
+              -B /src/build_win -S /src \
+              -G 'Unix Makefiles' \
+            && cmake --build /src/build_win -j\$(nproc)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dock_wmac-windows
-          path: build_mxe/dock_wmac.exe
+          path: build_win/dock_wmac.exe
           if-no-files-found: error
 
       - name: Extract tag name
@@ -88,6 +93,6 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
           files: |
-            build_mxe/dock_wmac.exe
+            build_win/dock_wmac.exe
             LICENSE
           generate_release_notes: true

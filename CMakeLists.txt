@@ -48,6 +48,24 @@ if(NOT WIN32)
     target_include_directories(dock_wmac PRIVATE ${X11_INCLUDE_DIR})
 endif()
 
+# Cross-compilation: MXE static linking needs explicit transitive dependencies
+# Qt6 already handles freetype; only supplement brotli/bz2 for static link
+if(MINGW OR CMAKE_CROSSCOMPILING)
+    foreach(lib brotlidec brotlicommon bz2)
+        find_library(MXE_${lib}_LIB ${lib}
+            PATHS /mxe/usr/x86_64-w64-mingw32.static.posix/lib
+            NO_DEFAULT_PATH
+        )
+    endforeach()
+    # Force whole-archive to break circular dep: freetype ↔ brotli/bz2
+    # Without this, static linker discards brotli symbols before freetype uses them
+    if(MXE_brotlidec_LIB AND MXE_brotlicommon_LIB AND MXE_bz2_LIB)
+        target_link_options(dock_wmac PRIVATE
+            "SHELL:-Wl,--whole-archive ${MXE_brotlidec_LIB} ${MXE_brotlicommon_LIB} ${MXE_bz2_LIB} -Wl,--no-whole-archive"
+        )
+    endif()
+endif()
+
 # 安装规则 (make install)
 include(GNUInstallDirs)
 
