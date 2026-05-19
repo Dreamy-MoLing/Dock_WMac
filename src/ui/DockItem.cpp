@@ -2,8 +2,8 @@
  * @file DockItem.cpp
  * @brief 单个 Dock 图标组件实现
  *
- * 负责图标的绘制（缩放/运行指示灯/未读徽章）、
- * 鼠标悬浮放大效果、点击启动应用及右键菜单。
+ * 通过 visualScale 属性实现 macOS 风格鱼眼动画。
+ * 锚点为底部中心，图标向上生长，widget 尺寸随缩放变化。
  */
 
 #include "ui/DockItem.h"
@@ -19,6 +19,7 @@
 #include <QIcon>
 #include <QFileInfo>
 #include <QDebug>
+#include <QEnterEvent>
 #include <QApplication>
 #include <QMimeData>
 
@@ -30,7 +31,7 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
     , m_isRunning(false)
     , m_badgeCount(0)
     , m_isHovered(false)
-    , m_scaleFactor(1.0)
+    , m_visualScale(1.0)
     , m_dragStartPos(0, 0)
 {
     setFixedSize(48, 48);
@@ -50,7 +51,6 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
         }
     }
     if (m_icon.isNull()) {
-        // 占位符：灰色方块 + 首字母
         m_icon = QPixmap(64, 64);
         m_icon.fill(QColor(80, 80, 80));
         QPainter p(&m_icon);
@@ -76,14 +76,13 @@ void DockItem::setBadgeCount(int count)
     update();
 }
 
-void DockItem::setScaleFactor(qreal factor)
+void DockItem::setVisualScale(qreal scale)
 {
-    if (qFuzzyCompare(m_scaleFactor, factor)) return;
-    m_scaleFactor = factor;
-    int baseSize = 48;
-    int newSize = static_cast<int>(baseSize * factor);
-    setFixedSize(newSize, newSize);
-    m_scaledIcon = QPixmap();  // 清除缓存，下次绘制时重新缩放
+    if (qFuzzyCompare(m_visualScale, scale)) return;
+    m_visualScale = scale;
+    // widget 尺寸随缩放变化
+    int sz = static_cast<int>(baseSize() * scale);
+    setFixedSize(sz, sz);
     update();
 }
 
@@ -94,16 +93,12 @@ void DockItem::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    int size = qMin(width(), height()) - 4;
-    int offset = (width() - size) / 2;
+    int drawSize = qMin(width(), height()) - 4;
+    int offset = (width() - drawSize) / 2;
 
-    // 绘制图标（缓存缩放结果，尺寸变化时才重新缩放）
-    QSize targetSize(size, size);
-    if (m_scaledIcon.isNull() || m_scaledSize != targetSize) {
-        m_scaledIcon = m_icon.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        m_scaledSize = targetSize;
-    }
-    painter.drawPixmap(offset, offset, m_scaledIcon);
+    // 绘制图标
+    QPixmap scaled = m_icon.scaled(drawSize, drawSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    painter.drawPixmap(offset, offset, scaled);
 
     // 按下效果（下沉 2px）
     if (m_isHovered && QApplication::mouseButtons() & Qt::LeftButton) {
@@ -137,11 +132,11 @@ void DockItem::paintEvent(QPaintEvent *event)
     }
 }
 
-void DockItem::enterEvent(QEvent *event)
+void DockItem::enterEvent(QEnterEvent *event)
 {
     Q_UNUSED(event);
     m_isHovered = true;
-    emit hoverEntered(-1);  // 由 DockWindow 处理索引
+    emit hoverEntered(-1);
     update();
 }
 
@@ -166,7 +161,6 @@ void DockItem::mouseMoveEvent(QMouseEvent *event)
     if (!(event->buttons() & Qt::LeftButton)) return;
     if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) return;
 
-    // 开始拖拽
     QMimeData *mimeData = new QMimeData;
     mimeData->setText(m_appId);
 
@@ -178,7 +172,6 @@ void DockItem::mouseMoveEvent(QMouseEvent *event)
 
 void DockItem::dragEnterEvent(QDragEnterEvent *event)
 {
-    // 接受文件拖入（URL 列表或文本路径）
     if (event->mimeData()->hasUrls() || event->mimeData()->hasText()) {
         event->acceptProposedAction();
         m_isHovered = true;
@@ -198,7 +191,6 @@ void DockItem::dropEvent(QDropEvent *event)
 
     if (m_execPath.isEmpty()) return;
 
-    // 提取文件路径列表
     QStringList filePaths;
     if (event->mimeData()->hasUrls()) {
         for (const QUrl &url : event->mimeData()->urls()) {
@@ -212,10 +204,8 @@ void DockItem::dropEvent(QDropEvent *event)
 
     if (filePaths.isEmpty()) return;
 
-    // 用应用打开文件
     QStringList parts = m_execPath.split(' ');
     QString program = parts.takeFirst();
-    // 移除已有的参数（如 %f），用实际文件路径替换
     QStringList args = parts;
     args.removeAll("%f");
     args.removeAll("%F");
@@ -240,11 +230,33 @@ void DockItem::contextMenuEvent(QContextMenuEvent *event)
         }
     });
 
-    QAction *removeAction = menu.addAction("从 Dock 移除");
-    connect(removeAction, &QAction::triggered, this, [this]() {
-        // 发送信号，由 DockManager 处理
-        emit rightClicked(m_appId);
-    });
+    // 固定/取消固定
+    bool isPinned = false;
+    // 通过 parent（DockWindow）判断是否为固定项
+    QMetaObject::invokeMethod(this, [this, &isPinned]() {
+        // 查询父窗口的 dockManager
+        QWidget *parent = parentWidget();
+        if (!parent) return;
+        // 使用属性查询（避免依赖 DockManager 头文件）
+        QVariant ret;
+        QMetaObject::invokeMethod(parent, "isItemPinned",
+            Qt::DirectConnection,
+            Q_RETURN_ARG(QVariant, ret),
+            Q_ARG(QVariant, m_appId));
+        if (ret.isValid()) isPinned = ret.toBool();
+    }, Qt::DirectConnection);
+
+    if (isPinned) {
+        QAction *removeAction = menu.addAction("从 Dock 移除");
+        connect(removeAction, &QAction::triggered, this, [this]() {
+            emit pinRequested(m_appId, false);
+        });
+    } else {
+        QAction *pinAction = menu.addAction("固定到 Dock");
+        connect(pinAction, &QAction::triggered, this, [this]() {
+            emit pinRequested(m_appId, true);
+        });
+    }
 
     menu.addSeparator();
 

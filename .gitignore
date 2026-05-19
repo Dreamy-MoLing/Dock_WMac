@@ -6,6 +6,10 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+
+# ===== vcpkg 构建产物 =====
+vcpkg_installed/
+build_mxe/
 *.o
 *.obj
 *.a

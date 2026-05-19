@@ -2,22 +2,24 @@
 #define DOCKWINDOW_H
 
 #include <QWidget>
-#include <QHBoxLayout>
+#include <QList>
 #include <QMap>
 #include <QScreen>
+#include <QPropertyAnimation>
+#include <QTimer>
 #include "core/Types.h"
 
 class DockItem;
 class DockManager;
-class AnimationHandler;
+class SysHelper;
 
 /**
  * @file DockWindow.h
  * @brief Dock 主窗口
  *
  * 无边框、透明背景、置顶显示的 Dock 主窗体。
- * 使用 QPainter 绘制 Dock 背景，QHBoxLayout 管理 DockItem 布局。
- * 通过 DockManager 信号驱动 UI 更新。
+ * 使用手动定位管理 DockItem，实现 macOS 风格变量间隙鱼眼动画。
+ * 通过 DockManager 信号驱动 UI 更新，ProcessMonitor 驱动进程状态检测。
  */
 
 class DockWindow : public QWidget {
@@ -28,29 +30,22 @@ public:
     /** @brief 关联 DockManager，连接信号 */
     void setDockManager(DockManager *manager);
 
-    /** @brief 添加一个 DockItem 到布局中 */
-    void addItem(DockItem *item);
-
-    /** @brief 从布局中移除 DockItem */
-    void removeItem(DockItem *item);
-
-    /** @brief 清空所有 DockItem */
-    void clearItems();
+    /** @brief 关联 SysHelper（窗口管理用） */
+    void setSysHelper(SysHelper *helper);
 
     /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
     void setMonitor(int index);
 
-    /** @brief 移动到指定屏幕并重新定位 */
-    void moveToScreen(QScreen *screen);
-
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void enterEvent(QEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
-    bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
     void onItemAdded(const DockItemData &data);
@@ -58,21 +53,55 @@ private slots:
     void onItemStateChanged(const QString &appId, bool isRunning);
     void onStateChanged(DockState newState);
 
+    /** @brief 查询指定应用是否为固定项（DockItem 右键菜单通过 QMetaObject 调用） */
+    QVariant isItemPinned(QVariant appId);
+
+public slots:
+    /** @brief ProcessMonitor 信号：应用运行状态变化 */
+    void onAppRunningStateChanged(const QString &appId, bool isRunning);
+
+    /** @brief ProcessMonitor 信号：检测到新运行应用 */
+    void onNewRunningAppDetected(const DockItemData &item);
+
+    /** @brief ProcessMonitor 信号：运行应用退出 */
+    void onRunningAppExited(const QString &appId);
+
 private:
-    void applyFishEyeEffect(int hoveredIndex);
-    void resetFishEyeEffect();
     void updatePosition();
     void updateDpiScale();
-    void checkRunningApps();  // 定期检测应用运行状态
+    void applyFishEyeEffect(int hoveredIndex);
+    void resetFishEyeEffect();
+    void launchApp(DockItem *item);
+    void handleSingleClick(DockItem *item);
+    void handleDoubleClick(DockItem *item);
+    void animateItemToScale(DockItem *item, qreal targetScale);
+    int  itemAtPos(int mouseX, int mouseY) const;
+    void relayoutItems();
 
-    QHBoxLayout *m_layout;
+    QList<DockItem *> m_items;
     QMap<QString, DockItem *> m_itemMap;
-    AnimationHandler *m_animationHandler;
     DockManager *m_dockManager;
-    int m_iconSize;
+    SysHelper *m_sysHelper;
+    int m_baseIconSize;
+    int m_fixedWindowH;
     qreal m_opacity;
     bool m_isHidden;
-    int m_monitorIndex;  // -1 = 跟随鼠标所在屏幕
+    int m_monitorIndex;
+    int m_hoveredIndex;
+
+    // 鱼眼动画
+    QMap<DockItem *, QPropertyAnimation *> m_fishEyeAnims;
+
+    // 单双击检测
+    QTimer *m_clickTimer;
+    DockItem *m_pendingClickItem;
+
+    // 布局常量
+    static constexpr int kBaseSpacing = 8;
+    static constexpr int kExtraSpacing = 18;
+    static constexpr int kMarginH = 14;
+    static constexpr int kMarginTop = 8;
+    static constexpr int kMarginBottom = 10;
 };
 
 #endif // DOCKWINDOW_H

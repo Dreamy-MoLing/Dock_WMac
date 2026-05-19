@@ -7,7 +7,17 @@
  */
 
 #include "core/SysHelper.h"
+#include "core/IPCHelper.h"
 
-SysHelper::SysHelper(QObject *parent) : QObject(parent) {}
+SysHelper::SysHelper(QObject *parent)
+    : QObject(parent)
+    , m_ipcHelper(nullptr)
+{
+}
+
+void SysHelper::setIPCHelper(IPCHelper *helper)
+{
+    m_ipcHelper = helper;
+}
 
 

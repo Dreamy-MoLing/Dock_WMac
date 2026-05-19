@@ -7,6 +7,7 @@
  */
 
 #include "core/SysHelper.h"
+#include "core/IPCHelper.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -44,7 +45,6 @@ static const QStringList kDefaultApps = {
 static DockItemData parseDesktopFile(const QString &filePath)
 {
     QSettings desktop(filePath, QSettings::IniFormat);
-    desktop.setIniCodec("UTF-8");
 
     desktop.beginGroup("Desktop Entry");
 
@@ -92,6 +92,28 @@ static bool isValidDesktopEntry(QSettings &desktop)
 
 QList<DockItemData> SysHelper::getPinnedItems()
 {
+    // IPC 后端优先
+    if (m_ipcHelper) {
+        QJsonObject resp = m_ipcHelper->scanDesktopFiles();
+        if (resp.value("status").toString() == "ok") {
+            QList<DockItemData> items;
+            QJsonArray arr = resp.value("data").toObject().value("items").toArray();
+            for (const QJsonValue &val : arr) {
+                QJsonObject obj = val.toObject();
+                DockItemData item;
+                item.appId = obj["appId"].toString();
+                item.displayName = obj["displayName"].toString();
+                item.execPath = obj["execPath"].toString();
+                item.iconPath = obj["iconPath"].toString();
+                item.isRunning = false;
+                item.badgeCount = 0;
+                items.append(item);
+            }
+            return items;
+        }
+    }
+
+    // 回退：传统文件解析
     QList<DockItemData> items;
     QStringList seen;
 
@@ -103,7 +125,6 @@ QList<DockItemData> SysHelper::getPinnedItems()
         const auto entries = dir.entryInfoList({"*.desktop"}, QDir::Files);
         for (const QFileInfo &fi : entries) {
             QSettings desktop(fi.absoluteFilePath(), QSettings::IniFormat);
-            desktop.setIniCodec("UTF-8");
 
             if (!isValidDesktopEntry(desktop)) continue;
 
@@ -131,7 +152,6 @@ QList<DockItemData> SysHelper::getPinnedItems()
                 QString filePath = dirPath + "/" + appId + ".desktop";
                 if (QFileInfo::exists(filePath)) {
                     QSettings desktop(filePath, QSettings::IniFormat);
-                    desktop.setIniCodec("UTF-8");
                     if (isValidDesktopEntry(desktop)) {
                         items.append(parseDesktopFile(filePath));
                         break;
@@ -295,4 +315,110 @@ bool SysHelper::isAutoStartEnabled() const
 {
     QString desktopPath = QDir::homePath() + "/.config/autostart/dock-wmac.desktop";
     return QFile::exists(desktopPath);
+}
+
+// ─── 窗口管理 ──────────────────────────────────────────────
+
+/**
+ * @brief 通过 Xlib 遍历所有窗口，按 WM_CLASS 匹配计数
+ */
+static QList<Window> findWindowsByClass(Display *display, const QString &wmClass)
+{
+    QList<Window> result;
+    Window root = DefaultRootWindow(display);
+
+    Atom netClientList = XInternAtom(display, "_NET_CLIENT_LIST", True);
+    if (netClientList == None) return result;
+
+    Atom actualType;
+    int actualFormat;
+    unsigned long nItems, bytesAfter;
+    unsigned char *prop = nullptr;
+
+    if (XGetWindowProperty(display, root, netClientList, 0, 1024, False,
+                           XA_WINDOW, &actualType, &actualFormat,
+                           &nItems, &bytesAfter, &prop) != Success || !prop) {
+        return result;
+    }
+
+    Window *windows = reinterpret_cast<Window *>(prop);
+    Atom wmClassAtom = XInternAtom(display, "WM_CLASS", True);
+
+    for (unsigned long i = 0; i < nItems; ++i) {
+        unsigned char *classProp = nullptr;
+        if (XGetWindowProperty(display, windows[i], wmClassAtom, 0, 1024, False,
+                               XA_STRING, &actualType, &actualFormat,
+                               &nItems, &bytesAfter, &classProp) == Success && classProp) {
+            // WM_CLASS 包含两个 null 分隔的字符串：实例名和类名
+            QString instanceName = QString::fromUtf8(reinterpret_cast<char *>(classProp));
+            QString className;
+            int len = strlen(reinterpret_cast<char *>(classProp));
+            if (len + 1 < (int)nItems) {
+                className = QString::fromUtf8(reinterpret_cast<char *>(classProp) + len + 1);
+            }
+            // 匹配类名或实例名（不区分大小写）
+            if (className.toLower() == wmClass.toLower() ||
+                instanceName.toLower() == wmClass.toLower()) {
+                result.append(windows[i]);
+            }
+            XFree(classProp);
+        }
+    }
+
+    XFree(prop);
+    return result;
+}
+
+int SysHelper::getWindowCount(const QString &wmClass)
+{
+    Display *display = XOpenDisplay(nullptr);
+    if (!display) return 0;
+
+    QList<Window> windows = findWindowsByClass(display, wmClass);
+    XCloseDisplay(display);
+    return windows.size();
+}
+
+bool SysHelper::activateWindow(const QString &wmClass)
+{
+    Display *display = XOpenDisplay(nullptr);
+    if (!display) return false;
+
+    QList<Window> windows = findWindowsByClass(display, wmClass);
+    if (windows.isEmpty()) {
+        XCloseDisplay(display);
+        return false;
+    }
+
+    Window target = windows.first();
+    Window root = DefaultRootWindow(display);
+
+    // 发送 _NET_ACTIVE_WINDOW 请求
+    Atom netActiveWindow = XInternAtom(display, "_NET_ACTIVE_WINDOW", False);
+    XEvent event;
+    memset(&event, 0, sizeof(event));
+    event.xclient.type = ClientMessage;
+    event.xclient.serial = 0;
+    event.xclient.send_event = True;
+    event.xclient.display = display;
+    event.xclient.window = target;
+    event.xclient.message_type = netActiveWindow;
+    event.xclient.format = 32;
+    event.xclient.data.l[0] = 2;  // 来自任务栏
+    event.xclient.data.l[1] = CurrentTime;
+
+    XSendEvent(display, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
+    XFlush(display);
+    XCloseDisplay(display);
+    return true;
+}
+
+void SysHelper::showWindowPicker()
+{
+    // GNOME：通过 dbus 触发 Activities 概览
+    QProcess::startDetached("dbus-send", {
+        "--session", "--type=method_call", "--dest=org.gnome.Shell",
+        "/org/gnome/Shell", "org.gnome.Shell.Eval",
+        "string:Main.overview.toggle();"
+    });
 }

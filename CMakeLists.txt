@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets Svg)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
 
 # 平台判断：选择对应 SysHelper 实现
 if(WIN32)
@@ -18,27 +18,31 @@ endif()
 
 add_executable(dock_wmac
     src/main.cpp
+    src/core/Application.cpp
     src/core/DockManager.cpp
     src/core/ConfigManager.cpp
+    src/core/IPCHelper.cpp
+    src/core/ProcessMonitor.cpp
     src/core/SysHelper.cpp
     src/core/Logger.cpp
     ${SYS_SRC}
     src/ui/DockWindow.cpp
     src/ui/DockItem.cpp
-    src/ui/AnimationHandler.cpp
     include/core/Types.h
+    include/core/Application.h
     include/core/DockManager.h
     include/core/ConfigManager.h
+    include/core/IPCHelper.h
+    include/core/ProcessMonitor.h
     include/core/SysHelper.h
     include/core/Logger.h
     include/ui/DockWindow.h
     include/ui/DockItem.h
-    include/ui/AnimationHandler.h
     resources/resources.qrc
 )
 
 target_include_directories(dock_wmac PRIVATE include)
-target_link_libraries(dock_wmac Qt5::Widgets Qt5::Svg)
+target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg)
 if(NOT WIN32)
     target_link_libraries(dock_wmac ${X11_LIBRARIES})
     target_include_directories(dock_wmac PRIVATE ${X11_INCLUDE_DIR})

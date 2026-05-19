@@ -13,7 +13,7 @@ endif()
 
 enable_testing()
 
-find_package(Qt5 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test)
 
 # 平台源文件
 if(WIN32)
@@ -26,16 +26,18 @@ endif()
 set(CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/core/ConfigManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/DockManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/IPCHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
     ${PLATFORM_SRC}
     ${CMAKE_SOURCE_DIR}/include/core/Types.h
     ${CMAKE_SOURCE_DIR}/include/core/ConfigManager.h
     ${CMAKE_SOURCE_DIR}/include/core/DockManager.h
+    ${CMAKE_SOURCE_DIR}/include/core/IPCHelper.h
     ${CMAKE_SOURCE_DIR}/include/core/SysHelper.h
 )
 
 # 链接库
-set(TEST_LIBS GTest::GTest GTest::Main Qt5::Widgets Qt5::Test)
+set(TEST_LIBS GTest::GTest GTest::Main Qt6::Widgets Qt6::Test)
 if(NOT WIN32)
     list(APPEND TEST_LIBS ${X11_LIBRARIES})
 endif()

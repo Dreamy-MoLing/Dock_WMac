@@ -98,7 +98,7 @@ else
     fail "日志文件缺失"
 fi
 
-# 9. 内存（Qt5 GUI 应用合理范围 < 150MB）
+# 9. 内存（Qt6 GUI 应用合理范围 < 150MB）
 RSS_KB=$(ps -o rss= -p "$APP_PID" 2>/dev/null || echo 0)
 RSS_MB=$((RSS_KB / 1024))
 if [ "$RSS_MB" -lt 150 ]; then

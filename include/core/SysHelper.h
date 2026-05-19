@@ -5,6 +5,8 @@
 #include <QList>
 #include "Types.h"
 
+class IPCHelper;
+
 /**
  * @file SysHelper.h
  * @brief 系统适配层抽象接口
@@ -17,6 +19,9 @@ class SysHelper : public QObject {
     Q_OBJECT
 public:
     explicit SysHelper(QObject *parent = nullptr);
+
+    /** @brief 设置 IPC helper（用于 .desktop 文件解析等） */
+    void setIPCHelper(IPCHelper *helper);
 
     /** @brief 读取系统任务栏/面板固定项列表 */
     QList<DockItemData> getPinnedItems();
@@ -42,12 +47,24 @@ public:
     /** @brief 检查是否已设置开机自启 */
     bool isAutoStartEnabled() const;
 
+    /** @brief 获取指定应用的窗口数量（按 WM_CLASS 匹配） */
+    int getWindowCount(const QString &wmClass);
+
+    /** @brief 激活指定应用的第一个窗口，返回是否成功 */
+    bool activateWindow(const QString &wmClass);
+
+    /** @brief 触发系统窗口选择器（GNOME 概览） */
+    void showWindowPicker();
+
 signals:
     /** @brief 前台窗口状态变化 signal */
     void foregroundWindowChanged(bool isMaximizedOrFullscreen);
 
     /** @brief Win 键被按下 signal */
     void winKeyPressed();
+
+protected:
+    IPCHelper *m_ipcHelper;
 };
 
 #endif // SYSHELPER_H

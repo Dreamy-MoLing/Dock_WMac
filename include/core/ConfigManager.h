@@ -7,17 +7,23 @@
 #include <QCache>
 #include <QPixmap>
 
+class IPCHelper;
+
 /**
  * @file ConfigManager.h
  * @brief JSON 配置读写与图标映射缓存
  *
  * 管理配置文件（JSON 格式）的读写、图标映射表的维护与 LRU 缓存。
+ * 支持两种后端：传统文件读写（默认）或 Python IPC（设置 ipcHelper 后自动启用）。
  */
 
 class ConfigManager : public QObject {
     Q_OBJECT
 public:
     explicit ConfigManager(QObject *parent = nullptr);
+
+    /** @brief 设置 IPC helper，启用 IPC 后端读写 */
+    void setIPCHelper(IPCHelper *helper);
 
     /** @brief 加载配置文件，不存在则创建默认配置 */
     void load();
@@ -44,6 +50,7 @@ private:
     QString configFilePath() const;
     QJsonObject m_config;
     QCache<QString, QPixmap> m_iconCache;
+    IPCHelper *m_ipcHelper;
     static const int kCacheLimit = 128;
 };
 
