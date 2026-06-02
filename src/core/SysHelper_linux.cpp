@@ -422,3 +422,35 @@ void SysHelper::showWindowPicker()
         "string:Main.overview.toggle();"
     });
 }
+
+// ─── Linux 存根：DWM 效果 / 任务栏管理（仅 Windows 实现） ────
+
+void SysHelper::enableBlurBehindWindow(WId)
+{
+    // Linux 下无 DWM，使用 Qt 原生半透明背景即可
+}
+
+bool SysHelper::isBlurSupported() const
+{
+    return false;  // Linux 下不使用 DWM 模糊
+}
+
+bool SysHelper::isLightTheme() const
+{
+    // 检测 GTK 主题偏好（简化判断）
+    QProcess proc;
+    proc.start("gsettings", {"get", "org.gnome.desktop.interface", "color-scheme"});
+    proc.waitForFinished(1000);
+    QString scheme = proc.readAllStandardOutput().trimmed().toLower();
+    return !scheme.contains("dark");
+}
+
+void SysHelper::hideNativeTaskbar()
+{
+    // Linux 下不隐藏系统面板（各桌面环境差异大）
+}
+
+void SysHelper::restoreNativeTaskbar()
+{
+    // Linux 下无操作
+}

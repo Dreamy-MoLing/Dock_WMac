@@ -61,6 +61,9 @@ void ConfigManager::load()
         m_config["opacity"] = 0.95;
         m_config["blurEnabled"] = true;
         m_config["startWithSystem"] = false;
+        m_config["corner_radius"] = 16;
+        m_config["animation_duration"] = 300;
+        m_config["show_delay"] = 0;
         save();
         return;
     }

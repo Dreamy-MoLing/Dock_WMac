@@ -475,3 +475,76 @@ void SysHelper::showWindowPicker()
     keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
     keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
 }
+
+// ─── DWM 毛玻璃模糊 ─────────────────────────────────────────
+
+void SysHelper::enableBlurBehindWindow(WId winId)
+{
+    HWND hwnd = reinterpret_cast<HWND>(winId);
+    if (!hwnd) return;
+
+    // 使用 DwmEnableBlurBehindWindow 实现毛玻璃效果
+    DWM_BLURBEHIND bb;
+    ZeroMemory(&bb, sizeof(bb));
+    bb.dwFlags = DWM_BB_ENABLE;
+    bb.fEnable = TRUE;
+    // 设置模糊区域为整个窗口
+    bb.hRgnBlur = nullptr;
+
+    HRESULT hr = DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (FAILED(hr)) {
+        qWarning() << "DwmEnableBlurBehindWindow 失败，hr:" << Qt::hex << hr;
+    }
+}
+
+bool SysHelper::isBlurSupported() const
+{
+    // 检查 DWM 是否启用（Windows Vista+ 均支持）
+    BOOL dwmEnabled = FALSE;
+    HRESULT hr = DwmIsCompositionEnabled(&dwmEnabled);
+    return SUCCEEDED(hr) && dwmEnabled;
+}
+
+bool SysHelper::isLightTheme() const
+{
+    // 读取 Windows 主题设置
+    HKEY hKey;
+    LONG result = RegOpenKeyEx(
+        HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        0, KEY_QUERY_VALUE, &hKey);
+    if (result != ERROR_SUCCESS) return true;  // 默认亮色
+
+    DWORD value = 1;
+    DWORD size = sizeof(value);
+    result = RegQueryValueEx(hKey, L"AppsUseLightTheme", nullptr, nullptr,
+                             reinterpret_cast<LPBYTE>(&value), &size);
+    RegCloseKey(hKey);
+
+    return (result == ERROR_SUCCESS) ? (value != 0) : true;
+}
+
+// ─── 原生任务栏管理 ─────────────────────────────────────────
+
+static HWND g_taskbarHandle = nullptr;
+
+void SysHelper::hideNativeTaskbar()
+{
+    HWND hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
+    if (hTaskbar) {
+        g_taskbarHandle = hTaskbar;
+        ShowWindow(hTaskbar, SW_HIDE);
+    }
+}
+
+void SysHelper::restoreNativeTaskbar()
+{
+    if (g_taskbarHandle) {
+        ShowWindow(g_taskbarHandle, SW_SHOW);
+        g_taskbarHandle = nullptr;
+    } else {
+        // 尝试重新查找
+        HWND hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
+        if (hTaskbar) ShowWindow(hTaskbar, SW_SHOW);
+    }
+}

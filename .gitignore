@@ -75,12 +75,13 @@ ehthumbs.db
 build_win/
 .hermes/
 
-# 内部文档（不上传 GitHub）
+# 内部文档与规划文件（不上传 GitHub）
 AGENTS.md
 CLAUDE.md
 V5_REVIEW_PLAN.md
 plan.md
 plan_legacy.md
+openspec/
 
 # Qt Creator user settings
 CMakeLists.txt.user*

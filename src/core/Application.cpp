@@ -98,12 +98,18 @@ int Application::run()
     m_dockWindow->show();
     m_sysHelper->installWindowHook();
 
+    // 隐藏原生任务栏（Windows only）
+    m_sysHelper->hideNativeTaskbar();
+
     // 开机自启
     if (m_config->get(QStringLiteral("startWithSystem"), false).toBool()) {
         m_sysHelper->setAutoStart(true);
     }
 
     int exitCode = app.exec();
+
+    // 恢复原生任务栏（Windows only）
+    m_sysHelper->restoreNativeTaskbar();
 
     // ─── 清理：在 QApplication 销毁前删除所有 QObject 子对象 ───
     delete m_processMonitor;    m_processMonitor = nullptr;

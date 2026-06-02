@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QWidget>  // for WId
 #include "Types.h"
 
 class IPCHelper;
@@ -55,6 +56,21 @@ public:
 
     /** @brief 触发系统窗口选择器（GNOME 概览） */
     void showWindowPicker();
+
+    /** @brief 为窗口启用 DWM 毛玻璃模糊效果 */
+    void enableBlurBehindWindow(WId winId);
+
+    /** @brief 检查系统是否支持 DWM 模糊效果 */
+    bool isBlurSupported() const;
+
+    /** @brief 检测当前系统是否为亮色主题 */
+    bool isLightTheme() const;
+
+    /** @brief 隐藏原生任务栏 */
+    void hideNativeTaskbar();
+
+    /** @brief 恢复原生任务栏显示 */
+    void restoreNativeTaskbar();
 
 signals:
     /** @brief 前台窗口状态变化 signal */

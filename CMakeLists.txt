@@ -43,7 +43,9 @@ add_executable(dock_wmac
 
 target_include_directories(dock_wmac PRIVATE include)
 target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg)
-if(NOT WIN32)
+if(WIN32)
+    target_link_libraries(dock_wmac dwmapi)
+else()
     target_link_libraries(dock_wmac ${X11_LIBRARIES})
     target_include_directories(dock_wmac PRIVATE ${X11_INCLUDE_DIR})
 endif()

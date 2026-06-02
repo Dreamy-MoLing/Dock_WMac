@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QScreen>
 #include <QPropertyAnimation>
+#include <QGraphicsOpacityEffect>
 #include <QTimer>
 #include "core/Types.h"
 
@@ -78,6 +79,14 @@ private:
     int  itemAtPos(int mouseX, int mouseY) const;
     void relayoutItems();
 
+    // 毛玻璃 & 主题
+    void initBlurEffect();
+    void updateTheme();
+
+    // 图标添加/移除动画
+    void animateItemAdd(DockItem *item);
+    void animateItemRemove(DockItem *item, const QString &appId);
+
     QList<DockItem *> m_items;
     QMap<QString, DockItem *> m_itemMap;
     DockManager *m_dockManager;
@@ -91,6 +100,15 @@ private:
 
     // 鱼眼动画
     QMap<DockItem *, QPropertyAnimation *> m_fishEyeAnims;
+
+    // 显示/隐藏动画
+    QPropertyAnimation *m_slideAnim;
+    QGraphicsOpacityEffect *m_opacityEffect;
+
+    // 毛玻璃 & 主题
+    bool m_blurInitialized;
+    bool m_isLightTheme;
+    QTimer *m_themeTimer;
 
     // 单双击检测
     QTimer *m_clickTimer;
