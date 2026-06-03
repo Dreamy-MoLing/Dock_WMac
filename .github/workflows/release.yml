@@ -25,6 +25,9 @@ jobs:
           version: '6.8.2'
           arch: win64_msvc2022_64
 
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure CMake
         run: cmake --preset default -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
 

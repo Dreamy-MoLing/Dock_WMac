@@ -6,8 +6,7 @@
  * 平台适配：任务栏 .lnk 解析、SetWinEventHook、SetWindowsHookEx。
  */
 
-#include "core/SysHelper.h"
-
+// Windows SDK 版本宏必须在所有 #include 之前定义
 #define UNICODE
 #define _UNICODE
 #define WINVER 0x0601
@@ -17,6 +16,8 @@
 #ifndef EVENT_SYSTEM_MAXIMIZESTART
 #define EVENT_SYSTEM_MAXIMIZESTART 0x0017
 #endif
+
+#include "core/SysHelper.h"
 
 #include <windows.h>
 #include <shlobj.h>
