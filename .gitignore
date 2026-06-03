@@ -1,15 +1,14 @@
 # ===== 构建产物 =====
 build/
 build-win/
+build-debug/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
 
-# ===== vcpkg 构建产物 =====
-vcpkg_installed/
-build_mxe/
+# ===== 编译中间产物 =====
 *.o
 *.obj
 *.a
@@ -22,7 +21,7 @@ build_mxe/
 *.out
 *.app
 
-# Qt 自动生成
+# ===== Qt 自动生成 =====
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
@@ -30,7 +29,6 @@ ui_*.h
 *_autogen/
 
 # ===== 用户隐私与配置 =====
-# 运行时生成的用户配置（含本地路径、个人偏好）
 config.json
 *.log
 *.log.old
@@ -54,8 +52,6 @@ config.json
 .cproject
 .settings/
 *.code-workspace
-
-# Qt Creator
 CMakeLists.txt.user*
 
 # ===== OS 文件 =====
@@ -72,19 +68,15 @@ ehthumbs.db
 *.bak
 *.cache
 *.pid
-build_win/
 .hermes/
 
-# 内部文档与规划文件（不上传 GitHub）
-AGENTS.md
+# ===== 内部文档与规划文件（不上传 GitHub）=====
 CLAUDE.md
 V5_REVIEW_PLAN.md
 plan.md
 plan_legacy.md
 openspec/
+docs/
 
-# Qt Creator user settings
-CMakeLists.txt.user*
-
-# Clangd / LSP
+# ===== Clangd / LSP =====
 .cache/

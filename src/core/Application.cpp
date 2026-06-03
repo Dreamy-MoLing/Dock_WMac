@@ -5,7 +5,6 @@
  * 将原 main.cpp 的 ~100 行初始化逻辑封装到独立的方法中：
  *   setupLogging()       — 日志系统初始化
  *   checkSingleInstance() — QSharedMemory 单实例检测
- *   setupIPC()           — IPCHelper 启动（含脚本路径回退）
  *   loadPinnedItems()    — 从配置恢复固定项列表
  *   connectPersistence() — 固定项变更自动保存
  */
@@ -16,15 +15,28 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QTimer>
+#include <csignal>
 
 #include "core/ConfigManager.h"
 #include "core/DockManager.h"
-#include "core/IPCHelper.h"
 #include "core/Logger.h"
 #include "core/ProcessMonitor.h"
 #include "core/SysHelper.h"
 #include "core/Types.h"
 #include "ui/DockWindow.h"
+
+// ─── 信号处理：异常退出时恢复原生任务栏 ────────────────────
+
+static SysHelper *s_sysHelperForSignal = nullptr;
+
+static void signalRestoreTaskbar(int)
+{
+    if (s_sysHelperForSignal) {
+        s_sysHelperForSignal->restoreNativeTaskbar();
+    }
+    _exit(1);
+}
 
 // ─── 构造 / 析构 ────────────────────────────────────────────
 
@@ -43,7 +55,6 @@ Application::~Application()
     delete m_dockWindow;
     delete m_dockManager;
     delete m_sysHelper;
-    delete m_ipcHelper;
     delete m_config;
 }
 
@@ -54,22 +65,18 @@ int Application::run()
     // QApplication 必须最先创建、最后销毁
     QApplication app(m_argc, m_argv);
     app.setApplicationName(QStringLiteral("Dock_WMac"));
-    app.setApplicationVersion(QStringLiteral("0.2.0"));
+    app.setApplicationVersion(QStringLiteral("0.2.1"));
 
     setupLogging();
 
     if (!checkSingleInstance())
         return 0;
 
-    setupIPC();
-
     // 核心层初始化
     m_config = new ConfigManager(this);
-    m_config->setIPCHelper(m_ipcHelper);
     m_config->load();
 
     m_sysHelper = new SysHelper(this);
-    m_sysHelper->setIPCHelper(m_ipcHelper);
 
     m_dockManager = new DockManager(this);
     loadPinnedItems();
@@ -85,7 +92,7 @@ int Application::run()
     connectPersistence();
 
     // 创建 ProcessMonitor 并连接 DockWindow
-    m_processMonitor = new ProcessMonitor(m_ipcHelper, this);
+    m_processMonitor = new ProcessMonitor(this);
     m_processMonitor->registerApps(m_dockManager->pinnedItems());
     connect(m_processMonitor, &ProcessMonitor::appRunningStateChanged,
             m_dockWindow, &DockWindow::onAppRunningStateChanged);
@@ -100,6 +107,20 @@ int Application::run()
 
     // 隐藏原生任务栏（Windows only）
     m_sysHelper->hideNativeTaskbar();
+
+    // 注册信号处理，确保异常退出时恢复任务栏
+    s_sysHelperForSignal = m_sysHelper;
+    std::signal(SIGINT, signalRestoreTaskbar);
+    std::signal(SIGTERM, signalRestoreTaskbar);
+    std::signal(SIGABRT, signalRestoreTaskbar);
+    atexit([]() {
+        if (s_sysHelperForSignal) {
+            s_sysHelperForSignal->restoreNativeTaskbar();
+        }
+    });
+
+    // 任务栏隐藏后 availableGeometry 变化，延迟重新定位 Dock
+    QTimer::singleShot(100, m_dockWindow, &DockWindow::requestUpdatePosition);
 
     // 开机自启
     if (m_config->get(QStringLiteral("startWithSystem"), false).toBool()) {
@@ -116,7 +137,6 @@ int Application::run()
     delete m_dockWindow;    m_dockWindow = nullptr;
     delete m_dockManager;   m_dockManager = nullptr;
     delete m_sysHelper;     m_sysHelper = nullptr;
-    delete m_ipcHelper;     m_ipcHelper = nullptr;
     delete m_config;        m_config = nullptr;
 
     return exitCode;
@@ -139,26 +159,6 @@ bool Application::checkSingleInstance()
         }
     }
     return true;
-}
-
-void Application::setupIPC()
-{
-    m_ipcHelper = new IPCHelper(this);
-
-    // 优先：安装目录 ../scripts/helper.py
-    QString scriptPath = QCoreApplication::applicationDirPath()
-                         + QStringLiteral("/../scripts/helper.py");
-
-    // 回退：CMake 构建时二进制在 build/，脚本在项目根
-    if (!QFileInfo::exists(scriptPath)) {
-        QString altPath = QCoreApplication::applicationDirPath()
-                          + QStringLiteral("/../../scripts/helper.py");
-        if (QFileInfo::exists(altPath)) {
-            scriptPath = altPath;
-        }
-    }
-
-    m_ipcHelper->start(scriptPath);
 }
 
 void Application::loadPinnedItems()

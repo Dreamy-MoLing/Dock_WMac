@@ -6,23 +6,18 @@
 #include <QWidget>  // for WId
 #include "Types.h"
 
-class IPCHelper;
-
 /**
  * @file SysHelper.h
  * @brief 系统适配层抽象接口
  *
  * 封装所有底层系统交互，包括任务栏固定项读取、窗口状态监听、全局热键等。
- * 平台差异实现在 SysHelper_win.cpp / SysHelper_linux.cpp 中。
+ * 使用 Win32 API 实现。
  */
 
 class SysHelper : public QObject {
     Q_OBJECT
 public:
     explicit SysHelper(QObject *parent = nullptr);
-
-    /** @brief 设置 IPC helper（用于 .desktop 文件解析等） */
-    void setIPCHelper(IPCHelper *helper);
 
     /** @brief 读取系统任务栏/面板固定项列表 */
     QList<DockItemData> getPinnedItems();
@@ -42,19 +37,19 @@ public:
     /** @brief 返回当前前台窗口是否最大化或全屏 */
     bool getForegroundWindowState();
 
-    /** @brief 设置开机自启（Linux: ~/.config/autostart/*.desktop） */
+    /** @brief 设置开机自启（注册表） */
     bool setAutoStart(bool enabled);
 
     /** @brief 检查是否已设置开机自启 */
     bool isAutoStartEnabled() const;
 
-    /** @brief 获取指定应用的窗口数量（按 WM_CLASS 匹配） */
+    /** @brief 获取指定应用的窗口数量（按进程名匹配） */
     int getWindowCount(const QString &wmClass);
 
     /** @brief 激活指定应用的第一个窗口，返回是否成功 */
     bool activateWindow(const QString &wmClass);
 
-    /** @brief 触发系统窗口选择器（GNOME 概览） */
+    /** @brief 触发系统窗口选择器（Task View） */
     void showWindowPicker();
 
     /** @brief 为窗口启用 DWM 毛玻璃模糊效果 */
@@ -78,9 +73,6 @@ signals:
 
     /** @brief Win 键被按下 signal */
     void winKeyPressed();
-
-protected:
-    IPCHelper *m_ipcHelper;
 };
 
 #endif // SYSHELPER_H

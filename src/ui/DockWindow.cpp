@@ -27,6 +27,11 @@
 #include <QWindow>
 #include <QDir>
 #include <QFile>
+#include <QMenu>
+#include <QAction>
+#include <QContextMenuEvent>
+#include <QDesktopServices>
+#include <QUrl>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -176,6 +181,11 @@ void DockWindow::relayoutItems()
 }
 
 // ─── 窗口定位 ────────────────────────────────────────────
+
+void DockWindow::requestUpdatePosition()
+{
+    updatePosition();
+}
 
 void DockWindow::updatePosition()
 {
@@ -763,4 +773,38 @@ void DockWindow::dropEvent(QDropEvent *event)
     relayoutItems();
 
     event->acceptProposedAction();
+}
+
+// ─── 右键菜单 ─────────────────────────────────────────────
+
+void DockWindow::contextMenuEvent(QContextMenuEvent *event)
+{
+    // 检查右键位置是否在某个 DockItem 上
+    int index = itemAtPos(event->pos().x(), event->pos().y());
+    if (index >= 0) {
+        // 在 DockItem 上，让 DockItem 自己处理右键菜单
+        return;
+    }
+
+    // 在 Dock 背景空白区域，显示系统操作菜单
+    QMenu menu(this);
+
+    QAction *taskMgrAction = menu.addAction("任务管理器");
+    connect(taskMgrAction, &QAction::triggered, this, []() {
+        QProcess::startDetached("taskmgr", QStringList());
+    });
+
+    QAction *taskbarSettingsAction = menu.addAction("任务栏设置");
+    connect(taskbarSettingsAction, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl("ms-settings:taskbar"));
+    });
+
+    menu.addSeparator();
+
+    QAction *quitAction = menu.addAction("退出 Dock");
+    connect(quitAction, &QAction::triggered, this, []() {
+        qApp->quit();
+    });
+
+    menu.exec(event->globalPos());
 }

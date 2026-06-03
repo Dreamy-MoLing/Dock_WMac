@@ -2,20 +2,20 @@
  * @file ProcessMonitor.cpp
  * @brief 应用进程状态监控器实现
  *
- * 通过 IPCHelper 周期性检测进程运行状态，
+ * 使用 Win32 API (CreateToolhelp32Snapshot) 周期性检测进程运行状态，
  * 将变化以信号形式通知 UI 层。
  */
 
 #include "core/ProcessMonitor.h"
-#include "core/IPCHelper.h"
-#include <QJsonObject>
-#include <QJsonArray>
 #include <QFileInfo>
 #include <QDebug>
 
-ProcessMonitor::ProcessMonitor(IPCHelper *ipcHelper, QObject *parent)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <tlhelp32.h>
+
+ProcessMonitor::ProcessMonitor(QObject *parent)
     : QObject(parent)
-    , m_ipcHelper(ipcHelper)
     , m_timer(new QTimer(this))
     , m_tickCount(0)
 {
@@ -62,9 +62,39 @@ QString ProcessMonitor::appIdToProcessName(const QString &appId)
     return name.toLower();
 }
 
+/**
+ * @brief 获取当前运行中的进程名集合
+ *
+ * 使用 CreateToolhelp32Snapshot 枚举所有进程，
+ * 返回小写的可执行文件名（不含 .exe）集合。
+ */
+static QSet<QString> getRunningProcessNames()
+{
+    QSet<QString> names;
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return names;
+
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(pe);
+
+    if (Process32First(hSnap, &pe)) {
+        do {
+            QString exeName = QString::fromWCharArray(pe.szExeFile).toLower();
+            // 移除 .exe 后缀
+            if (exeName.endsWith(".exe")) {
+                exeName.chop(4);
+            }
+            names.insert(exeName);
+        } while (Process32Next(hSnap, &pe));
+    }
+
+    CloseHandle(hSnap);
+    return names;
+}
+
 void ProcessMonitor::onTick()
 {
-    if (!m_ipcHelper || m_registeredApps.isEmpty()) {
+    if (m_registeredApps.isEmpty()) {
         m_tickCount++;
         return;
     }
@@ -75,21 +105,13 @@ void ProcessMonitor::onTick()
     }
     m_tickCount++;
 
-    // 批量检测已注册应用的运行状态
-    QStringList processNames;
-    QList<QString> appIds;
+    // 获取当前运行中的进程名
+    QSet<QString> runningNames = getRunningProcessNames();
+
+    // 检测已注册应用的运行状态
     for (const auto &appId : m_registeredApps) {
-        processNames << appIdToProcessName(appId);
-        appIds << appId;
-    }
-
-    QJsonObject resp = m_ipcHelper->checkProcesses(processNames);
-    if (resp.value("status").toString() != "ok") return;
-
-    QJsonObject running = resp.value("data").toObject().value("is_running").toObject();
-    for (int i = 0; i < appIds.size(); ++i) {
-        const QString &appId = appIds[i];
-        bool isRunning = running.value(processNames[i]).toBool();
+        QString processName = appIdToProcessName(appId);
+        bool isRunning = runningNames.contains(processName);
         bool wasRunning = m_runningCache.value(appId, false);
 
         if (isRunning != wasRunning) {
@@ -101,33 +123,30 @@ void ProcessMonitor::onTick()
 
 void ProcessMonitor::scanTransientApps()
 {
-    QJsonObject resp = m_ipcHelper->scanRunningApps();
-    if (resp.value("status").toString() != "ok") return;
-
-    QJsonArray runningList = resp.value("data").toObject().value("apps").toArray();
+    QSet<QString> runningNames = getRunningProcessNames();
 
     // 当前运行中的应用 ID 集合
     QSet<QString> currentRunning;
-    for (const QJsonValue &v : runningList) {
-        QJsonObject app = v.toObject();
-        QString appId = app.value("app_id").toString();
-        if (appId.isEmpty()) continue;
-        currentRunning.insert(appId);
+    for (const auto &name : runningNames) {
+        // 跳过系统进程
+        if (name.isEmpty() || name == "system" || name == "idle") continue;
+
+        currentRunning.insert(name);
 
         // 跳过已注册的（固定项或已有临时项）
-        if (m_registeredApps.contains(appId)) continue;
+        if (m_registeredApps.contains(name)) continue;
         // 跳过已检测到的
-        if (m_detectedRunningApps.contains(appId)) continue;
+        if (m_detectedRunningApps.contains(name)) continue;
 
         // 新应用出现
         DockItemData item;
-        item.appId = appId;
-        item.displayName = app.value("display_name").toString(appId);
-        item.execPath = app.value("exec_path").toString();
-        item.iconPath = app.value("icon_path").toString();
+        item.appId = name;
+        item.displayName = name;
+        item.execPath = QString();
+        item.iconPath = QString();
         item.isRunning = true;
 
-        m_detectedRunningApps.insert(appId);
+        m_detectedRunningApps.insert(name);
         emit newRunningAppDetected(item);
     }
 

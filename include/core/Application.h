@@ -2,7 +2,7 @@
  * @file Application.h
  * @brief 应用程序生命周期管理类
  *
- * 封装 main.cpp 中的所有初始化逻辑：单实例检测、IPC 启动、
+ * 封装 main.cpp 中的所有初始化逻辑：单实例检测、
  * 配置加载、DockManager/DockWindow 组装、信号连接等。
  * main() 仅需创建 Application 并调用 run()。
  */
@@ -15,7 +15,6 @@
 
 class ConfigManager;
 class SysHelper;
-class IPCHelper;
 class DockManager;
 class DockWindow;
 class ProcessMonitor;
@@ -32,7 +31,6 @@ public:
 private:
     void setupLogging();
     bool checkSingleInstance();
-    void setupIPC();
     void loadPinnedItems();
     void connectPersistence();
 
@@ -45,7 +43,6 @@ private:
 
     // run() 中按序创建，退出前按逆序销毁
     ConfigManager *m_config = nullptr;
-    IPCHelper *m_ipcHelper = nullptr;
     SysHelper *m_sysHelper = nullptr;
     DockManager *m_dockManager = nullptr;
     DockWindow *m_dockWindow = nullptr;

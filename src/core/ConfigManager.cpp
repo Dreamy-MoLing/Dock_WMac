@@ -2,12 +2,11 @@
  * @file ConfigManager.cpp
  * @brief JSON 配置读写与图标映射缓存实现
  *
- * 使用 QJsonDocument 读写 JSON 配置文件，
+ * 使用 QJsonDocument 直接读写 JSON 配置文件，
  * QCache 实现图标 LRU 缓存，自动管理内存。
  */
 
 #include "core/ConfigManager.h"
-#include "core/IPCHelper.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -17,38 +16,18 @@
 ConfigManager::ConfigManager(QObject *parent)
     : QObject(parent)
     , m_iconCache(kCacheLimit)
-    , m_ipcHelper(nullptr)
 {
-}
-
-void ConfigManager::setIPCHelper(IPCHelper *helper)
-{
-    m_ipcHelper = helper;
 }
 
 QString ConfigManager::configFilePath() const
 {
-    // 配置路径: ~/.config/Dock_WMac/config.json (Linux)
-    // Windows 下使用 %APPDATA%/Dock_WMac/config.json
+    // Windows: %APPDATA%/Dock_WMac/config.json
     QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     return configDir + "/config.json";
 }
 
 void ConfigManager::load()
 {
-    // IPC 后端优先
-    if (m_ipcHelper) {
-        QJsonObject resp = m_ipcHelper->readConfig();
-        if (resp.value("status").toString() == "ok") {
-            QJsonObject data = resp.value("data").toObject();
-            if (!data.isEmpty()) {
-                m_config = data;
-                return;
-            }
-        }
-        // IPC 失败则回退到文件
-    }
-
     QFile file(configFilePath());
     if (!file.exists()) {
         // 创建默认配置
@@ -82,14 +61,6 @@ void ConfigManager::load()
 
 void ConfigManager::save()
 {
-    // IPC 后端优先
-    if (m_ipcHelper) {
-        if (m_ipcHelper->writeConfig(m_config)) {
-            return;
-        }
-        // IPC 失败则回退到文件
-    }
-
     QDir().mkpath(QFileInfo(configFilePath()).absolutePath());
 
     QFile file(configFilePath());
@@ -136,5 +107,3 @@ void ConfigManager::cacheIcon(const QString &appId, const QPixmap &pixmap)
 {
     m_iconCache.insert(appId, new QPixmap(pixmap));
 }
-
-

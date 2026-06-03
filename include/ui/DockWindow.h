@@ -45,6 +45,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
 
@@ -58,6 +59,9 @@ private slots:
     QVariant isItemPinned(QVariant appId);
 
 public slots:
+    /** @brief 延迟重新定位 Dock（任务栏隐藏后可用区域变化时调用） */
+    void requestUpdatePosition();
+
     /** @brief ProcessMonitor 信号：应用运行状态变化 */
     void onAppRunningStateChanged(const QString &appId, bool isRunning);
 

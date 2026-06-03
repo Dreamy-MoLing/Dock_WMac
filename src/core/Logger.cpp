@@ -17,6 +17,10 @@
 #include <QDebug>
 #include <cstdio>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 static QFile s_logFile;
 static QMutex s_mutex;
 static const qint64 kMaxLogSize = 5 * 1024 * 1024;  // 5MB
@@ -85,6 +89,11 @@ QString Logger::logFilePath()
 
 void Logger::init()
 {
+#ifdef Q_OS_WIN
+    // 设置控制台输出代码页为 UTF-8，防止中文乱码
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
     QString path = logFilePath();
     QDir().mkpath(QFileInfo(path).absolutePath());
 
