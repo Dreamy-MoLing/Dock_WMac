@@ -22,11 +22,11 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: '6.8.2'
           arch: win64_msvc2022_64
 
       - name: Configure CMake
-        run: cmake --preset default
+        run: cmake --preset default -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
