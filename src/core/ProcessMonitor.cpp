@@ -125,6 +125,13 @@ void ProcessMonitor::scanTransientApps()
 {
     QSet<QString> runningNames = getRunningProcessNames();
 
+    // 构建已注册应用的进程名集合（用于匹配反向DNS格式的appId）
+    // 例如：注册 "com.google.Chrome" → 进程名 "chrome"
+    QSet<QString> registeredProcessNames;
+    for (const auto &appId : m_registeredApps) {
+        registeredProcessNames.insert(appIdToProcessName(appId));
+    }
+
     // 当前运行中的应用 ID 集合
     QSet<QString> currentRunning;
     for (const auto &name : runningNames) {
@@ -134,7 +141,8 @@ void ProcessMonitor::scanTransientApps()
         currentRunning.insert(name);
 
         // 跳过已注册的（固定项或已有临时项）
-        if (m_registeredApps.contains(name)) continue;
+        // 使用进程名匹配，兼容反向DNS格式的appId
+        if (registeredProcessNames.contains(name)) continue;
         // 跳过已检测到的
         if (m_detectedRunningApps.contains(name)) continue;
 

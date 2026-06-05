@@ -54,6 +54,9 @@ private slots:
     void onItemRemoved(const QString &appId);
     void onItemStateChanged(const QString &appId, bool isRunning);
     void onStateChanged(DockState newState);
+    void onOverflowChanged();
+    void onItemWindowCountChanged(const QString &appId, int count);
+    void updateWindowCounts();
 
     /** @brief 查询指定应用是否为固定项（DockItem 右键菜单通过 QMetaObject 调用） */
     QVariant isItemPinned(QVariant appId);
@@ -91,6 +94,10 @@ private:
     void animateItemAdd(DockItem *item);
     void animateItemRemove(DockItem *item, const QString &appId);
 
+    // 抽屉图标管理
+    void updateOverflowItem();
+    void showOverflowPopup();
+
     QList<DockItem *> m_items;
     QMap<QString, DockItem *> m_itemMap;
     DockManager *m_dockManager;
@@ -117,6 +124,13 @@ private:
     // 单双击检测
     QTimer *m_clickTimer;
     DockItem *m_pendingClickItem;
+
+    // 抽屉图标（溢出折叠）
+    DockItem *m_overflowItem;
+    QWidget *m_overflowPopup;
+
+    // 窗口数量更新定时器
+    QTimer *m_windowCountTimer;
 
     // 布局常量
     static constexpr int kBaseSpacing = 8;

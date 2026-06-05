@@ -65,7 +65,7 @@ int Application::run()
     // QApplication 必须最先创建、最后销毁
     QApplication app(m_argc, m_argv);
     app.setApplicationName(QStringLiteral("Dock_WMac"));
-    app.setApplicationVersion(QStringLiteral("0.2.1b"));
+    app.setApplicationVersion(QStringLiteral("0.2.1.1"));
 
     setupLogging();
 
@@ -79,6 +79,7 @@ int Application::run()
     m_sysHelper = new SysHelper(this);
 
     m_dockManager = new DockManager(this);
+    m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
     loadPinnedItems();
 
     // UI 层初始化

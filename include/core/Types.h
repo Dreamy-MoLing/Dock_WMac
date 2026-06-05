@@ -27,6 +27,7 @@ struct DockItemData {
     QString iconPath;       // 图标路径
     bool    isRunning;      // 是否正在运行
     int     badgeCount;     // 未读通知数 (0=无)
+    int     windowCount = 1; // 窗口数量（默认1，用于多窗口堆叠指示器）
 };
 
 #endif // TYPES_H

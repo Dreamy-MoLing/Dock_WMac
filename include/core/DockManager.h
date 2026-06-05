@@ -28,6 +28,18 @@ public:
     QList<DockItemData> pinnedItems() const;
     QList<DockItemData> transientItems() const;
 
+    /** @brief 可见项列表（固定项全部 + 截断后的临时项，受 maxItems 限制） */
+    QList<DockItemData> visibleItems() const;
+
+    /** @brief 被折叠的临时项（超出 maxItems 部分） */
+    QList<DockItemData> overflowItems() const;
+
+    /** @brief 设置最大可见图标数 */
+    void setMaxItems(int max);
+
+    /** @brief 获取最大可见图标数 */
+    int maxItems() const;
+
     /** @brief 初始化：关联 SysHelper 并连接信号，加载固定项列表 */
     void initialize(SysHelper *sysHelper);
 
@@ -49,6 +61,9 @@ public:
     /** @brief 检查应用是否为固定项 */
     bool isPinned(const QString &appId) const;
 
+    /** @brief 更新指定应用的窗口数量 */
+    void updateWindowCount(const QString &appId, int count);
+
 public slots:
     /** @brief 处理前台窗口状态变化 */
     void onForegroundWindowChanged(bool isMaximizedOrFullscreen);
@@ -63,12 +78,17 @@ signals:
     void itemStateChanged(const QString &appId, bool isRunning);
     /** @brief 固定项列表变更（用于通知 ConfigManager 持久化） */
     void pinnedItemsChanged(const QList<DockItemData> &items);
+    /** @brief 被折叠项列表变更（通知 UI 更新抽屉图标） */
+    void overflowChanged();
+    /** @brief 应用窗口数量变更 */
+    void itemWindowCountChanged(const QString &appId, int count);
 
 private:
     DockState m_currentState;
     QList<DockItemData> m_pinnedItems;
     QList<DockItemData> m_transientItems;
     SysHelper *m_sysHelper;
+    int m_maxItems = 16;
 };
 
 #endif // DOCKMANAGER_H

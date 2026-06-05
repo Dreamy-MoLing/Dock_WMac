@@ -30,6 +30,7 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
     , m_displayName(displayName)
     , m_isRunning(false)
     , m_badgeCount(0)
+    , m_windowCount(1)
     , m_isHovered(false)
     , m_visualScale(1.0)
     , m_dragStartPos(0, 0)
@@ -73,6 +74,13 @@ void DockItem::setRunning(bool running)
 void DockItem::setBadgeCount(int count)
 {
     m_badgeCount = count;
+    update();
+}
+
+void DockItem::setWindowCount(int count)
+{
+    if (m_windowCount == count) return;
+    m_windowCount = count;
     update();
 }
 
@@ -129,6 +137,28 @@ void DockItem::paintEvent(QPaintEvent *event)
         painter.setFont(font);
         QString text = (m_badgeCount > 99) ? "99+" : QString::number(m_badgeCount);
         painter.drawText(QRect(bx, 0, badgeSize, badgeSize), Qt::AlignCenter, text);
+    }
+
+    // 多窗口堆叠效果（右下角半透明小矩形层叠）
+    if (m_windowCount > 1) {
+        int layers = qMin(m_windowCount - 1, 3);  // 最多显示3层
+        int layerW = drawSize / 3;                 // 小矩形宽度
+        int layerH = drawSize / 4;                 // 小矩形高度
+        int offsetX = 4;                           // 每层偏移
+        int baseX = width() - layerW - 2;          // 起始X
+        int baseY = height() - layerH - 8;         // 起始Y（避开运行指示灯）
+
+        painter.setPen(QPen(QColor(255, 255, 255, 120), 1));
+
+        // 从最底层开始画（最透明）
+        for (int i = layers - 1; i >= 0; --i) {
+            int alpha = 60 + i * 50;  // 递增不透明度
+            QColor layerColor(200, 200, 200, alpha);
+            painter.setBrush(layerColor);
+            int x = baseX - (layers - 1 - i) * offsetX;
+            int y = baseY - (layers - 1 - i) * offsetX;
+            painter.drawRoundedRect(x, y, layerW, layerH, 3, 3);
+        }
     }
 }
 

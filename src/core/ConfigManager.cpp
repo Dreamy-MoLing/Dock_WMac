@@ -43,6 +43,7 @@ void ConfigManager::load()
         m_config["corner_radius"] = 16;
         m_config["animation_duration"] = 300;
         m_config["show_delay"] = 0;
+        m_config["maxItems"] = 16;
         save();
         return;
     }

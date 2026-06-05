@@ -24,6 +24,8 @@ public:
     void setRunning(bool running);
     bool isRunning() const { return m_isRunning; }
     void setBadgeCount(int count);
+    void setWindowCount(int count);
+    int windowCount() const { return m_windowCount; }
 
     QString appId() const { return m_appId; }
     QString displayName() const { return m_displayName; }
@@ -64,6 +66,7 @@ private:
     QPixmap m_icon;
     bool    m_isRunning;
     int     m_badgeCount;
+    int     m_windowCount;   // 窗口数量（>1 时绘制堆叠效果）
     bool    m_isHovered;
     qreal   m_visualScale;   // 绘制缩放比（1.0 = 原始大小）
     QPoint  m_dragStartPos;

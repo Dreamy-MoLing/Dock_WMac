@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 #include <QSignalSpy>
+#include <QTest>
 #include "core/ProcessMonitor.h"
 #include "test_helpers.h"
 
@@ -165,4 +166,46 @@ TEST_F(ProcessMonitorTest, StopBeforeStart)
 {
     // 在启动前停止不应崩溃
     monitor->stop();
+}
+
+// ========== 反向DNS appId 临时项检测 bug 测试 ==========
+
+TEST_F(ProcessMonitorTest, ReverseDnsAppIdNotDetectedAsTransient)
+{
+    // Bug: scanTransientApps 用 m_registeredApps.contains(name) 检查，
+    // 但 name 是进程名（如 "chrome"），而注册的 appId 是反向DNS格式（如 "com.google.Chrome"）。
+    // 导致已注册的固定项被当作新临时项检测到。
+
+    // 注册一个反向DNS格式的appId
+    monitor->registerApp("com.google.Chrome");
+
+    QSignalSpy newAppSpy(monitor, &ProcessMonitor::newRunningAppDetected);
+
+    // 启动监控，等待扫描触发（tick间隔100ms，scanTransientApps每4 ticks触发）
+    monitor->start(100);
+
+    // 等待足够时间让 scanTransientApps 执行（至少 4 * 100ms = 400ms）
+    QTest::qWait(600);
+
+    monitor->stop();
+
+    // 检查是否错误地将已注册的chrome检测为新临时应用
+    // 如果系统正在运行chrome进程，此测试将失败（证明bug存在）
+    // 如果系统没有运行chrome，此测试会通过（无法复现bug）
+    for (int i = 0; i < newAppSpy.count(); ++i) {
+        QString detectedAppId = newAppSpy.at(i).at(0).value<DockItemData>().appId;
+        // "chrome" 不应被检测为新应用，因为它已通过 "com.google.Chrome" 注册
+        EXPECT_NE(detectedAppId, "chrome")
+            << "Bug: 已注册的反向DNS appId 'com.google.Chrome' 的进程 'chrome' "
+               "被错误地检测为新临时应用";
+    }
+}
+
+TEST(ProcessNameMatching, RegisteredProcessNameMatchesDetected)
+{
+    // 验证 appIdToProcessName 转换逻辑（与 normalizeProcessName 等价）
+    // 这是 bug 的核心：注册的appId和检测到的进程名应该通过转换匹配
+    EXPECT_EQ(normalizeProcessName("com.google.Chrome"), "chrome");
+    EXPECT_EQ(normalizeProcessName("org.gnome.Nautilus"), "nautilus");
+    EXPECT_EQ(normalizeProcessName("chrome"), "chrome");
 }

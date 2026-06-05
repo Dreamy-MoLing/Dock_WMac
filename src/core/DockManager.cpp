@@ -40,6 +40,75 @@ QList<DockItemData> DockManager::transientItems() const
     return m_transientItems;
 }
 
+QList<DockItemData> DockManager::visibleItems() const
+{
+    // 固定项全部显示，不受 maxItems 限制
+    QList<DockItemData> visible = m_pinnedItems;
+
+    // 临时项补满到 maxItems
+    int remaining = m_maxItems - visible.size();
+    for (int i = 0; i < m_transientItems.size() && i < remaining; ++i) {
+        visible.append(m_transientItems[i]);
+    }
+
+    return visible;
+}
+
+QList<DockItemData> DockManager::overflowItems() const
+{
+    // 被折叠的临时项：超出 visibleItems 容量的部分
+    int pinnedCount = m_pinnedItems.size();
+    int transientVisible = qMax(0, m_maxItems - pinnedCount);
+    int transientTotal = m_transientItems.size();
+
+    if (transientVisible >= transientTotal) {
+        return {};  // 没有溢出
+    }
+
+    QList<DockItemData> overflow;
+    for (int i = transientVisible; i < transientTotal; ++i) {
+        overflow.append(m_transientItems[i]);
+    }
+    return overflow;
+}
+
+void DockManager::setMaxItems(int max)
+{
+    if (max < 1) max = 1;
+    if (m_maxItems == max) return;
+    m_maxItems = max;
+    emit overflowChanged();
+}
+
+int DockManager::maxItems() const
+{
+    return m_maxItems;
+}
+
+void DockManager::updateWindowCount(const QString &appId, int count)
+{
+    // 在固定项中查找
+    for (auto &item : m_pinnedItems) {
+        if (item.appId == appId) {
+            if (item.windowCount != count) {
+                item.windowCount = count;
+                emit itemWindowCountChanged(appId, count);
+            }
+            return;
+        }
+    }
+    // 在临时项中查找
+    for (auto &item : m_transientItems) {
+        if (item.appId == appId) {
+            if (item.windowCount != count) {
+                item.windowCount = count;
+                emit itemWindowCountChanged(appId, count);
+            }
+            return;
+        }
+    }
+}
+
 void DockManager::initialize(SysHelper *sysHelper)
 {
     m_sysHelper = sysHelper;
@@ -73,6 +142,8 @@ void DockManager::setPinnedItems(const QList<DockItemData> &items)
     for (const auto &item : m_pinnedItems) {
         emit itemAdded(item);
     }
+
+    emit overflowChanged();
 }
 
 void DockManager::addTransientItem(const DockItemData &item)
@@ -87,7 +158,15 @@ void DockManager::addTransientItem(const DockItemData &item)
     }
 
     m_transientItems.append(item);
-    emit itemAdded(item);
+
+    // 检查是否在可见范围内
+    int visibleTransientCount = qMax(0, m_maxItems - m_pinnedItems.size());
+    if (m_transientItems.size() <= visibleTransientCount) {
+        emit itemAdded(item);
+    } else {
+        // 超出范围，通知溢出变更
+        emit overflowChanged();
+    }
 }
 
 void DockManager::removeTransientItem(const QString &appId)
@@ -96,6 +175,7 @@ void DockManager::removeTransientItem(const QString &appId)
         if (m_transientItems[i].appId == appId) {
             m_transientItems.removeAt(i);
             emit itemRemoved(appId);
+            emit overflowChanged();
             return;
         }
     }

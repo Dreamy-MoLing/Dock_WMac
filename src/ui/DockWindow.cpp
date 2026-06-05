@@ -32,6 +32,8 @@
 #include <QContextMenuEvent>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -55,6 +57,9 @@ DockWindow::DockWindow(QWidget *parent)
     , m_themeTimer(new QTimer(this))
     , m_clickTimer(new QTimer(this))
     , m_pendingClickItem(nullptr)
+    , m_overflowItem(nullptr)
+    , m_overflowPopup(nullptr)
+    , m_windowCountTimer(new QTimer(this))
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -96,6 +101,11 @@ DockWindow::DockWindow(QWidget *parent)
 
     // 初始主题检测
     updateTheme();
+
+    // 窗口数量定时更新（每 2 秒）
+    m_windowCountTimer->setInterval(2000);
+    connect(m_windowCountTimer, &QTimer::timeout, this, &DockWindow::updateWindowCounts);
+    m_windowCountTimer->start();
 }
 
 void DockWindow::setDockManager(DockManager *manager)
@@ -105,6 +115,8 @@ void DockWindow::setDockManager(DockManager *manager)
     connect(manager, &DockManager::itemRemoved, this, &DockWindow::onItemRemoved);
     connect(manager, &DockManager::itemStateChanged, this, &DockWindow::onItemStateChanged);
     connect(manager, &DockManager::stateChanged, this, &DockWindow::onStateChanged);
+    connect(manager, &DockManager::overflowChanged, this, &DockWindow::onOverflowChanged);
+    connect(manager, &DockManager::itemWindowCountChanged, this, &DockWindow::onItemWindowCountChanged);
 }
 
 void DockWindow::setSysHelper(SysHelper *helper)
@@ -507,6 +519,138 @@ void DockWindow::onStateChanged(DockState newState)
     case DockState::Animating:
         break;
     }
+}
+
+// ─── 溢出抽屉 & 窗口数量 ──────────────────────────────────
+
+void DockWindow::onOverflowChanged()
+{
+    updateOverflowItem();
+}
+
+void DockWindow::onItemWindowCountChanged(const QString &appId, int count)
+{
+    auto it = m_itemMap.find(appId);
+    if (it != m_itemMap.end()) {
+        it.value()->setWindowCount(count);
+    }
+}
+
+void DockWindow::updateWindowCounts()
+{
+    if (!m_sysHelper || !m_dockManager) return;
+
+    // 更新所有运行中图标的窗口数量
+    for (auto it = m_itemMap.begin(); it != m_itemMap.end(); ++it) {
+        DockItem *item = it.value();
+        if (!item->isRunning()) continue;
+
+        // 从 appId 推导 WM_CLASS
+        QString wmClass = item->appId();
+        int dotIdx = wmClass.lastIndexOf('.');
+        if (dotIdx >= 0) {
+            wmClass = wmClass.mid(dotIdx + 1);
+        }
+
+        int count = m_sysHelper->getWindowCount(wmClass);
+        if (count > 0) {
+            m_dockManager->updateWindowCount(item->appId(), count);
+        }
+    }
+}
+
+void DockWindow::updateOverflowItem()
+{
+    if (!m_dockManager) return;
+
+    bool hasOverflow = !m_dockManager->overflowItems().isEmpty();
+
+    if (hasOverflow && !m_overflowItem) {
+        // 创建抽屉图标
+        m_overflowItem = new DockItem("__overflow__", "", "...", this);
+        m_overflowItem->setFixedSize(48, 48);
+        m_itemMap["__overflow__"] = m_overflowItem;
+        m_items.append(m_overflowItem);
+
+        // 点击事件：弹出溢出菜单
+        connect(m_overflowItem, &DockItem::clicked, this, [this](const QString &) {
+            showOverflowPopup();
+        });
+
+        m_overflowItem->installEventFilter(this);
+        m_overflowItem->show();
+        relayoutItems();
+        updatePosition();
+        animateItemAdd(m_overflowItem);
+
+    } else if (!hasOverflow && m_overflowItem) {
+        // 移除抽屉图标
+        auto it = m_itemMap.find("__overflow__");
+        if (it != m_itemMap.end()) {
+            m_itemMap.erase(it);
+        }
+        m_items.removeOne(m_overflowItem);
+        animateItemRemove(m_overflowItem, "__overflow__");
+        m_overflowItem = nullptr;
+    }
+}
+
+void DockWindow::showOverflowPopup()
+{
+    if (!m_dockManager) return;
+
+    // 关闭之前的弹出窗口
+    if (m_overflowPopup) {
+        m_overflowPopup->close();
+        m_overflowPopup->deleteLater();
+        m_overflowPopup = nullptr;
+    }
+
+    auto overflowItems = m_dockManager->overflowItems();
+    if (overflowItems.isEmpty()) return;
+
+    // 创建弹出窗口
+    m_overflowPopup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
+    m_overflowPopup->setAttribute(Qt::WA_TranslucentBackground);
+
+    int itemH = 40;
+    int popupW = 200;
+    int popupH = overflowItems.size() * itemH + 16;
+    m_overflowPopup->setFixedSize(popupW, popupH);
+
+    // 在抽屉图标上方显示
+    QPoint globalPos = m_overflowItem->mapToGlobal(QPoint(0, 0));
+    m_overflowPopup->move(globalPos.x() - popupW / 2 + m_overflowItem->width() / 2,
+                          globalPos.y() - popupH - 8);
+
+    // 绘制背景和列表项
+    QVBoxLayout *layout = new QVBoxLayout(m_overflowPopup);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(2);
+
+    for (const auto &data : overflowItems) {
+        QPushButton *btn = new QPushButton(data.displayName, m_overflowPopup);
+        btn->setFixedHeight(itemH - 4);
+        btn->setStyleSheet(
+            "QPushButton { background: rgba(60,60,60,200); color: white; "
+            "border: none; border-radius: 6px; text-align: left; padding-left: 12px; font-size: 13px; }"
+            "QPushButton:hover { background: rgba(80,80,80,220); }"
+        );
+        connect(btn, &QPushButton::clicked, this, [this, appId = data.appId]() {
+            if (m_sysHelper) {
+                QString wmClass = appId;
+                int dotIdx = wmClass.lastIndexOf('.');
+                if (dotIdx >= 0) wmClass = wmClass.mid(dotIdx + 1);
+                m_sysHelper->activateWindow(wmClass);
+            }
+            if (m_overflowPopup) {
+                m_overflowPopup->close();
+            }
+        });
+        layout->addWidget(btn);
+    }
+
+    m_overflowPopup->show();
 }
 
 // ─── 单双击处理 ────────────────────────────────────────────
