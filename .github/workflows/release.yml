@@ -2,10 +2,10 @@ name: Build & Release
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   BUILD_TYPE: Release
@@ -36,7 +36,7 @@ jobs:
 
       - name: Deploy Qt runtime dependencies
         run: |
-          windeployqt --no-translations --no-opengl-sw --dir deploy build/dock_wmac.exe
+          windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/dock_wmac.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
