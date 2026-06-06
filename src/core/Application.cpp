@@ -24,6 +24,7 @@
 #include "core/PinnedItemsReader.h"
 #include "core/ProcessMonitor.h"
 #include "core/SysHelper.h"
+#include "core/WindowManager.h"
 #include "core/Types.h"
 #include "ui/DockWindow.h"
 
@@ -55,6 +56,7 @@ Application::~Application()
     delete m_processMonitor;
     delete m_dockWindow;
     delete m_dockManager;
+    delete m_windowManager;
     delete m_sysHelper;
     delete m_config;
 }
@@ -78,6 +80,7 @@ int Application::run()
     m_config->load();
 
     m_sysHelper = new SysHelper(this);
+    m_windowManager = new WindowManager(this);
 
     m_dockManager = new DockManager(this);
     m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
@@ -86,6 +89,7 @@ int Application::run()
     m_dockWindow = new DockWindow();
     m_dockWindow->setDockManager(m_dockManager);
     m_dockWindow->setSysHelper(m_sysHelper);
+    m_dockWindow->setWindowManager(m_windowManager);
 
     // 加载固定项（必须在信号连接之前）
     loadPinnedItems();
@@ -98,12 +102,7 @@ int Application::run()
     // 创建 ProcessMonitor 并连接 DockWindow
     m_processMonitor = new ProcessMonitor(this);
     m_processMonitor->registerApps(m_dockManager->pinnedItems());
-    connect(m_processMonitor, &ProcessMonitor::appRunningStateChanged,
-            m_dockWindow, &DockWindow::onAppRunningStateChanged);
-    connect(m_processMonitor, &ProcessMonitor::newRunningAppDetected,
-            m_dockWindow, &DockWindow::onNewRunningAppDetected);
-    connect(m_processMonitor, &ProcessMonitor::runningAppExited,
-            m_dockWindow, &DockWindow::onRunningAppExited);
+    m_dockWindow->setProcessMonitor(m_processMonitor);
     m_processMonitor->start();
 
     m_dockWindow->show();
@@ -135,6 +134,7 @@ int Application::run()
     delete m_processMonitor;    m_processMonitor = nullptr;
     delete m_dockWindow;    m_dockWindow = nullptr;
     delete m_dockManager;   m_dockManager = nullptr;
+    delete m_windowManager; m_windowManager = nullptr;
     delete m_sysHelper;     m_sysHelper = nullptr;
     delete m_config;        m_config = nullptr;
 

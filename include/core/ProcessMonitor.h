@@ -50,7 +50,6 @@ private slots:
     void onTick();
 
 private:
-    static QString appIdToProcessName(const QString &appId);
     void scanTransientApps();
 
     QTimer *m_timer;

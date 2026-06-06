@@ -7,6 +7,7 @@
  */
 
 #include "ui/DockItem.h"
+#include "core/IconProvider.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QEnterEvent>
@@ -43,50 +44,8 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
     setMouseTracking(true);
     setAcceptDrops(true);
 
-    // 加载图标：优先绝对路径图片，其次 exe/dll 图标提取，最后占位符
-    if (!iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
-        m_icon.load(iconPath);
-    }
-    // 若直接加载失败（如 .exe 无法作为图片加载），使用 QFileIconProvider 提取
-    if (m_icon.isNull() && !iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
-        QString lower = iconPath.toLower();
-        if (lower.endsWith(".exe") || lower.endsWith(".dll") || lower.endsWith(".lnk")) {
-            QFileIconProvider provider;
-            QIcon fileIcon = provider.icon(QFileInfo(iconPath));
-            if (!fileIcon.isNull()) {
-                m_icon = fileIcon.pixmap(64, 64);
-            }
-        }
-    }
-    if (m_icon.isNull() && !iconPath.isEmpty()) {
-        QIcon themedIcon = QIcon::fromTheme(iconPath);
-        if (!themedIcon.isNull()) {
-            m_icon = themedIcon.pixmap(64, 64);
-        }
-    }
-    if (m_icon.isNull()) {
-        m_icon = QPixmap(64, 64);
-        m_icon.fill(QColor(80, 80, 80));
-        QPainter p(&m_icon);
-        p.setPen(Qt::white);
-        QFont font = p.font();
-        font.setPixelSize(32);
-        font.setBold(true);
-        p.setFont(font);
-        p.drawText(m_icon.rect(), Qt::AlignCenter,
-                   displayName.isEmpty() ? "?" : displayName.left(1).toUpper());
-    }
-
-    // 统一归一化：所有图标缩放居中到 64×64，确保 Dock 上显示尺寸一致
-    if (m_icon.width() != 64 || m_icon.height() != 64) {
-        QPixmap normalized(64, 64);
-        normalized.fill(Qt::transparent);
-        QPixmap scaled = m_icon.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        QPainter np(&normalized);
-        np.drawPixmap((64 - scaled.width()) / 2, (64 - scaled.height()) / 2, scaled);
-        np.end();
-        m_icon = normalized;
-    }
+    // 加载图标（IconProvider 内部处理 4 级回退 + 归一化到 64×64）
+    m_icon = IconProvider::loadIcon(iconPath, displayName);
 }
 
 void DockItem::setRunning(bool running)

@@ -13,6 +13,10 @@
 class DockItem;
 class DockManager;
 class SysHelper;
+class ProcessMonitor;
+class WindowPreviewPanel;
+class OverflowPanel;
+class WindowManager;
 
 /**
  * @file DockWindow.h
@@ -33,6 +37,12 @@ public:
 
     /** @brief 关联 SysHelper（窗口管理用） */
     void setSysHelper(SysHelper *helper);
+
+    /** @brief 连接 ProcessMonitor 信号 */
+    void setProcessMonitor(ProcessMonitor *monitor);
+
+    /** @brief 设置 WindowManager（窗口枚举/激活） */
+    void setWindowManager(WindowManager *wm);
 
     /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
     void setMonitor(int index);
@@ -103,6 +113,7 @@ private:
     QMap<QString, DockItem *> m_itemMap;
     DockManager *m_dockManager;
     SysHelper *m_sysHelper;
+    WindowManager *m_windowManager = nullptr;
     int m_baseIconSize;
     int m_fixedWindowH;
     qreal m_opacity;
@@ -128,17 +139,14 @@ private:
 
     // 抽屉图标（溢出折叠）
     DockItem *m_overflowItem;
-    QWidget *m_overflowPopup;
+    OverflowPanel *m_overflowPanel;
 
     // 窗口数量更新定时器
     QTimer *m_windowCountTimer;
 
     // 窗口预览
-    QTimer *m_previewTimer;        // 悬停延迟定时器 (500ms)
-    QWidget *m_previewPopup;       // 预览弹出面板
-    DockItem *m_previewItem;       // 当前正在预览的图标项
-    void showWindowPreview(DockItem *item);
-    void hideWindowPreview();
+    WindowPreviewPanel *m_windowPreview;  // 预览面板控制器
+    DockItem *m_previewItem;              // 当前悬停的图标项（hover 追踪）
 
     // 底部边缘唤起（Hidden 状态鼠标触碰屏幕底部边缘自动显示）
     QTimer *m_bottomEdgeTimer;

@@ -11,6 +11,11 @@
 #include "ui/DockItem.h"
 #include "core/DockManager.h"
 #include "core/SysHelper.h"
+#include "core/AppIdHelper.h"
+#include "core/ProcessMonitor.h"
+#include "core/WindowManager.h"
+#include "ui/WindowPreviewPanel.h"
+#include "ui/OverflowPanel.h"
 #include <QPainter>
 #include <QScreen>
 #include <QGuiApplication>
@@ -61,12 +66,11 @@ DockWindow::DockWindow(QWidget *parent)
     , m_clickTimer(new QTimer(this))
     , m_pendingClickItem(nullptr)
     , m_overflowItem(nullptr)
-    , m_overflowPopup(nullptr)
     , m_windowCountTimer(new QTimer(this))
-    , m_previewTimer(new QTimer(this))
-    , m_previewPopup(nullptr)
     , m_previewItem(nullptr)
     , m_bottomEdgeTimer(new QTimer(this))
+    , m_windowPreview(new WindowPreviewPanel(this))
+    , m_overflowPanel(new OverflowPanel(this))
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -114,15 +118,6 @@ DockWindow::DockWindow(QWidget *parent)
     connect(m_windowCountTimer, &QTimer::timeout, this, &DockWindow::updateWindowCounts);
     m_windowCountTimer->start();
 
-    // 窗口预览延迟定时器（悬停 500ms 后显示预览）
-    m_previewTimer->setSingleShot(true);
-    m_previewTimer->setInterval(500);
-    connect(m_previewTimer, &QTimer::timeout, this, [this]() {
-        if (m_previewItem) {
-            showWindowPreview(m_previewItem);
-        }
-    });
-
     // 底部边缘唤起定时器（Hidden 状态每 200ms 检查鼠标位置）
     m_bottomEdgeTimer->setInterval(200);
     connect(m_bottomEdgeTimer, &QTimer::timeout, this, [this]() {
@@ -157,6 +152,8 @@ void DockWindow::setDockManager(DockManager *manager)
     connect(manager, &DockManager::stateChanged, this, &DockWindow::onStateChanged);
     connect(manager, &DockManager::overflowChanged, this, &DockWindow::onOverflowChanged);
     connect(manager, &DockManager::itemWindowCountChanged, this, &DockWindow::onItemWindowCountChanged);
+
+    m_overflowPanel->setDockManager(manager);
 }
 
 void DockWindow::setSysHelper(SysHelper *helper)
@@ -166,6 +163,25 @@ void DockWindow::setSysHelper(SysHelper *helper)
     QTimer::singleShot(100, this, &DockWindow::initBlurEffect);
     // 刷新主题
     updateTheme();
+    // 设置预览面板的 SysHelper
+    m_windowPreview->setSysHelper(m_sysHelper);
+    m_overflowPanel->setSysHelper(m_sysHelper);
+}
+
+void DockWindow::setProcessMonitor(ProcessMonitor *monitor)
+{
+    connect(monitor, &ProcessMonitor::appRunningStateChanged,
+            this, &DockWindow::onAppRunningStateChanged);
+    connect(monitor, &ProcessMonitor::newRunningAppDetected,
+            this, &DockWindow::onNewRunningAppDetected);
+    connect(monitor, &ProcessMonitor::runningAppExited,
+            this, &DockWindow::onRunningAppExited);
+}
+
+void DockWindow::setWindowManager(WindowManager *wm)
+{
+    m_windowManager = wm;
+    m_overflowPanel->setWindowManager(wm);
 }
 
 void DockWindow::setMonitor(int index)
@@ -430,37 +446,17 @@ bool DockWindow::eventFilter(QObject *obj, QEvent *event)
                     resetFishEyeEffect();
             }
 
-            // 窗口预览：悬停时启动延迟定时器，离开时取消
+            // 窗口预览：悬停时委托给 WindowPreviewPanel
             if (index >= 0) {
                 DockItem *hoveredItem = m_items[index];
                 if (hoveredItem != m_previewItem) {
-                    hideWindowPreview();
+                    m_windowPreview->hidePreview();
                     m_previewItem = hoveredItem;
-                    m_previewTimer->start();
+                    m_windowPreview->showPreview(hoveredItem);
                 }
             } else {
-                hideWindowPreview();
-                m_previewTimer->stop();
+                m_windowPreview->hidePreview();
                 m_previewItem = nullptr;
-            }
-        }
-    }
-
-    // 窗口预览缩略图点击 → 激活对应窗口
-    if (event->type() == QEvent::MouseButtonPress) {
-        QWidget *w = qobject_cast<QWidget *>(obj);
-        if (w) {
-            QVariant v = w->property("previewHwnd");
-            if (v.isValid()) {
-                HWND hwnd = reinterpret_cast<HWND>(v.value<qintptr>());
-                if (hwnd && IsWindow(hwnd)) {
-                    hideWindowPreview();
-                    AllowSetForegroundWindow(ASFW_ANY);
-                    SetForegroundWindow(hwnd);
-                    ShowWindow(hwnd, SW_RESTORE);
-                    SetFocus(hwnd);
-                }
-                return true;
             }
         }
     }
@@ -650,21 +646,9 @@ void DockWindow::updateWindowCounts()
         DockItem *item = it.value();
         if (!item->isRunning()) continue;
 
-        // 从 appId 推导 WM_CLASS，优先用 execPath basename
-        QString wmClass;
-        QString execPath = item->execPath();
-        if (!execPath.isEmpty()) {
-            QFileInfo fi(execPath);
-            wmClass = fi.baseName();
-        } else {
-            wmClass = item->appId();
-            int dotIdx = wmClass.lastIndexOf('.');
-            if (dotIdx >= 0) {
-                wmClass = wmClass.mid(dotIdx + 1);
-            }
-        }
+        QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
 
-        int count = m_sysHelper->getWindowCount(wmClass);
+        int count = m_windowManager->getWindowCount(wmClass);
         if (count > 0) {
             m_dockManager->updateWindowCount(item->appId(), count);
         }
@@ -709,66 +693,7 @@ void DockWindow::updateOverflowItem()
 
 void DockWindow::showOverflowPopup()
 {
-    if (!m_dockManager) return;
-
-    // 关闭之前的弹出窗口
-    if (m_overflowPopup) {
-        m_overflowPopup->close();
-        m_overflowPopup->deleteLater();
-        m_overflowPopup = nullptr;
-    }
-
-    auto overflowItems = m_dockManager->overflowItems();
-    if (overflowItems.isEmpty()) return;
-
-    // 创建弹出窗口
-    m_overflowPopup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
-    m_overflowPopup->setAttribute(Qt::WA_TranslucentBackground);
-
-    int itemH = 40;
-    int popupW = 200;
-    int popupH = overflowItems.size() * itemH + 16;
-    m_overflowPopup->setFixedSize(popupW, popupH);
-
-    // 在抽屉图标上方显示
-    QPoint globalPos = m_overflowItem->mapToGlobal(QPoint(0, 0));
-    m_overflowPopup->move(globalPos.x() - popupW / 2 + m_overflowItem->width() / 2,
-                          globalPos.y() - popupH - 8);
-
-    // 绘制背景和列表项
-    QVBoxLayout *layout = new QVBoxLayout(m_overflowPopup);
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(2);
-
-    for (const auto &data : overflowItems) {
-        QPushButton *btn = new QPushButton(data.displayName, m_overflowPopup);
-        btn->setFixedHeight(itemH - 4);
-        btn->setStyleSheet(
-            "QPushButton { background: rgba(60,60,60,200); color: white; "
-            "border: none; border-radius: 6px; text-align: left; padding-left: 12px; font-size: 13px; }"
-            "QPushButton:hover { background: rgba(80,80,80,220); }"
-        );
-        connect(btn, &QPushButton::clicked, this, [this, data]() {
-            if (m_sysHelper) {
-                QString wmClass;
-                if (!data.execPath.isEmpty()) {
-                    QFileInfo fi(data.execPath);
-                    wmClass = fi.baseName();
-                } else {
-                    wmClass = data.appId;
-                    int dotIdx = wmClass.lastIndexOf('.');
-                    if (dotIdx >= 0) wmClass = wmClass.mid(dotIdx + 1);
-                }
-                m_sysHelper->activateWindow(wmClass);
-            }
-            if (m_overflowPopup) {
-                m_overflowPopup->close();
-            }
-        });
-        layout->addWidget(btn);
-    }
-
-    m_overflowPopup->show();
+    m_overflowPanel->showPopup(m_overflowItem, this);
 }
 
 // ─── 单双击处理 ────────────────────────────────────────────
@@ -801,37 +726,25 @@ void DockWindow::handleSingleClick(DockItem *item)
         return;
     }
 
-    // 推导 WM_CLASS，优先用 execPath basename（更精确）
-    QString wmClass;
-    QString execPath = item->execPath();
-    if (!execPath.isEmpty()) {
-        QFileInfo fi(execPath);
-        wmClass = fi.baseName();
-    } else {
-        wmClass = item->appId();
-        int dotIdx = wmClass.lastIndexOf('.');
-        if (dotIdx >= 0) {
-            wmClass = wmClass.mid(dotIdx + 1);
-        }
-    }
+    QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
 
     if (item->isRunning()) {
         // 应用正在运行 → 尝试激活已有窗口
-        int count = m_sysHelper->getWindowCount(wmClass);
+        int count = m_windowManager->getWindowCount(wmClass);
         if (count == 1) {
-            m_sysHelper->activateWindow(wmClass);
+            m_windowManager->activateWindow(wmClass);
             return;
         } else if (count > 1) {
-            m_sysHelper->showWindowPicker();
+            m_windowManager->showWindowPicker();
             return;
         }
         // getWindowCount 返回 0 但 isRunning=true → WM_CLASS 可能不匹配
         // fallback：直接调用 activateWindow，它内部会重新查找
-        if (m_sysHelper->activateWindow(wmClass)) {
+        if (m_windowManager->activateWindow(wmClass)) {
             return;
         }
         // 二次 fallback：用原始 appId 试一次
-        if (m_sysHelper->activateWindow(item->appId())) {
+        if (m_windowManager->activateWindow(item->appId())) {
             return;
         }
         // 都失败了，降级为启动新实例
@@ -1078,219 +991,3 @@ void DockWindow::contextMenuEvent(QContextMenuEvent *event)
     menu.exec(event->globalPos());
 }
 
-// ─── 窗口预览 ──────────────────────────────────────────────
-
-void DockWindow::showWindowPreview(DockItem *item)
-{
-    if (!item || !m_sysHelper) return;
-
-    // 推导 WM_CLASS
-    QString wmClass;
-    QString execPath = item->execPath();
-    if (!execPath.isEmpty()) {
-        QFileInfo fi(execPath);
-        wmClass = fi.baseName();
-    } else {
-        wmClass = item->appId();
-        int dotIdx = wmClass.lastIndexOf('.');
-        if (dotIdx >= 0) wmClass = wmClass.mid(dotIdx + 1);
-    }
-    if (wmClass.isEmpty()) return;
-
-    QString lowerClass = wmClass.toLower();
-
-    // 枚举匹配进程的可见窗口
-    struct WinInfo { HWND hwnd; QString title; };
-
-    // 使用结构体传递匹配参数
-    struct EnumCtx {
-        QString targetClass;
-        QList<WinInfo> windows;
-    } ctx{lowerClass, {}};
-
-    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-        auto *ctx = reinterpret_cast<EnumCtx *>(lParam);
-        if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
-
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
-
-        wchar_t title[256] = {0};
-        GetWindowTextW(hwnd, title, 255);
-        if (wcslen(title) < 2) return TRUE;
-
-        DWORD pid;
-        GetWindowThreadProcessId(hwnd, &pid);
-        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (!hProcess) return TRUE;
-
-        wchar_t exeName[MAX_PATH] = {0};
-        DWORD size = MAX_PATH;
-        BOOL matched = FALSE;
-        if (QueryFullProcessImageNameW(hProcess, 0, exeName, &size)) {
-            QString exe = QFileInfo(QString::fromWCharArray(exeName)).baseName().toLower();
-            if (exe == ctx->targetClass) matched = TRUE;
-        }
-        CloseHandle(hProcess);
-        if (!matched) return TRUE;
-
-        ctx->windows.append({hwnd, QString::fromWCharArray(title)});
-        return TRUE;
-    }, reinterpret_cast<LPARAM>(&ctx));
-
-    if (ctx.windows.isEmpty()) return;
-
-    // 限制最多显示 6 个窗口预览
-    int maxPreviews = qMin(ctx.windows.size(), 6);
-
-    // 创建预览弹出面板
-    hideWindowPreview();
-    m_previewPopup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
-    m_previewPopup->setAttribute(Qt::WA_TranslucentBackground);
-    m_previewPopup->setAttribute(Qt::WA_ShowWithoutActivating);
-
-    int thumbW = 160;
-    int thumbH = 100;
-    int spacing = 8;
-    int padding = 10;
-    int titleH  = 20;
-    int popupW  = maxPreviews * thumbW + (maxPreviews - 1) * spacing + 2 * padding;
-    int popupH  = thumbH + titleH + 2 * padding;
-    m_previewPopup->setFixedSize(popupW, popupH);
-
-    // 背景和布局
-    m_previewPopup->setStyleSheet(
-        "background: rgba(30, 30, 30, 220); border-radius: 10px;");
-
-    for (int i = 0; i < maxPreviews; ++i) {
-        const auto &wi = ctx.windows[i];
-
-        // 捕获窗口缩略图（安全模式：先检测响应，再 PrintWindow）
-        QPixmap thumb(thumbW, thumbH);
-        thumb.fill(QColor(50, 50, 50));
-        bool captured = false;
-
-#ifdef Q_OS_WIN
-        // 检测窗口是否响应，避免 PrintWindow 卡死事件循环
-        DWORD_PTR result = 0;
-        LRESULT checkOk = SendMessageTimeoutW(wi.hwnd, WM_NULL, 0, 0,
-            SMTO_ABORTIFHUNG | SMTO_BLOCK, 80, &result);
-        if (checkOk) {
-            RECT rect;
-            if (GetWindowRect(wi.hwnd, &rect)) {
-                int winW = rect.right - rect.left;
-                int winH = rect.bottom - rect.top;
-                if (winW > 0 && winH > 0) {
-                    // 限制窗口尺寸，避免超大窗口的位图分配
-                    int capW = qMin(winW, 640);
-                    int capH = qMin(winH, 400);
-                    HDC hdcWindow = GetDC(wi.hwnd);
-                    HDC hdcMem = CreateCompatibleDC(hdcWindow);
-                    HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, capW, capH);
-                    HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hBitmap);
-
-                    // PW_CLIENTONLY 比 PW_RENDERFULLCONTENT 更安全，不会触发 DWM 重绘
-                    if (PrintWindow(wi.hwnd, hdcMem, PW_CLIENTONLY)) {
-                        BITMAPINFO bmi = {};
-                        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                        bmi.bmiHeader.biWidth = capW;
-                        bmi.bmiHeader.biHeight = -capH;
-                        bmi.bmiHeader.biPlanes = 1;
-                        bmi.bmiHeader.biBitCount = 32;
-                        bmi.bmiHeader.biCompression = BI_RGB;
-
-                        QImage img(capW, capH, QImage::Format_ARGB32);
-                        GetDIBits(hdcMem, hBitmap, 0, capH, img.bits(), &bmi, DIB_RGB_COLORS);
-                        thumb = QPixmap::fromImage(img).scaled(thumbW, thumbH,
-                            Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                        captured = true;
-
-                        // 居中放置缩略图
-                        if (thumb.width() < thumbW || thumb.height() < thumbH) {
-                            QPixmap centered(thumbW, thumbH);
-                            centered.fill(QColor(50, 50, 50));
-                            QPainter pp(&centered);
-                            pp.drawPixmap((thumbW - thumb.width()) / 2,
-                                          (thumbH - thumb.height()) / 2, thumb);
-                            pp.end();
-                            thumb = centered;
-                        }
-                    }
-
-                    SelectObject(hdcMem, hOld);
-                    DeleteObject(hBitmap);
-                    DeleteDC(hdcMem);
-                    ReleaseDC(wi.hwnd, hdcWindow);
-                }
-            }
-        }
-
-        // PrintWindow 失败：回退到应用图标
-        if (!captured && !item->execPath().isEmpty()) {
-            QFileIconProvider provider;
-            QIcon appIcon = provider.icon(QFileInfo(item->execPath()));
-            if (!appIcon.isNull()) {
-                QPixmap iconPix = appIcon.pixmap(48, 48);
-                QPainter pp(&thumb);
-                pp.drawPixmap((thumbW - 48) / 2, (thumbH - 48) / 2, iconPix);
-                pp.end();
-            }
-        }
-#endif
-
-        // 缩略图标签
-        QLabel *thumbLabel = new QLabel(m_previewPopup);
-        thumbLabel->setPixmap(thumb);
-        thumbLabel->setFixedSize(thumbW, thumbH);
-        thumbLabel->setStyleSheet("background: transparent;");
-        thumbLabel->move(padding + i * (thumbW + spacing), padding);
-
-        // 窗口标题标签
-        QLabel *titleLabel = new QLabel(m_previewPopup);
-        QString elidedTitle = wi.title;
-        if (elidedTitle.length() > 20) {
-            elidedTitle = elidedTitle.left(19) + "...";
-        }
-        titleLabel->setText(elidedTitle);
-        titleLabel->setFixedSize(thumbW, titleH);
-        titleLabel->setAlignment(Qt::AlignCenter);
-        titleLabel->setStyleSheet(
-            "background: transparent; color: white; font-size: 11px;");
-        titleLabel->move(padding + i * (thumbW + spacing), padding + thumbH + 4);
-
-        // 点击缩略图切换到对应窗口
-        HWND targetHwnd = wi.hwnd;
-        thumbLabel->setCursor(Qt::PointingHandCursor);
-        // 使用 eventFilter 处理点击（在 thumbLabel 上安装事件过滤器）
-        thumbLabel->installEventFilter(this);
-        // 存储 hwnd 到 property
-        thumbLabel->setProperty("previewHwnd", reinterpret_cast<qintptr>(targetHwnd));
-    }
-
-    // 定位弹出面板：在 dock 窗口上方居中
-    QPoint itemCenter = item->mapToGlobal(
-        QPoint(item->width() / 2, 0));
-    int popupX = itemCenter.x() - popupW / 2;
-    int popupY = mapToGlobal(QPoint(0, 0)).y() - popupH - 12;
-
-    // 确保不超出屏幕
-    QScreen *screen = QGuiApplication::screenAt(itemCenter);
-    if (screen) {
-        QRect geo = screen->availableGeometry();
-        popupX = qBound(geo.left() + 8, popupX, geo.right() - popupW - 8);
-        if (popupY < geo.top()) popupY = geo.top() + 8;
-    }
-
-    m_previewPopup->move(popupX, popupY);
-    m_previewPopup->show();
-}
-
-void DockWindow::hideWindowPreview()
-{
-    if (m_previewPopup) {
-        m_previewPopup->close();
-        m_previewPopup->deleteLater();
-        m_previewPopup = nullptr;
-    }
-    m_previewItem = nullptr;
-}

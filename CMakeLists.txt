@@ -15,20 +15,29 @@ add_executable(dock_wmac WIN32
     src/core/ConfigManager.cpp
     src/core/ProcessMonitor.cpp
     src/core/SysHelper.cpp
+    src/core/WindowManager.cpp
+    src/core/IconProvider.cpp
     src/core/Logger.cpp
     src/core/PinnedItemsReader.cpp
     src/ui/DockWindow.cpp
     src/ui/DockItem.cpp
+    src/ui/WindowPreviewPanel.cpp
+    src/ui/OverflowPanel.cpp
     include/core/Types.h
+    include/core/AppIdHelper.h
     include/core/Application.h
     include/core/DockManager.h
     include/core/ConfigManager.h
     include/core/ProcessMonitor.h
     include/core/SysHelper.h
+    include/core/WindowManager.h
+    include/core/IconProvider.h
     include/core/Logger.h
     include/core/PinnedItemsReader.h
     include/ui/DockWindow.h
     include/ui/DockItem.h
+    include/ui/WindowPreviewPanel.h
+    include/ui/OverflowPanel.h
     resources/resources.qrc
 )
 

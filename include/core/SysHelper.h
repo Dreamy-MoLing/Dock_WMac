@@ -37,15 +37,6 @@ public:
     /** @brief 检查是否已设置开机自启 */
     bool isAutoStartEnabled() const;
 
-    /** @brief 获取指定应用的窗口数量（按进程名匹配） */
-    int getWindowCount(const QString &wmClass);
-
-    /** @brief 激活指定应用的第一个窗口，返回是否成功 */
-    bool activateWindow(const QString &wmClass);
-
-    /** @brief 触发系统窗口选择器（Task View） */
-    void showWindowPicker();
-
     /** @brief 为窗口启用 DWM 毛玻璃模糊效果（全窗口） */
     void enableBlurBehindWindow(WId winId);
 

@@ -25,15 +25,24 @@ add_library(dock_core_objects OBJECT
     ${CMAKE_SOURCE_DIR}/src/core/DockManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ProcessMonitor.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/WindowManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/IconProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/PinnedItemsReader.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/WindowPreviewPanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/OverflowPanel.cpp
     ${CMAKE_SOURCE_DIR}/include/core/Types.h
     ${CMAKE_SOURCE_DIR}/include/core/ConfigManager.h
+    ${CMAKE_SOURCE_DIR}/include/core/AppIdHelper.h
     ${CMAKE_SOURCE_DIR}/include/core/DockManager.h
     ${CMAKE_SOURCE_DIR}/include/core/ProcessMonitor.h
     ${CMAKE_SOURCE_DIR}/include/core/SysHelper.h
+    ${CMAKE_SOURCE_DIR}/include/core/WindowManager.h
+    ${CMAKE_SOURCE_DIR}/include/core/IconProvider.h
     ${CMAKE_SOURCE_DIR}/include/core/Logger.h
     ${CMAKE_SOURCE_DIR}/include/core/PinnedItemsReader.h
+    ${CMAKE_SOURCE_DIR}/include/ui/WindowPreviewPanel.h
+    ${CMAKE_SOURCE_DIR}/include/ui/OverflowPanel.h
 )
 target_include_directories(dock_core_objects PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi)

@@ -9,6 +9,7 @@
  */
 
 #include "core/ProcessMonitor.h"
+#include "core/AppIdHelper.h"
 #include <QFileInfo>
 #include <QSet>
 #include <QDebug>
@@ -133,17 +134,6 @@ void ProcessMonitor::unregisterApp(const QString &appId)
     m_runningCache.remove(appId);
 }
 
-QString ProcessMonitor::appIdToProcessName(const QString &appId)
-{
-    // org.gnome.Nautilus → Nautilus
-    QString name = appId;
-    int dotIdx = name.lastIndexOf('.');
-    if (dotIdx >= 0) {
-        name = name.mid(dotIdx + 1);
-    }
-    return name.toLower();
-}
-
 /**
  * @brief 获取当前运行中的进程名集合
  *
@@ -192,7 +182,7 @@ void ProcessMonitor::onTick()
 
     // 检测已注册应用的运行状态
     for (const auto &appId : m_registeredApps) {
-        QString processName = appIdToProcessName(appId);
+        QString processName = AppIdHelper::appIdToProcName(appId).toLower();
         bool isRunning = runningNames.contains(processName);
 
         // 如果 appId 推导名未匹配，尝试用可执行文件 basename
@@ -225,7 +215,7 @@ void ProcessMonitor::scanTransientApps()
     QSet<QString> registeredProcessNames;
     QSet<QString> registeredExePaths;
     for (const auto &appId : m_registeredApps) {
-        registeredProcessNames.insert(appIdToProcessName(appId));
+        registeredProcessNames.insert(AppIdHelper::appIdToProcName(appId).toLower());
         // 如果有 execPath，也添加到匹配集合
         if (m_registeredExecPaths.contains(appId)) {
             QFileInfo fi(m_registeredExecPaths[appId]);

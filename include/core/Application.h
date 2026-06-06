@@ -15,6 +15,7 @@
 
 class ConfigManager;
 class SysHelper;
+class WindowManager;
 class DockManager;
 class DockWindow;
 class ProcessMonitor;
@@ -44,6 +45,7 @@ private:
     // run() 中按序创建，退出前按逆序销毁
     ConfigManager *m_config = nullptr;
     SysHelper *m_sysHelper = nullptr;
+    WindowManager *m_windowManager = nullptr;
     DockManager *m_dockManager = nullptr;
     DockWindow *m_dockWindow = nullptr;
     ProcessMonitor *m_processMonitor = nullptr;
