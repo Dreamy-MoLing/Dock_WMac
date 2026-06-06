@@ -34,11 +34,15 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
 
+      - name: Deploy Qt runtime dependencies
+        run: |
+          windeployqt --no-translations --no-opengl-sw --dir deploy build/dock_wmac.exe
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dock_wmac-windows
-          path: build/dock_wmac.exe
+          path: deploy
           if-no-files-found: error
 
   # ---- Release (tag only) ----
@@ -57,10 +61,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dock_wmac-windows
+          path: deploy
 
       - name: Extract tag name
         id: tag
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Package release archive
+        run: |
+          Compress-Archive -Path deploy\* -DestinationPath dock_wmac_v${{ steps.tag.outputs.tag }}_x64.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -68,6 +77,6 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
           files: |
-            dock_wmac.exe
+            dock_wmac_v${{ steps.tag.outputs.tag }}_x64.zip
             LICENSE
           generate_release_notes: true

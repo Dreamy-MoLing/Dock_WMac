@@ -224,6 +224,8 @@ void WindowCache::scanForClass(const QString &wmClass)
     for (const auto &w : ctx.wins) {
         addWindowToCache(w, lowerClass);
     }
+    locker.unlock();
+    emit cacheUpdated();
 }
 
 // ─── 查询接口 ────────────────────────────────────────────
