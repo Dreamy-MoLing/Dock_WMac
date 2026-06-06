@@ -13,7 +13,8 @@
 #include "core/SysHelper.h"
 #include "core/AppIdHelper.h"
 #include "core/ProcessMonitor.h"
-#include "core/WindowManager.h"
+#include "core/WindowCache.h"
+#include "core/ClickStateMachine.h"
 #include "ui/WindowPreviewPanel.h"
 #include "ui/OverflowPanel.h"
 #include <QPainter>
@@ -22,11 +23,11 @@
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
 #include <QProcess>
+#include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
 #include <QCursor>
-#include <QDebug>
 #include <QEnterEvent>
 #include <QTimer>
 #include <QWindow>
@@ -178,10 +179,22 @@ void DockWindow::setProcessMonitor(ProcessMonitor *monitor)
             this, &DockWindow::onRunningAppExited);
 }
 
-void DockWindow::setWindowManager(WindowManager *wm)
+void DockWindow::setWindowCache(WindowCache *cache)
 {
-    m_windowManager = wm;
-    m_overflowPanel->setWindowManager(wm);
+    m_windowCache = cache;
+    m_clickStateMachine = new ClickStateMachine(cache, this);
+
+    m_windowPreview->setWindowCache(cache);
+    m_overflowPanel->setWindowCache(cache);
+
+    // 预览窗鱼眼联动
+    connect(m_windowPreview, &WindowPreviewPanel::previewShown, this, [this]() {
+        if (m_hoveredIndex >= 0)
+            lockFishEye(m_hoveredIndex);
+    });
+    connect(m_windowPreview, &WindowPreviewPanel::previewHidden, this, [this]() {
+        unlockFishEye();
+    });
 }
 
 void DockWindow::setMonitor(int index)
@@ -639,19 +652,25 @@ void DockWindow::onItemWindowCountChanged(const QString &appId, int count)
 
 void DockWindow::updateWindowCounts()
 {
-    if (!m_sysHelper || !m_dockManager) return;
+    if (!m_sysHelper || !m_dockManager || !m_windowCache) return;
 
-    // 更新所有运行中图标的窗口数量
+    // 先刷新缓存
+    m_windowCache->refresh();
+
+    // 更新所有运行中图标的窗口数量和前台状态
     for (auto it = m_itemMap.begin(); it != m_itemMap.end(); ++it) {
         DockItem *item = it.value();
         if (!item->isRunning()) continue;
 
         QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
 
-        int count = m_windowManager->getWindowCount(wmClass);
+        int count = m_windowCache->getWindowCount(wmClass);
         if (count > 0) {
             m_dockManager->updateWindowCount(item->appId(), count);
         }
+
+        // 更新前台激活指示器
+        item->setForegroundActive(m_windowCache->isForegroundApp(wmClass));
     }
 }
 
@@ -710,49 +729,24 @@ void DockWindow::launchApp(DockItem *item)
 }
 
 /**
- * @brief 单击处理
- *
- * 0 个窗口 → 启动应用
- * 1 个窗口 → 激活已有窗口
- * 2+ 个窗口 → 调用系统窗口选择器
- *
- * 如果 item 标记为 running 但 getWindowCount 返回 0（WM_CLASS 不匹配），
- * 直接尝试 activateWindow 做 fallback。
+ * @brief 单击处理 — 由 ClickStateMachine 5 状态状态机判定
  */
 void DockWindow::handleSingleClick(DockItem *item)
 {
-    if (!m_sysHelper || !item) {
+    if (!item || !m_clickStateMachine) {
         launchApp(item);
         return;
     }
 
     QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
+    bool isRunning = item->isRunning();
 
-    if (item->isRunning()) {
-        // 应用正在运行 → 尝试激活已有窗口
-        int count = m_windowManager->getWindowCount(wmClass);
-        if (count == 1) {
-            m_windowManager->activateWindow(wmClass);
-            return;
-        } else if (count > 1) {
-            m_windowManager->showWindowPicker();
-            return;
-        }
-        // getWindowCount 返回 0 但 isRunning=true → WM_CLASS 可能不匹配
-        // fallback：直接调用 activateWindow，它内部会重新查找
-        if (m_windowManager->activateWindow(wmClass)) {
-            return;
-        }
-        // 二次 fallback：用原始 appId 试一次
-        if (m_windowManager->activateWindow(item->appId())) {
-            return;
-        }
-        // 都失败了，降级为启动新实例
-        launchApp(item);
-    } else {
-        // 应用未运行 → 启动
-        launchApp(item);
-    }
+    m_clickStateMachine->handleClick(wmClass, item->execPath(), isRunning);
+
+    // 触发交互指示器（1 秒延迟等待窗口操作生效）
+    QTimer::singleShot(1000, item, [item]() {
+        item->triggerInteractionIndicator();
+    });
 }
 
 /**
@@ -761,6 +755,10 @@ void DockWindow::handleSingleClick(DockItem *item)
 void DockWindow::handleDoubleClick(DockItem *item)
 {
     launchApp(item);
+    // 双击启动新实例后延迟触发指示器
+    QTimer::singleShot(2000, item, [item]() {
+        item->triggerInteractionIndicator();
+    });
 }
 
 QVariant DockWindow::isItemPinned(QVariant appId)
@@ -859,6 +857,8 @@ void DockWindow::animateItemToScale(DockItem *item, qreal targetScale)
 
 void DockWindow::applyFishEyeEffect(int hoveredIndex)
 {
+    // 预览窗显示期间锁定鱼眼，不响应鼠标移动
+    if (m_fishEyeLocked) return;
     m_hoveredIndex = hoveredIndex;
 
     for (int i = 0; i < m_items.size(); ++i) {
@@ -876,10 +876,24 @@ void DockWindow::applyFishEyeEffect(int hoveredIndex)
 
 void DockWindow::resetFishEyeEffect()
 {
+    if (m_fishEyeLocked) return;
     m_hoveredIndex = -1;
     for (int i = 0; i < m_items.size(); ++i) {
         animateItemToScale(m_items[i], 1.0);
     }
+}
+
+void DockWindow::lockFishEye(int index)
+{
+    m_fishEyeLocked = true;
+    m_fishEyeLockedIndex = index;
+}
+
+void DockWindow::unlockFishEye()
+{
+    m_fishEyeLocked = false;
+    m_fishEyeLockedIndex = -1;
+    resetFishEyeEffect();
 }
 
 // ─── DPI ──────────────────────────────────────────────────

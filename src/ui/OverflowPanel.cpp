@@ -9,7 +9,7 @@
 #include "ui/DockItem.h"
 #include "core/DockManager.h"
 #include "core/SysHelper.h"
-#include "core/WindowManager.h"
+#include "core/WindowCache.h"
 #include "core/AppIdHelper.h"
 
 #include <QVBoxLayout>
@@ -30,9 +30,9 @@ void OverflowPanel::setSysHelper(SysHelper *helper)
     m_sysHelper = helper;
 }
 
-void OverflowPanel::setWindowManager(WindowManager *wm)
+void OverflowPanel::setWindowCache(WindowCache *cache)
 {
-    m_windowManager = wm;
+    m_windowCache = cache;
 }
 
 void OverflowPanel::showPopup(DockItem *anchorItem, QWidget * /*dockParent*/)
@@ -68,9 +68,9 @@ void OverflowPanel::showPopup(DockItem *anchorItem, QWidget * /*dockParent*/)
             "QPushButton:hover { background: rgba(80,80,80,220); }"
         );
         connect(btn, &QPushButton::clicked, this, [this, data]() {
-            if (m_windowManager) {
+            if (m_windowCache) {
                 QString wmClass = AppIdHelper::deriveWmClass(data.execPath, data.appId);
-                m_windowManager->activateWindow(wmClass);
+                m_windowCache->activateWindow(wmClass);
             }
             hidePopup();
         });

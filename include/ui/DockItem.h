@@ -26,6 +26,10 @@ public:
     void setBadgeCount(int count);
     void setWindowCount(int count);
     int windowCount() const { return m_windowCount; }
+    void setForegroundActive(bool active);
+    bool isForegroundActive() const { return m_isForegroundActive; }
+    void setHasNotifications(bool has);
+    void triggerInteractionIndicator();
 
     QString appId() const { return m_appId; }
     QString displayName() const { return m_displayName; }
@@ -48,6 +52,10 @@ signals:
     void hoverEntered(int index);
     void hoverLeft();
 
+private slots:
+    void onFlashTimerTick();
+    void onFadeTimerTick();
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
@@ -66,9 +74,23 @@ private:
     QPixmap m_icon;
     bool    m_isRunning;
     int     m_badgeCount;
-    int     m_windowCount;   // 窗口数量（>1 时绘制堆叠效果）
+    int     m_windowCount;          // 窗口数量（>1 时绘制堆叠效果）
+    bool    m_isForegroundActive = false;  // 前台激活指示器
     bool    m_isHovered;
     qreal   m_visualScale;   // 绘制缩放比（1.0 = 原始大小）
+
+    // 通知闪烁
+    bool    m_hasNotifications = false;
+    QTimer *m_flashTimer = nullptr;
+    bool    m_flashVisible = true;
+
+    // 交互后渐隐
+    QTimer *m_fadeTimer = nullptr;
+    qreal   m_statusOpacity = 0.0;
+    static constexpr int kSolidDelay = 3000;
+    static constexpr int kFadeDuration = 1000;
+    static constexpr int kFadeInterval = 50;
+
     QPoint  m_dragStartPos;
 };
 

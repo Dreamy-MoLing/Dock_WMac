@@ -24,7 +24,7 @@
 #include "core/PinnedItemsReader.h"
 #include "core/ProcessMonitor.h"
 #include "core/SysHelper.h"
-#include "core/WindowManager.h"
+#include "core/WindowCache.h"
 #include "core/Types.h"
 #include "ui/DockWindow.h"
 
@@ -56,7 +56,7 @@ Application::~Application()
     delete m_processMonitor;
     delete m_dockWindow;
     delete m_dockManager;
-    delete m_windowManager;
+    delete m_windowCache;
     delete m_sysHelper;
     delete m_config;
 }
@@ -68,7 +68,7 @@ int Application::run()
     // QApplication 必须最先创建、最后销毁
     QApplication app(m_argc, m_argv);
     app.setApplicationName(QStringLiteral("Dock_WMac"));
-    app.setApplicationVersion(QStringLiteral("0.2.1.1"));
+    app.setApplicationVersion(QStringLiteral("0.2.2"));
 
     setupLogging();
 
@@ -80,7 +80,7 @@ int Application::run()
     m_config->load();
 
     m_sysHelper = new SysHelper(this);
-    m_windowManager = new WindowManager(this);
+    m_windowCache = new WindowCache(this);
 
     m_dockManager = new DockManager(this);
     m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
@@ -89,7 +89,7 @@ int Application::run()
     m_dockWindow = new DockWindow();
     m_dockWindow->setDockManager(m_dockManager);
     m_dockWindow->setSysHelper(m_sysHelper);
-    m_dockWindow->setWindowManager(m_windowManager);
+    m_dockWindow->setWindowCache(m_windowCache);
 
     // 加载固定项（必须在信号连接之前）
     loadPinnedItems();
@@ -107,6 +107,14 @@ int Application::run()
 
     m_dockWindow->show();
     m_sysHelper->installWindowHook();
+
+    // WinEvent → WindowCache 增量刷新（50ms 防抖）
+    connect(m_sysHelper, &SysHelper::windowEventOccurred, this,
+        [this](DWORD pid) {
+            QTimer::singleShot(50, this, [this, pid]() {
+                m_windowCache->refreshForPid(pid);
+            });
+        });
 
     // 隐藏原生任务栏（Windows only）
     m_sysHelper->hideNativeTaskbar();
@@ -134,7 +142,7 @@ int Application::run()
     delete m_processMonitor;    m_processMonitor = nullptr;
     delete m_dockWindow;    m_dockWindow = nullptr;
     delete m_dockManager;   m_dockManager = nullptr;
-    delete m_windowManager; m_windowManager = nullptr;
+    delete m_windowCache;   m_windowCache = nullptr;
     delete m_sysHelper;     m_sysHelper = nullptr;
     delete m_config;        m_config = nullptr;
 
@@ -168,6 +176,8 @@ void Application::loadPinnedItems()
 
     QList<DockItemData> pinnedItems;
 
+    bool firstRun = !m_config->get(QStringLiteral("firstRunComplete"), false).toBool();
+
     if (!savedPinned.isEmpty()) {
         // 从配置文件恢复
         pinnedItems.reserve(savedPinned.size());
@@ -184,13 +194,28 @@ void Application::loadPinnedItems()
         }
         qInfo() << "从配置文件恢复" << pinnedItems.size() << "个固定项";
     } else {
-        // 配置文件为空，使用 PinnedItemsReader 读取系统固定项
+        // 配置文件为空，从系统原生任务栏导入（首次运行）
         PinnedItemsReader reader;
         pinnedItems = reader.getAllPinnedItems();
-        qInfo() << "从系统读取" << pinnedItems.size() << "个固定项";
+        qInfo() << "从系统任务栏导入" << pinnedItems.size() << "个固定项（首次运行）";
     }
 
     m_dockManager->setPinnedItems(pinnedItems);
+
+    // 标记首次运行完成，并将导入的固定项写入配置
+    if (firstRun) {
+        m_config->set(QStringLiteral("firstRunComplete"), true);
+        QVariantList list;
+        for (const auto &item : pinnedItems) {
+            QVariantMap entry;
+            entry[QStringLiteral("appId")]       = item.appId;
+            entry[QStringLiteral("displayName")] = item.displayName;
+            entry[QStringLiteral("iconPath")]    = item.iconPath;
+            entry[QStringLiteral("execPath")]    = item.execPath;
+            list.append(entry);
+        }
+        m_config->set(QStringLiteral("pinnedApps"), list);
+    }
 }
 
 void Application::connectPersistence()

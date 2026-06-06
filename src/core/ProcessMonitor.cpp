@@ -182,7 +182,8 @@ void ProcessMonitor::onTick()
 
     // 检测已注册应用的运行状态
     for (const auto &appId : m_registeredApps) {
-        QString processName = AppIdHelper::appIdToProcName(appId).toLower();
+        QString processName = AppIdHelper::deriveWmClass(
+            m_registeredExecPaths.value(appId), appId);
         bool isRunning = runningNames.contains(processName);
 
         // 如果 appId 推导名未匹配，尝试用可执行文件 basename
@@ -215,7 +216,8 @@ void ProcessMonitor::scanTransientApps()
     QSet<QString> registeredProcessNames;
     QSet<QString> registeredExePaths;
     for (const auto &appId : m_registeredApps) {
-        registeredProcessNames.insert(AppIdHelper::appIdToProcName(appId).toLower());
+        registeredProcessNames.insert(
+            AppIdHelper::deriveWmClass(m_registeredExecPaths.value(appId), appId));
         // 如果有 execPath，也添加到匹配集合
         if (m_registeredExecPaths.contains(appId)) {
             QFileInfo fi(m_registeredExecPaths[appId]);

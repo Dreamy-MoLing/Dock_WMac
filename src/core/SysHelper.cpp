@@ -45,6 +45,18 @@ SysHelper::SysHelper(QObject *parent)
 static HHOOK g_keyboardHook = nullptr;
 static SysHelper *g_sysHelperForHook = nullptr;
 
+SysHelper::~SysHelper()
+{
+    // 销毁时清除全局指针，防止钩子回调访问已释放对象
+    if (g_sysHelperForHook == this) {
+        g_sysHelperForHook = nullptr;
+    }
+    if (g_keyboardHook) {
+        UnhookWindowsHookEx(g_keyboardHook);
+        g_keyboardHook = nullptr;
+    }
+}
+
 /**
  * @brief 低级键盘钩子回调
  *
@@ -95,6 +107,20 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
             emit g_sysHelperForHook->foregroundWindowChanged(maximized);
         }, Qt::QueuedConnection);
         break;
+    case EVENT_OBJECT_CREATE:
+    case EVENT_OBJECT_DESTROY:
+    case EVENT_OBJECT_SHOW:
+    case EVENT_OBJECT_HIDE: {
+        // 获取窗口 PID，通知 WindowCache 增量刷新
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hwnd, &pid);
+        if (pid != 0 && pid != 4) {
+            QMetaObject::invokeMethod(g_sysHelperForHook, [pid]() {
+                emit g_sysHelperForHook->windowEventOccurred(pid);
+            }, Qt::QueuedConnection);
+        }
+        break;
+    }
     default:
         break;
     }
@@ -107,15 +133,17 @@ bool SysHelper::installWindowHook()
 {
     g_sysHelperForHook = this;
 
-    // Windows 使用 SetWinEventHook 监听窗口事件
+    // 前台 + 最小化/最大化（合并为一个钩子）
     HWINEVENTHOOK hook = SetWinEventHook(
-        EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
+        EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MAXIMIZESTART,
         nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
     if (!hook) return false;
 
+    // 窗口创建/销毁/显示/隐藏（新增，使用 WINEVENT_SKIPOWNPROCESS 跳过自身窗口）
     hook = SetWinEventHook(
-        EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MAXIMIZESTART,
-        nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE,
+        nullptr, WinEventProc, 0, 0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (!hook) return false;
 
     // 初始检测
@@ -151,7 +179,8 @@ void SysHelper::uninstallKeyboardHook()
         g_keyboardHook = nullptr;
         qInfo() << "键盘钩子已卸载";
     }
-    g_sysHelperForHook = nullptr;
+    // 注意：不清除 g_sysHelperForHook —
+    // WinEvent 钩子仍需要该指针将事件投递到 SysHelper
 }
 
 bool SysHelper::getForegroundWindowState()

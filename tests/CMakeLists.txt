@@ -25,7 +25,8 @@ add_library(dock_core_objects OBJECT
     ${CMAKE_SOURCE_DIR}/src/core/DockManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ProcessMonitor.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/WindowManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/WindowCache.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ClickStateMachine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/IconProvider.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/core/PinnedItemsReader.cpp
@@ -37,7 +38,8 @@ add_library(dock_core_objects OBJECT
     ${CMAKE_SOURCE_DIR}/include/core/DockManager.h
     ${CMAKE_SOURCE_DIR}/include/core/ProcessMonitor.h
     ${CMAKE_SOURCE_DIR}/include/core/SysHelper.h
-    ${CMAKE_SOURCE_DIR}/include/core/WindowManager.h
+    ${CMAKE_SOURCE_DIR}/include/core/WindowCache.h
+    ${CMAKE_SOURCE_DIR}/include/core/ClickStateMachine.h
     ${CMAKE_SOURCE_DIR}/include/core/IconProvider.h
     ${CMAKE_SOURCE_DIR}/include/core/Logger.h
     ${CMAKE_SOURCE_DIR}/include/core/PinnedItemsReader.h
@@ -74,3 +76,11 @@ add_test(NAME test_process_monitor COMMAND test_process_monitor)
 add_test(NAME test_sys_helper COMMAND test_sys_helper)
 add_test(NAME test_pinned_items_reader COMMAND test_pinned_items_reader)
 add_test(NAME test_application COMMAND test_application)
+
+add_executable(test_window_cache test_window_cache.cpp)
+target_link_libraries(test_window_cache dock_core_objects ${TEST_LIBS})
+add_test(NAME test_window_cache COMMAND test_window_cache)
+
+add_executable(test_click_state_machine test_click_state_machine.cpp)
+target_link_libraries(test_click_state_machine dock_core_objects ${TEST_LIBS})
+add_test(NAME test_click_state_machine COMMAND test_click_state_machine)

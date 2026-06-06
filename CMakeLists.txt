@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Dock_WMac VERSION 0.2.1.1 LANGUAGES CXX)
+project(Dock_WMac VERSION 0.2.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,7 +15,8 @@ add_executable(dock_wmac WIN32
     src/core/ConfigManager.cpp
     src/core/ProcessMonitor.cpp
     src/core/SysHelper.cpp
-    src/core/WindowManager.cpp
+    src/core/WindowCache.cpp
+    src/core/ClickStateMachine.cpp
     src/core/IconProvider.cpp
     src/core/Logger.cpp
     src/core/PinnedItemsReader.cpp
@@ -30,7 +31,8 @@ add_executable(dock_wmac WIN32
     include/core/ConfigManager.h
     include/core/ProcessMonitor.h
     include/core/SysHelper.h
-    include/core/WindowManager.h
+    include/core/WindowCache.h
+    include/core/ClickStateMachine.h
     include/core/IconProvider.h
     include/core/Logger.h
     include/core/PinnedItemsReader.h

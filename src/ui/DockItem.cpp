@@ -8,6 +8,7 @@
 
 #include "ui/DockItem.h"
 #include "core/IconProvider.h"
+#include <QTimer>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QEnterEvent>
@@ -44,13 +45,32 @@ DockItem::DockItem(const QString &appId, const QString &iconPath,
     setMouseTracking(true);
     setAcceptDrops(true);
 
+    // 通知闪烁定时器（500ms 交替）
+    m_flashTimer = new QTimer(this);
+    m_flashTimer->setInterval(500);
+    connect(m_flashTimer, &QTimer::timeout, this, &DockItem::onFlashTimerTick);
+
+    // 渐隐定时器（50ms 步进）
+    m_fadeTimer = new QTimer(this);
+    m_fadeTimer->setInterval(kFadeInterval);
+    connect(m_fadeTimer, &QTimer::timeout, this, &DockItem::onFadeTimerTick);
+
     // 加载图标（IconProvider 内部处理 4 级回退 + 归一化到 64×64）
     m_icon = IconProvider::loadIcon(iconPath, displayName);
 }
 
 void DockItem::setRunning(bool running)
 {
+    if (m_isRunning == running) return;
     m_isRunning = running;
+    // 应用启动时显示注意点（通知优先）
+    if (running && !m_hasNotifications) {
+        m_fadeTimer->stop();
+        m_statusOpacity = 1.0;
+    } else if (!running) {
+        m_fadeTimer->stop();
+        m_statusOpacity = 0.0;
+    }
     update();
 }
 
@@ -63,7 +83,70 @@ void DockItem::setBadgeCount(int count)
 void DockItem::setWindowCount(int count)
 {
     if (m_windowCount == count) return;
+    int oldCount = m_windowCount;
     m_windowCount = count;
+
+    // 新窗口出现 → 重新触发注意点（通知优先）
+    if (count > oldCount && m_isRunning && !m_hasNotifications) {
+        m_fadeTimer->stop();
+        m_statusOpacity = 1.0;
+    }
+    update();
+}
+
+void DockItem::setForegroundActive(bool active)
+{
+    if (m_isForegroundActive == active) return;
+    m_isForegroundActive = active;
+    update();
+}
+
+void DockItem::setHasNotifications(bool has)
+{
+    if (m_hasNotifications == has) return;
+    m_hasNotifications = has;
+    if (has) {
+        m_flashTimer->start();
+    } else {
+        m_flashTimer->stop();
+        m_flashVisible = true;
+    }
+    update();
+}
+
+void DockItem::triggerInteractionIndicator()
+{
+    // 仅当窗口数 <= 1 且应用在运行时才显示指示器
+    if (m_windowCount > 1 || !m_isRunning) return;
+
+    // 通知闪烁期间不打断（通知优先级高于交互反馈）
+    if (m_hasNotifications) return;
+
+    // 停止之前的渐隐
+    m_fadeTimer->stop();
+    m_statusOpacity = 1.0;
+    update();
+
+    // 3 秒后开始渐隐
+    QTimer::singleShot(kSolidDelay, this, [this]() {
+        if (m_fadeTimer) m_fadeTimer->start();
+    });
+}
+
+void DockItem::onFlashTimerTick()
+{
+    m_flashVisible = !m_flashVisible;
+    update();
+}
+
+void DockItem::onFadeTimerTick()
+{
+    qreal step = static_cast<qreal>(kFadeInterval) / kFadeDuration;
+    m_statusOpacity = qMax(0.0, m_statusOpacity - step);
+    if (qFuzzyIsNull(m_statusOpacity)) {
+        m_statusOpacity = 0.0;
+        m_fadeTimer->stop();
+    }
     update();
 }
 
@@ -96,11 +179,40 @@ void DockItem::paintEvent(QPaintEvent *event)
         painter.translate(0, 2);
     }
 
-    // 运行指示灯（底部小圆点）
-    if (m_isRunning) {
-        painter.setBrush(QColor(180, 220, 80));
+    // 前台激活指示器（半透明白色渐变覆盖）
+    if (m_isForegroundActive) {
+        QLinearGradient gradient(0, 0, 0, height());
+        gradient.setColorAt(0.0, QColor(255, 255, 255, 40));   // 顶部更亮
+        gradient.setColorAt(1.0, QColor(255, 255, 255, 10));   // 底部渐弱
+        painter.setBrush(gradient);
         painter.setPen(Qt::NoPen);
-        painter.drawEllipse(QPointF(width() / 2.0, height() - 4), 3, 3);
+        painter.drawRoundedRect(rect().adjusted(2, 2, -2, -2), 10, 10);
+    }
+
+    // 状态指示灯（底部小圆点）
+    // - 多窗口（windowCount > 1）：不绘制绿点
+    // - 有通知：闪烁绿点
+    // - 交互后/新窗口：渐隐绿点（statusOpacity > 0）
+    if (m_windowCount <= 1 && m_isRunning) {
+        bool shouldDraw = false;
+        QColor dotColor;
+
+        if (m_hasNotifications) {
+            // 通知闪烁
+            shouldDraw = m_flashVisible;
+            dotColor = QColor(180, 220, 80);
+        } else if (m_statusOpacity > 0.0) {
+            // 交互后/新窗口渐隐
+            shouldDraw = true;
+            int alpha = static_cast<int>(m_statusOpacity * 255);
+            dotColor = QColor(180, 220, 80, alpha);
+        }
+
+        if (shouldDraw) {
+            painter.setBrush(dotColor);
+            painter.setPen(Qt::NoPen);
+            painter.drawEllipse(QPointF(width() / 2.0, height() - 4), 3, 3);
+        }
     }
 
     // 未读徽章（右上角红色圆 + 数字）

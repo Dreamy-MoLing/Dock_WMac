@@ -15,7 +15,7 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include "core/SysHelper.h"
-#include "core/WindowManager.h"
+#include "core/WindowCache.h"
 
 // ============================================================================
 // Test Fixture
@@ -25,16 +25,16 @@ class SysHelperTest : public ::testing::Test {
 protected:
     void SetUp() override {
         sysHelper = new SysHelper();
-        wm = new WindowManager();
+        wc = new WindowCache();
     }
     void TearDown() override {
         delete sysHelper;
         sysHelper = nullptr;
-        delete wm;
-        wm = nullptr;
+        delete wc;
+        wc = nullptr;
     }
     SysHelper *sysHelper = nullptr;
-    WindowManager *wm = nullptr;
+    WindowCache *wc = nullptr;
 };
 
 // ============================================================================
@@ -67,7 +67,7 @@ TEST_F(SysHelperTest, ForegroundWindowStateReturnsBool)
 TEST_F(SysHelperTest, WindowCountNonNegative)
 {
     // getWindowCount() 对任意进程名应返回 >= 0 的值
-    int count = wm->getWindowCount("explorer");
+    int count = wc->getWindowCount("explorer");
     EXPECT_GE(count, 0);
 }
 
@@ -79,7 +79,7 @@ TEST_F(SysHelperTest, ActivateWindowDoesNotCrash)
 {
     // activateWindow("nonexistent_app") 应返回 bool 且不崩溃
     EXPECT_NO_FATAL_FAILURE({
-        bool result = wm->activateWindow("nonexistent_app");
+        bool result = wc->activateWindow("nonexistent_app");
         (void)result;
     });
 }
@@ -209,7 +209,7 @@ TEST_F(SysHelperTest, ShowWindowPickerNoCrash)
 {
     // showWindowPicker() 在任何环境下不崩溃
     EXPECT_NO_FATAL_FAILURE({
-        wm->showWindowPicker();
+        wc->showWindowPicker();
     });
 }
 

@@ -2,34 +2,52 @@
  * @file WindowPreviewPanel.cpp
  * @brief 窗口缩略图预览面板实现
  *
- * 从 DockWindow 提取 Win32 EnumWindows + PrintWindow 逻辑。
+ * 鼠标悬停 Dock 图标 500ms 后弹出该应用所有窗口的实时缩略图。
+ * 使用 DWM DwmRegisterThumbnail / DwmUpdateThumbnailProperties（任务栏同款 API），
+ * 窗口列表从 WindowCache 获取（不再自 EnumWindows）。
+ * DWM 不可用时（远程桌面等）回退到应用图标。
+ * DWM Peek Lite：悬停缩略图 300ms 后 SetWindowPos(HWND_TOP)。
  */
 
 #include "ui/WindowPreviewPanel.h"
 #include "ui/DockItem.h"
 #include "core/SysHelper.h"
+#include "core/WindowCache.h"
 #include "core/AppIdHelper.h"
 
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QScreen>
+#include <QFileIconProvider>
 #include <QGuiApplication>
 #include <QFileInfo>
-#include <QFileIconProvider>
 #include <QPainter>
+#include <QMouseEvent>
+#include <QDebug>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <dwmapi.h>
 #endif
 
 WindowPreviewPanel::WindowPreviewPanel(QObject *parent)
     : QObject(parent)
     , m_previewTimer(new QTimer(this))
+    , m_leaveTimer(new QTimer(this))
+    , m_peekTimer(new QTimer(this))
 {
     m_previewTimer->setSingleShot(true);
     m_previewTimer->setInterval(500);
     connect(m_previewTimer, &QTimer::timeout,
             this, &WindowPreviewPanel::onPreviewTimerTimeout);
+
+    m_leaveTimer->setSingleShot(true);
+    m_leaveTimer->setInterval(200);
+    connect(m_leaveTimer, &QTimer::timeout,
+            this, &WindowPreviewPanel::onLeaveTimerTimeout);
+
+    m_peekTimer->setSingleShot(true);
+    m_peekTimer->setInterval(300);
 }
 
 WindowPreviewPanel::~WindowPreviewPanel()
@@ -42,9 +60,17 @@ void WindowPreviewPanel::setSysHelper(SysHelper *helper)
     m_sysHelper = helper;
 }
 
+void WindowPreviewPanel::setWindowCache(WindowCache *cache)
+{
+    m_windowCache = cache;
+}
+
 void WindowPreviewPanel::showPreview(DockItem *item)
 {
     if (!item || item == m_previewItem) return;
+
+    // 取消离开定时器（鼠标回到了 Dock）
+    m_leaveTimer->stop();
 
     hidePreview();
     m_previewItem = item;
@@ -54,8 +80,12 @@ void WindowPreviewPanel::showPreview(DockItem *item)
 void WindowPreviewPanel::hidePreview()
 {
     m_previewTimer->stop();
+    m_leaveTimer->stop();
+    m_peekTimer->stop();
+    stopPeek();
     m_previewItem = nullptr;
     clearContent();
+    emit previewHidden();
 }
 
 bool WindowPreviewPanel::isVisible() const
@@ -69,9 +99,27 @@ void WindowPreviewPanel::onPreviewTimerTimeout()
     buildPreviewContent(m_previewItem);
 }
 
+void WindowPreviewPanel::onLeaveTimerTimeout()
+{
+    hidePreview();
+}
+
 void WindowPreviewPanel::clearContent()
 {
+    // 先注销所有 DWM 缩略图（必须在 popup 销毁前调用）
     if (m_previewPopup) {
+        QVariant thumbListVar = m_previewPopup->property("dwmThumbList");
+        if (thumbListVar.isValid()) {
+            const QVariantList list = thumbListVar.toList();
+            for (const QVariant &entry : list) {
+                QVariantMap map = entry.toMap();
+                HTHUMBNAIL thumbId = reinterpret_cast<HTHUMBNAIL>(
+                    static_cast<quintptr>(map["thumbId"].toULongLong()));
+                if (thumbId) {
+                    DwmUnregisterThumbnail(thumbId);
+                }
+            }
+        }
         m_previewPopup->close();
         m_previewPopup->deleteLater();
         m_previewPopup = nullptr;
@@ -80,155 +128,56 @@ void WindowPreviewPanel::clearContent()
 
 void WindowPreviewPanel::buildPreviewContent(DockItem *item)
 {
-    if (!item || !m_sysHelper) return;
+    if (!item || !m_sysHelper || !m_windowCache) return;
 
     QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
     if (wmClass.isEmpty()) return;
 
-    QString lowerClass = wmClass.toLower();
+    // 从 WindowCache 获取窗口列表（不再自 EnumWindows）
+    WindowList windows = m_windowCache->getWindowsForPreview(wmClass.toLower());
+    if (windows.isEmpty())
+        return;
 
-    // 枚举匹配进程的可见窗口
-    struct WinInfo { HWND hwnd; QString title; };
-    struct EnumCtx {
-        QString targetClass;
-        QList<WinInfo> windows;
-    } ctx{lowerClass, {}};
-
-    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-        auto *ctx = reinterpret_cast<EnumCtx *>(lParam);
-        if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
-
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
-
-        wchar_t title[256] = {0};
-        GetWindowTextW(hwnd, title, 255);
-        if (wcslen(title) < 2) return TRUE;
-
-        DWORD pid;
-        GetWindowThreadProcessId(hwnd, &pid);
-        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (!hProcess) return TRUE;
-
-        wchar_t exeName[MAX_PATH] = {0};
-        DWORD size = MAX_PATH;
-        BOOL matched = FALSE;
-        if (QueryFullProcessImageNameW(hProcess, 0, exeName, &size)) {
-            QString exe = QFileInfo(QString::fromWCharArray(exeName)).baseName().toLower();
-            if (exe == ctx->targetClass) matched = TRUE;
-        }
-        CloseHandle(hProcess);
-        if (!matched) return TRUE;
-
-        ctx->windows.append({hwnd, QString::fromWCharArray(title)});
-        return TRUE;
-    }, reinterpret_cast<LPARAM>(&ctx));
-
-    if (ctx.windows.isEmpty()) return;
-
-    int maxPreviews = qMin(ctx.windows.size(), 6);
+    int maxPreviews = qMin(windows.size(), 6);
+    bool singleWindow = (windows.size() == 1);
 
     clearContent();
     m_previewPopup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
-    m_previewPopup->setAttribute(Qt::WA_TranslucentBackground);
     m_previewPopup->setAttribute(Qt::WA_ShowWithoutActivating);
 
-    int thumbW = 160, thumbH = 100, spacing = 8, padding = 10, titleH = 20;
-    int popupW = maxPreviews * thumbW + (maxPreviews - 1) * spacing + 2 * padding;
-    int popupH = thumbH + titleH + 2 * padding;
+    int thumbW, thumbH, spacing, padding, titleH, popupW, popupH;
+    if (singleWindow) {
+        // 单窗口：更大的缩略图，无标题栏
+        thumbW = 200; thumbH = 130; spacing = 0; padding = 8; titleH = 0;
+        popupW = thumbW + 2 * padding;
+        popupH = thumbH + 2 * padding;
+    } else {
+        // 多窗口：网格布局 + 标题栏
+        thumbW = 160; thumbH = 100; spacing = 8; padding = 10; titleH = 20;
+        popupW = maxPreviews * thumbW + (maxPreviews - 1) * spacing + 2 * padding;
+        popupH = thumbH + titleH + 2 * padding;
+    }
     m_previewPopup->setFixedSize(popupW, popupH);
-    m_previewPopup->setStyleSheet("background: rgba(30, 30, 30, 220); border-radius: 10px;");
+    m_previewPopup->setStyleSheet("background: rgb(30, 30, 30);");
+    m_previewPopup->installEventFilter(this);
 
-    for (int i = 0; i < maxPreviews; ++i) {
-        const auto &wi = ctx.windows[i];
-
-        QPixmap thumb(thumbW, thumbH);
-        thumb.fill(QColor(50, 50, 50));
-        bool captured = false;
-
-        // PrintWindow 捕获缩略图
-        DWORD_PTR result = 0;
-        LRESULT checkOk = SendMessageTimeoutW(wi.hwnd, WM_NULL, 0, 0,
-            SMTO_ABORTIFHUNG | SMTO_BLOCK, 80, &result);
-        if (checkOk) {
-            RECT rect;
-            if (GetWindowRect(wi.hwnd, &rect)) {
-                int winW = rect.right - rect.left;
-                int winH = rect.bottom - rect.top;
-                if (winW > 0 && winH > 0) {
-                    int capW = qMin(winW, 640), capH = qMin(winH, 400);
-                    HDC hdcWindow = GetDC(wi.hwnd);
-                    HDC hdcMem = CreateCompatibleDC(hdcWindow);
-                    HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, capW, capH);
-                    HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hBitmap);
-
-                    if (PrintWindow(wi.hwnd, hdcMem, PW_CLIENTONLY)) {
-                        BITMAPINFO bmi = {};
-                        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                        bmi.bmiHeader.biWidth = capW;
-                        bmi.bmiHeader.biHeight = -capH;
-                        bmi.bmiHeader.biPlanes = 1;
-                        bmi.bmiHeader.biBitCount = 32;
-                        bmi.bmiHeader.biCompression = BI_RGB;
-
-                        QImage img(capW, capH, QImage::Format_ARGB32);
-                        GetDIBits(hdcMem, hBitmap, 0, capH, img.bits(), &bmi, DIB_RGB_COLORS);
-                        thumb = QPixmap::fromImage(img).scaled(thumbW, thumbH,
-                            Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                        captured = true;
-
-                        if (thumb.width() < thumbW || thumb.height() < thumbH) {
-                            QPixmap centered(thumbW, thumbH);
-                            centered.fill(QColor(50, 50, 50));
-                            QPainter pp(&centered);
-                            pp.drawPixmap((thumbW - thumb.width()) / 2,
-                                          (thumbH - thumb.height()) / 2, thumb);
-                            pp.end();
-                            thumb = centered;
-                        }
-                    }
-                    SelectObject(hdcMem, hOld);
-                    DeleteObject(hBitmap);
-                    DeleteDC(hdcMem);
-                    ReleaseDC(wi.hwnd, hdcWindow);
-                }
-            }
+    // ── 创建标题标签（仅多窗口时）──
+    if (!singleWindow) {
+        for (int i = 0; i < maxPreviews; ++i) {
+            const auto &wi = windows[i];
+            QLabel *titleLabel = new QLabel(m_previewPopup);
+            QString elidedTitle = wi.title;
+            if (elidedTitle.length() > 20)
+                elidedTitle = elidedTitle.left(19) + "...";
+            titleLabel->setText(elidedTitle);
+            titleLabel->setFixedSize(thumbW, titleH);
+            titleLabel->setAlignment(Qt::AlignCenter);
+            titleLabel->setStyleSheet("background: transparent; color: white; font-size: 11px;");
+            titleLabel->move(padding + i * (thumbW + spacing), padding + thumbH + 4);
         }
-
-        if (!captured && !item->execPath().isEmpty()) {
-            QFileIconProvider provider;
-            QIcon appIcon = provider.icon(QFileInfo(item->execPath()));
-            if (!appIcon.isNull()) {
-                QPixmap iconPix = appIcon.pixmap(48, 48);
-                QPainter pp(&thumb);
-                pp.drawPixmap((thumbW - 48) / 2, (thumbH - 48) / 2, iconPix);
-                pp.end();
-            }
-        }
-
-        QLabel *thumbLabel = new QLabel(m_previewPopup);
-        thumbLabel->setPixmap(thumb);
-        thumbLabel->setFixedSize(thumbW, thumbH);
-        thumbLabel->setStyleSheet("background: transparent;");
-        thumbLabel->move(padding + i * (thumbW + spacing), padding);
-
-        QLabel *titleLabel = new QLabel(m_previewPopup);
-        QString elidedTitle = wi.title;
-        if (elidedTitle.length() > 20)
-            elidedTitle = elidedTitle.left(19) + "...";
-        titleLabel->setText(elidedTitle);
-        titleLabel->setFixedSize(thumbW, titleH);
-        titleLabel->setAlignment(Qt::AlignCenter);
-        titleLabel->setStyleSheet("background: transparent; color: white; font-size: 11px;");
-        titleLabel->move(padding + i * (thumbW + spacing), padding + thumbH + 4);
-
-        HWND targetHwnd = wi.hwnd;
-        thumbLabel->setCursor(Qt::PointingHandCursor);
-        thumbLabel->installEventFilter(this);
-        thumbLabel->setProperty("previewHwnd", reinterpret_cast<qintptr>(targetHwnd));
     }
 
-    // 定位弹出面板：在 dock 窗口上方居中
+    // ── 定位弹出面板并先显示 ──
     QPoint itemCenter = item->mapToGlobal(QPoint(item->width() / 2, 0));
     int popupX = itemCenter.x() - popupW / 2;
     int popupY = item->mapToGlobal(QPoint(0, 0)).y() - popupH - 12;
@@ -249,26 +198,202 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     }
 
     m_previewPopup->move(popupX, popupY);
+
+    // 先锁定鱼眼再显示弹窗（避免 show() 捕获鼠标导致 leaveEvent 重置鱼眼）
+    emit previewShown();
+
     m_previewPopup->show();
+
+    // Windows 11 DWM 圆角
+    HWND popupHwnd = reinterpret_cast<HWND>(m_previewPopup->winId());
+    const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    const int DWMWCP_ROUND = 2;
+    DwmSetWindowAttribute(popupHwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+                          &DWMWCP_ROUND, sizeof(DWMWCP_ROUND));
+
+    // ── 注册 DWM 实时缩略图 ──
+    QVariantList thumbList;
+    bool anyDwmSucceeded = false;
+
+    for (int i = 0; i < maxPreviews; ++i) {
+        const auto &wi = windows[i];
+        int tx = padding + i * (thumbW + spacing);
+        int ty = padding;
+
+        HTHUMBNAIL thumbId = nullptr;
+        HRESULT hr = DwmRegisterThumbnail(popupHwnd, wi.hwnd, &thumbId);
+
+        QVariantMap entry;
+        entry["srcHwnd"] = static_cast<qulonglong>(reinterpret_cast<quintptr>(wi.hwnd));
+        entry["x"] = tx;
+        entry["y"] = ty;
+        entry["w"] = thumbW;
+        entry["h"] = thumbH;
+
+        if (SUCCEEDED(hr)) {
+            DWM_THUMBNAIL_PROPERTIES props = {};
+            props.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE
+                          | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
+            props.fVisible = TRUE;
+            props.opacity = 255;
+            props.fSourceClientAreaOnly = TRUE;
+            props.rcDestination = {tx, ty, tx + thumbW, ty + thumbH};
+
+            RECT srcRect;
+            if (GetClientRect(wi.hwnd, &srcRect)) {
+                props.rcSource = srcRect;
+            }
+            DwmUpdateThumbnailProperties(thumbId, &props);
+            entry["thumbId"] = static_cast<qulonglong>(reinterpret_cast<quintptr>(thumbId));
+            anyDwmSucceeded = true;
+        } else {
+            entry["thumbId"] = static_cast<qulonglong>(0);
+            // 回退：在 popup 上画应用图标
+            QPixmap thumb(thumbW, thumbH);
+            thumb.fill(QColor(50, 50, 50));
+            if (!item->execPath().isEmpty()) {
+                QFileIconProvider provider;
+                QIcon appIcon = provider.icon(QFileInfo(item->execPath()));
+                if (!appIcon.isNull()) {
+                    QPixmap iconPix = appIcon.pixmap(48, 48);
+                    QPainter pp(&thumb);
+                    pp.drawPixmap((thumbW - 48) / 2, (thumbH - 48) / 2, iconPix);
+                    pp.end();
+                }
+            }
+            QLabel *fallbackLabel = new QLabel(m_previewPopup);
+            fallbackLabel->setPixmap(thumb);
+            fallbackLabel->setFixedSize(thumbW, thumbH);
+            fallbackLabel->move(tx, ty);
+            fallbackLabel->setStyleSheet("background: transparent;");
+            fallbackLabel->setCursor(Qt::PointingHandCursor);
+            fallbackLabel->setProperty("previewHwnd", reinterpret_cast<qintptr>(wi.hwnd));
+            fallbackLabel->installEventFilter(this);
+            fallbackLabel->show();
+        }
+
+        thumbList.append(entry);
+    }
+
+    m_previewPopup->setProperty("dwmThumbList", thumbList);
 }
+
+// ─── DWM Peek Lite ───────────────────────────────────────
+
+void WindowPreviewPanel::startPeek(HWND targetHwnd)
+{
+    if (!targetHwnd || !IsWindow(targetHwnd)) return;
+
+    // 检查前台是否全屏，如是则跳过 peek
+    HWND foregroundHwnd = GetForegroundWindow();
+    if (foregroundHwnd) {
+        RECT fgRect;
+        if (GetWindowRect(foregroundHwnd, &fgRect)) {
+            int fgW = fgRect.right - fgRect.left;
+            int fgH = fgRect.bottom - fgRect.top;
+            int screenW = GetSystemMetrics(SM_CXSCREEN);
+            int screenH = GetSystemMetrics(SM_CYSCREEN);
+            if (fgW >= screenW && fgH >= screenH) return; // 全屏，跳过
+        }
+    }
+
+    m_peekTarget = targetHwnd;
+    SetWindowPos(targetHwnd, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void WindowPreviewPanel::stopPeek()
+{
+    m_peekTarget = nullptr;
+    // 不还原 Z-order（子方案 B）
+}
+
+// ─── 事件过滤 ───────────────────────────────────────────
 
 bool WindowPreviewPanel::eventFilter(QObject *obj, QEvent *event)
 {
+    // ── popup Leave/Enter（离开防抖）──
+    if (obj == m_previewPopup && event->type() == QEvent::Leave) {
+        m_leaveTimer->start();
+        stopPeek();
+        m_peekTimer->stop();
+    } else if (obj == m_previewPopup && event->type() == QEvent::Enter) {
+        m_leaveTimer->stop();
+    }
+
+    // ── DWM Peek：鼠标在缩略图区域移动 ──
+    if (event->type() == QEvent::MouseMove && m_previewPopup) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        QVariant thumbListVar = m_previewPopup->property("dwmThumbList");
+        if (thumbListVar.isValid()) {
+            bool onThumb = false;
+            const QVariantList list = thumbListVar.toList();
+            for (const QVariant &entry : list) {
+                QVariantMap map = entry.toMap();
+                QRect rect(map["x"].toInt(), map["y"].toInt(),
+                           map["w"].toInt(), map["h"].toInt());
+                if (rect.contains(me->pos())) {
+                    HWND srcHwnd = reinterpret_cast<HWND>(
+                        static_cast<quintptr>(map["srcHwnd"].toULongLong()));
+                    if (srcHwnd != m_peekTarget) {
+                        stopPeek();
+                        m_peekTimer->disconnect();
+                        connect(m_peekTimer, &QTimer::timeout, this, [this, srcHwnd]() {
+                            startPeek(srcHwnd);
+                        });
+                        m_peekTimer->start();
+                    }
+                    onThumb = true;
+                    break;
+                }
+            }
+            if (!onThumb) {
+                stopPeek();
+                m_peekTimer->stop();
+            }
+        }
+    }
+
+    // ── 点击缩略图激活窗口 ──
     if (event->type() == QEvent::MouseButtonPress) {
+        HWND targetHwnd = nullptr;
+
+        // 路径 1: 回退图标 QLabel（有 previewHwnd 属性）
         QWidget *w = qobject_cast<QWidget *>(obj);
         if (w) {
             QVariant v = w->property("previewHwnd");
             if (v.isValid()) {
-                HWND hwnd = reinterpret_cast<HWND>(v.value<qintptr>());
-                if (hwnd && IsWindow(hwnd)) {
-                    hidePreview();
-                    AllowSetForegroundWindow(ASFW_ANY);
-                    SetForegroundWindow(hwnd);
-                    ShowWindow(hwnd, SW_RESTORE);
-                    SetFocus(hwnd);
-                }
-                return true;
+                targetHwnd = reinterpret_cast<HWND>(v.value<quintptr>());
             }
+        }
+
+        // 路径 2: DWM 缩略图区域 — 点击 popup 本身，按坐标匹配缩略图矩形
+        if (!targetHwnd && obj == m_previewPopup && m_previewPopup) {
+            QMouseEvent *me = static_cast<QMouseEvent *>(event);
+            QPoint pos = me->pos();
+            QVariant thumbListVar = m_previewPopup->property("dwmThumbList");
+            if (thumbListVar.isValid()) {
+                const QVariantList list = thumbListVar.toList();
+                for (const QVariant &entry : list) {
+                    QVariantMap map = entry.toMap();
+                    QRect rect(map["x"].toInt(), map["y"].toInt(),
+                               map["w"].toInt(), map["h"].toInt());
+                    if (rect.contains(pos)) {
+                        targetHwnd = reinterpret_cast<HWND>(
+                            static_cast<quintptr>(map["srcHwnd"].toULongLong()));
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (targetHwnd && IsWindow(targetHwnd)) {
+            hidePreview();
+            AllowSetForegroundWindow(ASFW_ANY);
+            SetForegroundWindow(targetHwnd);
+            ShowWindow(targetHwnd, SW_RESTORE);
+            SetFocus(targetHwnd);
+            return true;
         }
     }
     return QObject::eventFilter(obj, event);

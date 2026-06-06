@@ -7,7 +7,7 @@
 class DockManager;
 class SysHelper;
 class DockItem;
-class WindowManager;
+class WindowCache;
 
 /**
  * @file OverflowPanel.h
@@ -25,7 +25,7 @@ public:
 
     void setDockManager(DockManager *manager);
     void setSysHelper(SysHelper *helper);
-    void setWindowManager(WindowManager *wm);
+    void setWindowCache(WindowCache *cache);
 
     /** @brief 在溢出图标上方弹出菜单 */
     void showPopup(DockItem *anchorItem, QWidget *dockParent);
@@ -36,7 +36,7 @@ public:
 private:
     DockManager *m_dockManager = nullptr;
     SysHelper *m_sysHelper = nullptr;
-    WindowManager *m_windowManager = nullptr;
+    WindowCache *m_windowCache = nullptr;
     QWidget *m_popup = nullptr;
 };
 

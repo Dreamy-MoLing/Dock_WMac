@@ -16,7 +16,8 @@ class SysHelper;
 class ProcessMonitor;
 class WindowPreviewPanel;
 class OverflowPanel;
-class WindowManager;
+class WindowCache;
+class ClickStateMachine;
 
 /**
  * @file DockWindow.h
@@ -41,11 +42,17 @@ public:
     /** @brief 连接 ProcessMonitor 信号 */
     void setProcessMonitor(ProcessMonitor *monitor);
 
-    /** @brief 设置 WindowManager（窗口枚举/激活） */
-    void setWindowManager(WindowManager *wm);
+    /** @brief 设置 WindowCache + ClickStateMachine（窗口枚举/点击状态机） */
+    void setWindowCache(WindowCache *cache);
 
     /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
     void setMonitor(int index);
+
+    /** @brief 锁定鱼眼效果（预览窗显示期间） */
+    void lockFishEye(int index);
+
+    /** @brief 释放鱼眼锁定 */
+    void unlockFishEye();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -113,7 +120,10 @@ private:
     QMap<QString, DockItem *> m_itemMap;
     DockManager *m_dockManager;
     SysHelper *m_sysHelper;
-    WindowManager *m_windowManager = nullptr;
+    WindowCache       *m_windowCache = nullptr;
+    ClickStateMachine *m_clickStateMachine = nullptr;
+    bool               m_fishEyeLocked = false;
+    int                m_fishEyeLockedIndex = -1;
     int m_baseIconSize;
     int m_fixedWindowH;
     qreal m_opacity;

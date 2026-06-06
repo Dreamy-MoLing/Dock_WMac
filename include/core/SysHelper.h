@@ -6,6 +6,10 @@
 #include <QWidget>  // for WId
 #include "Types.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 /**
  * @file SysHelper.h
  * @brief 系统适配层抽象接口
@@ -18,6 +22,7 @@ class SysHelper : public QObject {
     Q_OBJECT
 public:
     explicit SysHelper(QObject *parent = nullptr);
+    ~SysHelper() override;
 
     /** @brief 注册全局窗口钩子，监听前台窗口状态变化 */
     bool installWindowHook();
@@ -67,6 +72,10 @@ signals:
 
     /** @brief Win 键被按下 signal */
     void winKeyPressed();
+
+    /** @brief 窗口事件发生（CREATE/DESTROY/SHOW/HIDE）
+     *  @param pid 窗口所属进程 ID */
+    void windowEventOccurred(DWORD pid);
 };
 
 #endif // SYSHELPER_H
