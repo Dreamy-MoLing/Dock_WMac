@@ -26,8 +26,9 @@ public:
     /** @brief 停止检测 */
     void stop();
 
-    /** @brief 注册需要监控运行状态的应用 */
-    void registerApp(const QString &appId);
+    /** @brief 注册需要监控运行状态的应用
+     *  @param execPath 可执行文件路径，用于更精确的进程名匹配（可选） */
+    void registerApp(const QString &appId, const QString &execPath = QString());
 
     /** @brief 批量注册应用 */
     void registerApps(const QList<DockItemData> &items);
@@ -57,6 +58,7 @@ private:
 
     // 监控的应用集合与状态缓存
     QSet<QString> m_registeredApps;        // appId 集合
+    QMap<QString, QString> m_registeredExecPaths;  // appId → execPath
     QMap<QString, bool> m_runningCache;     // appId → isRunning
 
     // 已检测到的运行中应用（用于清理）

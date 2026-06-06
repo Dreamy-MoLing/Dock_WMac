@@ -80,3 +80,4 @@ docs/
 
 # ===== Clangd / LSP =====
 .cache/
+tests/output/

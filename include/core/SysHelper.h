@@ -19,12 +19,6 @@ class SysHelper : public QObject {
 public:
     explicit SysHelper(QObject *parent = nullptr);
 
-    /** @brief 读取系统任务栏/面板固定项列表 */
-    QList<DockItemData> getPinnedItems();
-
-    /** @brief 提取应用图标（优先缓存，回退系统原生图标） */
-    QString extractAppIcon(const QString &appId);
-
     /** @brief 注册全局窗口钩子，监听前台窗口状态变化 */
     bool installWindowHook();
 
@@ -52,14 +46,23 @@ public:
     /** @brief 触发系统窗口选择器（Task View） */
     void showWindowPicker();
 
-    /** @brief 为窗口启用 DWM 毛玻璃模糊效果 */
+    /** @brief 为窗口启用 DWM 毛玻璃模糊效果（全窗口） */
     void enableBlurBehindWindow(WId winId);
+
+    /** @brief 为窗口指定区域启用 DWM 毛玻璃模糊（与 WA_TranslucentBackground 兼容） */
+    void enableBlurBehindWindow(WId winId, const QRect &blurRect, int cornerRadius);
 
     /** @brief 检查系统是否支持 DWM 模糊效果 */
     bool isBlurSupported() const;
 
     /** @brief 检测当前系统是否为亮色主题 */
     bool isLightTheme() const;
+
+    /** @brief 检测系统任务栏自动隐藏是否开启 */
+    bool isTaskbarAutoHideEnabled() const;
+
+    /** @brief 获取当前鼠标全局位置 */
+    QPoint cursorPos() const;
 
     /** @brief 隐藏原生任务栏 */
     void hideNativeTaskbar();

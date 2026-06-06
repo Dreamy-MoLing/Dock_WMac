@@ -2,7 +2,7 @@
  * @file DockManager.cpp
  * @brief Dock 状态机实现
  *
- * 管理 Dock 三种状态 (Docked/Hidden/Animating) 之间的转换逻辑，
+ * 管理 Dock 两种状态 (Docked/Hidden) 之间的转换逻辑，
  * 接收 SysHelper 的事件信号并作出状态决策，发射信号通知 UI 更新。
  *
  * 固定项（pinned）在配置中持久化保存。
@@ -119,14 +119,7 @@ void DockManager::initialize(SysHelper *sysHelper)
     connect(m_sysHelper, &SysHelper::winKeyPressed,
             this, &DockManager::onWinKeyPressed);
 
-    // 初始加载固定项（由 ConfigManager + IPCHelper 填充，通过 setPinnedItems 设置）
-    if (m_pinnedItems.isEmpty()) {
-        // 回退：直接从 SysHelper 读取固定项
-        m_pinnedItems = m_sysHelper->getPinnedItems();
-        for (const auto &item : m_pinnedItems) {
-            emit itemAdded(item);
-        }
-    }
+    // 固定项由 Application::loadPinnedItems() 通过 setPinnedItems() 设置
 }
 
 void DockManager::setPinnedItems(const QList<DockItemData> &items)
@@ -181,43 +174,25 @@ void DockManager::removeTransientItem(const QString &appId)
     }
 }
 
-void DockManager::pinItem(const QString &appId)
+void DockManager::pinItem(const DockItemData &item)
 {
     // 检查是否已在固定列表中
     for (const auto &p : m_pinnedItems) {
-        if (p.appId == appId) return;
+        if (p.appId == item.appId) return;
     }
 
-    // 从临时项移到固定项
-    DockItemData item;
-    bool found = false;
+    // 从临时项中移除（如果存在）
     for (int i = 0; i < m_transientItems.size(); ++i) {
-        if (m_transientItems[i].appId == appId) {
-            item = m_transientItems[i];
+        if (m_transientItems[i].appId == item.appId) {
             m_transientItems.removeAt(i);
-            found = true;
             break;
         }
-    }
-
-    if (!found) {
-        // 不在临时项中（可能是手动添加的固定）
-        // 从 SysHelper 获取完整信息
-        auto allItems = m_sysHelper->getPinnedItems();
-        for (const auto &a : allItems) {
-            if (a.appId == appId) {
-                item = a;
-                found = true;
-                break;
-            }
-        }
-        if (!found) return;
     }
 
     m_pinnedItems.append(item);
 
     // 重新发射信号：先移除再添加（让 UI 层知道位置变了）
-    emit itemRemoved(appId);
+    emit itemRemoved(item.appId);
     emit itemAdded(item);
     emit pinnedItemsChanged(m_pinnedItems);
 }
@@ -246,15 +221,11 @@ void DockManager::onForegroundWindowChanged(bool isMaximizedOrFullscreen)
 {
     if (isMaximizedOrFullscreen && m_currentState == DockState::Docked) {
         m_sysHelper->installKeyboardHook();
-        m_currentState = DockState::Animating;
-        emit stateChanged(DockState::Animating);
         m_currentState = DockState::Hidden;
         emit stateChanged(DockState::Hidden);
 
     } else if (!isMaximizedOrFullscreen && m_currentState == DockState::Hidden) {
         m_sysHelper->uninstallKeyboardHook();
-        m_currentState = DockState::Animating;
-        emit stateChanged(DockState::Animating);
         m_currentState = DockState::Docked;
         emit stateChanged(DockState::Docked);
     }
@@ -264,8 +235,7 @@ void DockManager::onWinKeyPressed()
 {
     if (m_currentState != DockState::Hidden) return;
 
-    m_currentState = DockState::Animating;
-    emit stateChanged(DockState::Animating);
+    m_sysHelper->uninstallKeyboardHook();
     m_currentState = DockState::Docked;
     emit stateChanged(DockState::Docked);
 }

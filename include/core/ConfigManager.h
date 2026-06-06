@@ -41,8 +41,10 @@ public:
     /** @brief 将图标放入缓存 */
     void cacheIcon(const QString &appId, const QPixmap &pixmap);
 
-private:
+    /** @brief 获取配置文件完整路径（公开用于测试诊断） */
     QString configFilePath() const;
+
+private:
     QJsonObject m_config;
     QCache<QString, QPixmap> m_iconCache;
     static const int kCacheLimit = 128;

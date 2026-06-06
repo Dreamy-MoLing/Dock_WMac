@@ -21,6 +21,7 @@
 #include "core/ConfigManager.h"
 #include "core/DockManager.h"
 #include "core/Logger.h"
+#include "core/PinnedItemsReader.h"
 #include "core/ProcessMonitor.h"
 #include "core/SysHelper.h"
 #include "core/Types.h"
@@ -80,12 +81,14 @@ int Application::run()
 
     m_dockManager = new DockManager(this);
     m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
-    loadPinnedItems();
 
     // UI 层初始化
     m_dockWindow = new DockWindow();
     m_dockWindow->setDockManager(m_dockManager);
     m_dockWindow->setSysHelper(m_sysHelper);
+
+    // 加载固定项（必须在信号连接之前）
+    loadPinnedItems();
 
     // 触发 DockManager 信号连接
     m_dockManager->initialize(m_sysHelper);
@@ -114,11 +117,6 @@ int Application::run()
     std::signal(SIGINT, signalRestoreTaskbar);
     std::signal(SIGTERM, signalRestoreTaskbar);
     std::signal(SIGABRT, signalRestoreTaskbar);
-    atexit([]() {
-        if (s_sysHelperForSignal) {
-            s_sysHelperForSignal->restoreNativeTaskbar();
-        }
-    });
 
     // 任务栏隐藏后 availableGeometry 变化，延迟重新定位 Dock
     QTimer::singleShot(100, m_dockWindow, &DockWindow::requestUpdatePosition);
@@ -164,22 +162,32 @@ bool Application::checkSingleInstance()
 
 void Application::loadPinnedItems()
 {
+    // 优先从配置文件读取用户固定的项目
     QVariantList savedPinned = m_config->get(
-        QStringLiteral("pinned_apps"), QVariantList()).toList();
+        QStringLiteral("pinnedApps"), QVariantList()).toList();
 
     QList<DockItemData> pinnedItems;
-    pinnedItems.reserve(savedPinned.size());
 
-    for (const QVariant &v : savedPinned) {
-        QVariantMap entry = v.toMap();
-        DockItemData item;
-        item.appId       = entry.value(QStringLiteral("appId")).toString();
-        item.displayName = entry.value(QStringLiteral("displayName")).toString();
-        item.iconPath    = entry.value(QStringLiteral("iconPath")).toString();
-        item.execPath    = entry.value(QStringLiteral("execPath")).toString();
-        item.isRunning   = false;
-        item.badgeCount  = 0;
-        pinnedItems.append(item);
+    if (!savedPinned.isEmpty()) {
+        // 从配置文件恢复
+        pinnedItems.reserve(savedPinned.size());
+        for (const QVariant &v : savedPinned) {
+            QVariantMap entry = v.toMap();
+            DockItemData item;
+            item.appId       = entry.value(QStringLiteral("appId")).toString();
+            item.displayName = entry.value(QStringLiteral("displayName")).toString();
+            item.iconPath    = entry.value(QStringLiteral("iconPath")).toString();
+            item.execPath    = entry.value(QStringLiteral("execPath")).toString();
+            item.isRunning   = false;
+            item.badgeCount  = 0;
+            pinnedItems.append(item);
+        }
+        qInfo() << "从配置文件恢复" << pinnedItems.size() << "个固定项";
+    } else {
+        // 配置文件为空，使用 PinnedItemsReader 读取系统固定项
+        PinnedItemsReader reader;
+        pinnedItems = reader.getAllPinnedItems();
+        qInfo() << "从系统读取" << pinnedItems.size() << "个固定项";
     }
 
     m_dockManager->setPinnedItems(pinnedItems);
@@ -200,6 +208,6 @@ void Application::connectPersistence()
                 entry[QStringLiteral("execPath")]    = item.execPath;
                 list.append(entry);
             }
-            m_config->set(QStringLiteral("pinned_apps"), list);
+            m_config->set(QStringLiteral("pinnedApps"), list);
         });
 }

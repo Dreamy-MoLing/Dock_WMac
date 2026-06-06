@@ -13,8 +13,7 @@
  */
 enum class DockState {
     Docked,     // 常驻显示
-    Hidden,     // 隐藏（窗口全屏/最大化时）
-    Animating   // 过渡动画中
+    Hidden      // 隐藏（窗口全屏/最大化时）
 };
 
 /**
@@ -26,7 +25,7 @@ struct DockItemData {
     QString execPath;       // 可执行文件路径
     QString iconPath;       // 图标路径
     bool    isRunning;      // 是否正在运行
-    int     badgeCount;     // 未读通知数 (0=无)
+    int     badgeCount = 0;  // 未读通知数 (0=无)
     int     windowCount = 1; // 窗口数量（默认1，用于多窗口堆叠指示器）
 };
 

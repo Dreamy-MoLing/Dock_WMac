@@ -20,8 +20,6 @@
 #include "core/SysHelper.h"
 
 #include <windows.h>
-#include <shlobj.h>
-#include <shlwapi.h>
 #include <dwmapi.h>
 #include <QDir>
 #include <QFileInfo>
@@ -29,12 +27,9 @@
 #include <QTimer>
 #include <QProcess>
 #include <QCoreApplication>
-#include <QSettings>
-#include <QRegularExpression>
-#include <QPixmap>
+#include <vector>
 
 #pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "user32.lib")
 
@@ -45,14 +40,16 @@ SysHelper::SysHelper(QObject *parent)
 {
 }
 
-// ─── 全局键盘钩子句柄 ─────────────────────────────────────
+// ─── 全局钩子句柄与 SysHelper 指针 ──────────────────────────
 
 static HHOOK g_keyboardHook = nullptr;
+static SysHelper *g_sysHelperForHook = nullptr;
 
 /**
  * @brief 低级键盘钩子回调
  *
  * 捕获 Win 键按下事件，通过 Qt 信号通知 DockManager。
+ * 使用全局指针避免 QCoreApplication::instance() 在极端时序下返回 nullptr。
  */
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
@@ -60,17 +57,12 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
         KBDLLHOOKSTRUCT *pKb = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
         if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) &&
             (pKb->vkCode == VK_LWIN || pKb->vkCode == VK_RWIN)) {
-            // 通过全局单例发射信号
-            static SysHelper *s_helper = nullptr;
-            if (!s_helper) {
-                s_helper = qobject_cast<SysHelper *>(QCoreApplication::instance()->findChild<SysHelper *>());
-            }
-            if (s_helper) {
-                QMetaObject::invokeMethod(s_helper, []() {
-                    emit s_helper->winKeyPressed();
+            if (g_sysHelperForHook) {
+                QMetaObject::invokeMethod(g_sysHelperForHook, []() {
+                    emit g_sysHelperForHook->winKeyPressed();
                 }, Qt::QueuedConnection);
             }
-            return 1;  // 阻止 Win 键传递给系统
+            // 不拦截 Win 键，让系统正常处理（开始菜单、Win+D 等快捷键）
         }
     }
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -91,21 +83,16 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
     // 只处理顶级窗口事件
     if (idObject != OBJID_WINDOW || hwnd == nullptr) return;
 
-    static SysHelper *s_helper = nullptr;
-    if (!s_helper) {
-        s_helper = qobject_cast<SysHelper *>(QCoreApplication::instance()->findChild<SysHelper *>());
-    }
-    if (!s_helper) return;
+    if (!g_sysHelperForHook) return;
 
     switch (event) {
     case EVENT_SYSTEM_FOREGROUND:
     case EVENT_SYSTEM_MINIMIZESTART:
     case EVENT_SYSTEM_MAXIMIZESTART:
-    case EVENT_OBJECT_LOCATIONCHANGE:
         // 延迟一帧后检查状态，确保窗口状态已更新
-        QMetaObject::invokeMethod(s_helper, []() {
-            bool maximized = s_helper->getForegroundWindowState();
-            emit s_helper->foregroundWindowChanged(maximized);
+        QMetaObject::invokeMethod(g_sysHelperForHook, []() {
+            bool maximized = g_sysHelperForHook->getForegroundWindowState();
+            emit g_sysHelperForHook->foregroundWindowChanged(maximized);
         }, Qt::QueuedConnection);
         break;
     default:
@@ -114,172 +101,15 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
 }
 
 
-// ─── 帮助函数 ────────────────────────────────────────────
-
-/**
- * @brief 从 .lnk 快捷方式文件解析出目标路径
- */
-static QString resolveShortcut(const QString &lnkPath)
-{
-    if (!QFileInfo::exists(lnkPath)) return {};
-
-    // 使用 IShellLink COM 接口解析 .lnk
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr)) return {};
-
-    IShellLink *psl = nullptr;
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_IShellLink, reinterpret_cast<void **>(&psl));
-    if (FAILED(hr)) {
-        CoUninitialize();
-        return {};
-    }
-
-    IPersistFile *ppf = nullptr;
-    hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
-    if (FAILED(hr)) {
-        psl->Release();
-        CoUninitialize();
-        return {};
-    }
-
-    // 加载 .lnk 文件
-    WCHAR wszPath[MAX_PATH];
-    lnkPath.toWCharArray(wszPath);
-    wszPath[lnkPath.length()] = 0;
-    hr = ppf->Load(wszPath, STGM_READ);
-
-    QString execPath;
-    if (SUCCEEDED(hr)) {
-        WIN32_FIND_DATA wfd;
-        WCHAR szPath[MAX_PATH];
-        hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
-        if (SUCCEEDED(hr)) {
-            execPath = QString::fromWCharArray(szPath);
-        }
-    }
-
-    ppf->Release();
-    psl->Release();
-    CoUninitialize();
-    return execPath;
-}
-
-
 // ─── 公共接口实现 ─────────────────────────────────────────
-
-QList<DockItemData> SysHelper::getPinnedItems()
-{
-    QList<DockItemData> items;
-
-    // Windows 10/11 任务栏固定项路径
-    QString taskbarPath = QDir::homePath()
-        + "/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/";
-    QDir dir(taskbarPath);
-    if (!dir.exists()) {
-        // 回退: Windows 7 风格路径
-        taskbarPath = QDir::homePath()
-            + "/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/";
-        dir.setPath(taskbarPath);
-    }
-    if (!dir.exists()) return items;
-
-    const auto entries = dir.entryInfoList({"*.lnk"}, QDir::Files, QDir::Name);
-    for (const QFileInfo &fi : entries) {
-        QString execPath = resolveShortcut(fi.absoluteFilePath());
-        if (execPath.isEmpty()) continue;
-
-        DockItemData item;
-        item.appId = fi.completeBaseName();
-        item.displayName = fi.completeBaseName();
-        item.execPath = execPath;
-        // 从可执行文件提取图标，失败时回退到 .lnk 路径
-        QString iconPath = extractAppIcon(execPath);
-        item.iconPath = iconPath.isEmpty() ? fi.absoluteFilePath() : iconPath;
-        item.isRunning = false;
-        item.badgeCount = 0;
-        items.append(item);
-    }
-
-    return items;
-}
-
-QString SysHelper::extractAppIcon(const QString &appId)
-{
-    // 检查缓存是否已存在
-    QString cacheDir = QDir::tempPath() + "/dock_wmac_icons";
-    QString cachePath = cacheDir + "/" + QFileInfo(appId).baseName() + ".png";
-    if (QFileInfo::exists(cachePath)) {
-        return cachePath;
-    }
-
-    // 使用 SHGetFileInfo 提取大图标
-    SHFILEINFO shfi;
-    DWORD_PTR result = SHGetFileInfo(
-        reinterpret_cast<const wchar_t *>(appId.utf16()),
-        FILE_ATTRIBUTE_NORMAL, &shfi, sizeof(shfi),
-        SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-    if (!result || !shfi.hIcon) {
-        // 回退：直接尝试文件图标
-        result = SHGetFileInfo(
-            reinterpret_cast<const wchar_t *>(appId.utf16()),
-            FILE_ATTRIBUTE_NORMAL, &shfi, sizeof(shfi),
-            SHGFI_ICON | SHGFI_LARGEICON);
-        if (!result || !shfi.hIcon) return {};
-    }
-
-    // HICON → QPixmap（Qt 5.15 MinGW 无 fromWinHICON/fromWinHBITMAP）
-    // 使用 QImage 从 HICON 的位图数据手动构建
-    QPixmap pix;
-    ICONINFO iconInfo;
-    memset(&iconInfo, 0, sizeof(iconInfo));
-    if (GetIconInfo(shfi.hIcon, &iconInfo) && iconInfo.hbmColor) {
-        // 获取位图信息
-        BITMAP bm;
-        memset(&bm, 0, sizeof(bm));
-        if (GetObject(iconInfo.hbmColor, sizeof(bm), &bm) && bm.bmWidth > 0 && bm.bmHeight > 0) {
-            QImage img(bm.bmWidth, bm.bmHeight, QImage::Format_ARGB32);
-            // 通过 GetDIBits 读取位图数据
-            HDC hdc = GetDC(nullptr);
-            if (hdc) {
-                BITMAPINFO bi;
-                memset(&bi, 0, sizeof(bi));
-                bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                bi.bmiHeader.biWidth = bm.bmWidth;
-                bi.bmiHeader.biHeight = -bm.bmHeight;  // 倒置，使原点在左上
-                bi.bmiHeader.biPlanes = 1;
-                bi.bmiHeader.biBitCount = 32;
-                bi.bmiHeader.biCompression = BI_RGB;
-                if (GetDIBits(hdc, iconInfo.hbmColor, 0, bm.bmHeight,
-                              img.bits(), &bi, DIB_RGB_COLORS)) {
-                    pix = QPixmap::fromImage(img);
-                }
-                ReleaseDC(nullptr, hdc);
-            }
-        }
-        if (iconInfo.hbmColor) DeleteObject(iconInfo.hbmColor);
-        if (iconInfo.hbmMask) DeleteObject(iconInfo.hbmMask);
-    }
-    DestroyIcon(shfi.hIcon);
-
-    if (pix.isNull()) return {};
-
-    QDir().mkpath(cacheDir);
-    pix.save(cachePath, "PNG");
-    return cachePath;
-}
 
 bool SysHelper::installWindowHook()
 {
+    g_sysHelperForHook = this;
+
     // Windows 使用 SetWinEventHook 监听窗口事件
     HWINEVENTHOOK hook = SetWinEventHook(
         EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
-        nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
-    if (!hook) return false;
-
-    hook = SetWinEventHook(
-        EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
         nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
     if (!hook) return false;
 
@@ -299,6 +129,7 @@ bool SysHelper::installWindowHook()
 
 bool SysHelper::installKeyboardHook()
 {
+    g_sysHelperForHook = this;
     if (g_keyboardHook) return true;  // 已安装
 
     g_keyboardHook = SetWindowsHookEx(
@@ -320,6 +151,7 @@ void SysHelper::uninstallKeyboardHook()
         g_keyboardHook = nullptr;
         qInfo() << "键盘钩子已卸载";
     }
+    g_sysHelperForHook = nullptr;
 }
 
 bool SysHelper::getForegroundWindowState()
@@ -495,6 +327,32 @@ void SysHelper::enableBlurBehindWindow(WId winId)
     }
 }
 
+void SysHelper::enableBlurBehindWindow(WId winId, const QRect &blurRect, int cornerRadius)
+{
+    HWND hwnd = reinterpret_cast<HWND>(winId);
+    if (!hwnd) return;
+
+    // 创建圆角矩形区域，仅对背景区域应用模糊
+    HRGN hRgn = CreateRoundRectRgn(
+        blurRect.left(), blurRect.top(),
+        blurRect.right(), blurRect.bottom(),
+        cornerRadius, cornerRadius);
+
+    DWM_BLURBEHIND bb;
+    ZeroMemory(&bb, sizeof(bb));
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = hRgn;
+
+    HRESULT hr = DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (FAILED(hr)) {
+        qWarning() << "DwmEnableBlurBehindWindow(region) 失败，hr:" << Qt::hex << hr;
+    }
+
+    // DwmEnableBlurBehindWindow 会拷贝 region，安全删除
+    DeleteObject(hRgn);
+}
+
 bool SysHelper::isBlurSupported() const
 {
     BOOL dwmEnabled = FALSE;
@@ -518,6 +376,43 @@ bool SysHelper::isLightTheme() const
     RegCloseKey(hKey);
 
     return (result == ERROR_SUCCESS) ? (value != 0) : true;
+}
+
+// ─── 任务栏自动隐藏检测 ─────────────────────────────────────
+
+bool SysHelper::isTaskbarAutoHideEnabled() const
+{
+    // 读取 StuckRects3\Settings 二进制值，Windows 10/11 通用
+    HKEY hKey;
+    LONG result = RegOpenKeyEx(
+        HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StuckRects3",
+        0, KEY_QUERY_VALUE, &hKey);
+    if (result != ERROR_SUCCESS) return false;
+
+    DWORD size = 0;
+    result = RegQueryValueEx(hKey, L"Settings", nullptr, nullptr, nullptr, &size);
+    if (result != ERROR_SUCCESS || size < 16) {
+        RegCloseKey(hKey);
+        return false;
+    }
+
+    std::vector<BYTE> data(size);
+    result = RegQueryValueEx(hKey, L"Settings", nullptr, nullptr, data.data(), &size);
+    RegCloseKey(hKey);
+    if (result != ERROR_SUCCESS) return false;
+
+    // Settings[12] bit 0 = 任务栏自动隐藏
+    return (size > 12) && (data[12] & 0x01);
+}
+
+QPoint SysHelper::cursorPos() const
+{
+    POINT pt;
+    if (GetCursorPos(&pt)) {
+        return QPoint(pt.x, pt.y);
+    }
+    return QPoint();
 }
 
 // ─── 原生任务栏管理 ─────────────────────────────────────────

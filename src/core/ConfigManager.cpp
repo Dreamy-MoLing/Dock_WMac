@@ -40,9 +40,9 @@ void ConfigManager::load()
         m_config["opacity"] = 0.95;
         m_config["blurEnabled"] = true;
         m_config["startWithSystem"] = false;
-        m_config["corner_radius"] = 16;
-        m_config["animation_duration"] = 300;
-        m_config["show_delay"] = 0;
+        m_config["cornerRadius"] = 16;
+        m_config["animationDuration"] = 300;
+        m_config["showDelay"] = 0;
         m_config["maxItems"] = 16;
         save();
         return;
@@ -57,6 +57,27 @@ void ConfigManager::load()
 
     if (doc.isObject()) {
         m_config = doc.object();
+    }
+
+    // 迁移旧配置键名（snake_case → camelCase）
+    // v0.3.0 之前使用混合命名，v0.3.0 起统一为 camelCase
+    struct { const char *oldKey; const char *newKey; } migrations[] = {
+        {"corner_radius",       "cornerRadius"},
+        {"animation_duration",  "animationDuration"},
+        {"show_delay",          "showDelay"},
+        {"known_icons",         "knownIcons"},
+        {"pinned_apps",         "pinnedApps"},
+    };
+    bool migrated = false;
+    for (const auto &m : migrations) {
+        if (m_config.contains(m.oldKey) && !m_config.contains(m.newKey)) {
+            m_config[m.newKey] = m_config[m.oldKey];
+            m_config.remove(m.oldKey);
+            migrated = true;
+        }
+    }
+    if (migrated) {
+        save();
     }
 }
 
@@ -90,7 +111,7 @@ void ConfigManager::set(const QString &key, const QVariant &value)
 
 QString ConfigManager::resolveIcon(const QString &appId) const
 {
-    QJsonObject knownIcons = m_config["known_icons"].toObject();
+    QJsonObject knownIcons = m_config["knownIcons"].toObject();
     if (knownIcons.contains(appId)) {
         return knownIcons[appId].toString();
     }

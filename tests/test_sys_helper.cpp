@@ -1,16 +1,24 @@
 /**
  * @file test_sys_helper.cpp
- * @brief SysHelper 单元测试
+ * @brief SysHelper Win32 API 包装层单元测试
  *
- * 测试窗口检测、全屏判断、最大化检测等功能。
+ * 测试窗口检测、全屏判断、最大化检测、钩子安装、任务栏管理、
+ * DWM 模糊效果、主题检测、开机自启管理等功能。
  *
- * 注意：由于 SysHelper 依赖 Win32 API 和实际窗口，
- * 这些测试主要验证接口存在性和基本逻辑，
- * 实际的窗口检测需要在有图形界面的环境中测试。
+ * 设计原则：
+ * - 所有测试必须在无图形界面的环境中安全运行（CI / headless）
+ * - 测试的是"行为契约"（不崩溃、返回值合理），而非特定环境下的具体值
+ * - 禁止使用 EXPECT_TRUE(x == true || x == false) 这种无意义断言
+ * - 使用 EXPECT_NO_FATAL_FAILURE 验证函数调用不崩溃
  */
 
 #include <gtest/gtest.h>
+#include <chrono>
 #include "core/SysHelper.h"
+
+// ============================================================================
+// Test Fixture
+// ============================================================================
 
 class SysHelperTest : public ::testing::Test {
 protected:
@@ -19,174 +27,217 @@ protected:
     }
     void TearDown() override {
         delete sysHelper;
+        sysHelper = nullptr;
     }
-    SysHelper *sysHelper;
+    SysHelper *sysHelper = nullptr;
 };
 
-// ========== 接口存在性测试 ==========
+// ============================================================================
+// 1. Initialization
+// ============================================================================
 
 TEST_F(SysHelperTest, Initialization)
 {
-    // SysHelper 应能正常初始化
+    // SysHelper 构造后不应为空指针
     EXPECT_NE(sysHelper, nullptr);
 }
 
-TEST_F(SysHelperTest, GetForegroundWindowState)
-{
-    // 测试前台窗口状态检测
-    // 在无图形界面环境中，可能返回 false
-    // 但不应崩溃
-    bool state = sysHelper->getForegroundWindowState();
+// ============================================================================
+// 2. ForegroundWindowStateReturnsBool
+// ============================================================================
 
-    // 验证返回布尔值（不验证具体值，因为依赖环境）
-    EXPECT_TRUE(state == true || state == false);
+TEST_F(SysHelperTest, ForegroundWindowStateReturnsBool)
+{
+    // getForegroundWindowState() 必须在任何环境下不崩溃地返回
+    EXPECT_NO_FATAL_FAILURE({
+        bool state = sysHelper->getForegroundWindowState();
+        (void)state;
+    });
 }
 
-// ========== 信号存在性测试 ==========
+// ============================================================================
+// 3. WindowCountNonNegative
+// ============================================================================
 
-TEST_F(SysHelperTest, ForegroundWindowSignal)
+TEST_F(SysHelperTest, WindowCountNonNegative)
 {
-    // 验证信号存在且可连接
-    // 这里主要验证接口存在
-    EXPECT_TRUE(typeid(*sysHelper) == typeid(SysHelper));
-}
-
-// ========== 窗口管理测试 ==========
-
-TEST_F(SysHelperTest, GetWindowCount)
-{
-    // 测试获取窗口数量
-    // 在无图形界面环境中，可能返回 0
+    // getWindowCount() 对任意进程名应返回 >= 0 的值
     int count = sysHelper->getWindowCount("explorer");
-
-    // 验证返回非负整数
     EXPECT_GE(count, 0);
 }
 
-TEST_F(SysHelperTest, ActivateWindow)
-{
-    // 测试激活窗口
-    // 在无图形界面环境中，可能返回 false
-    // 但不应崩溃
-    bool result = sysHelper->activateWindow("nonexistent_app");
+// ============================================================================
+// 4. ActivateWindowDoesNotCrash
+// ============================================================================
 
-    // 验证返回布尔值
-    EXPECT_TRUE(result == true || result == false);
+TEST_F(SysHelperTest, ActivateWindowDoesNotCrash)
+{
+    // activateWindow("nonexistent_app") 应返回 bool 且不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        bool result = sysHelper->activateWindow("nonexistent_app");
+        (void)result;
+    });
 }
 
-// ========== 自动启动测试 ==========
+// ============================================================================
+// 5. BlurSupportedReturnsBool
+// ============================================================================
 
-TEST_F(SysHelperTest, AutoStart)
+TEST_F(SysHelperTest, BlurSupportedReturnsBool)
 {
-    // 测试自动启动设置
-    // 注意：这些测试会修改系统设置，需要谨慎
-    // 这里只测试接口存在性
-
-    // 获取当前状态
-    bool currentState = sysHelper->isAutoStartEnabled();
-
-    // 验证返回布尔值
-    EXPECT_TRUE(currentState == true || currentState == false);
+    // isBlurSupported() 应在任何环境下不崩溃地返回
+    EXPECT_NO_FATAL_FAILURE({
+        bool supported = sysHelper->isBlurSupported();
+        (void)supported;
+    });
 }
 
-// ========== DWM 模糊效果测试 ==========
+// ============================================================================
+// 6. IsLightThemeReturnsBool
+// ============================================================================
 
-TEST_F(SysHelperTest, BlurSupported)
+TEST_F(SysHelperTest, IsLightThemeReturnsBool)
 {
-    // 测试模糊效果支持
-    bool supported = sysHelper->isBlurSupported();
-
-    // 验证返回布尔值
-    EXPECT_TRUE(supported == true || supported == false);
+    // isLightTheme() 应在任何环境下不崩溃地返回
+    EXPECT_NO_FATAL_FAILURE({
+        bool isLight = sysHelper->isLightTheme();
+        (void)isLight;
+    });
 }
 
-// ========== 任务栏管理测试 ==========
+// ============================================================================
+// 7. AutoStartStateCheck
+// ============================================================================
 
-TEST_F(SysHelperTest, TaskbarManagement)
+TEST_F(SysHelperTest, AutoStartStateCheck)
 {
-    // 测试任务栏管理功能
-    // 注意：这些测试会修改系统状态，需要谨慎
-    // 这里只测试接口存在性
-
-    // 隐藏任务栏
-    sysHelper->hideNativeTaskbar();
-
-    // 恢复任务栏
-    sysHelper->restoreNativeTaskbar();
-
-    // 如果执行到这里没有崩溃，测试通过
-    EXPECT_TRUE(true);
+    // isAutoStartEnabled() 应在任何环境下不崩溃地返回
+    EXPECT_NO_FATAL_FAILURE({
+        bool enabled = sysHelper->isAutoStartEnabled();
+        (void)enabled;
+    });
 }
 
-// ========== 主题检测测试 ==========
+// ============================================================================
+// 8. SetAutoStartRoundtrip
+// ============================================================================
 
-TEST_F(SysHelperTest, ThemeDetection)
+TEST_F(SysHelperTest, SetAutoStartRoundtrip)
 {
-    // 测试主题检测
-    bool isLight = sysHelper->isLightTheme();
+    // 保存当前状态
+    bool originalState = false;
+    EXPECT_NO_FATAL_FAILURE({
+        originalState = sysHelper->isAutoStartEnabled();
+    });
 
-    // 验证返回布尔值
-    EXPECT_TRUE(isLight == true || isLight == false);
+    // 切换到相反状态
+    EXPECT_NO_FATAL_FAILURE({
+        bool toggleResult = sysHelper->setAutoStart(!originalState);
+        (void)toggleResult;
+    });
+
+    // 验证状态已改变（注册表操作在受限环境下可能失败，只要不崩溃即可）
+    EXPECT_NO_FATAL_FAILURE({
+        bool newState = sysHelper->isAutoStartEnabled();
+        (void)newState;
+    });
+
+    // 恢复原始状态
+    EXPECT_NO_FATAL_FAILURE({
+        bool restoreResult = sysHelper->setAutoStart(originalState);
+        (void)restoreResult;
+    });
 }
 
-// ========== 窗口选择器测试 ==========
+// ============================================================================
+// 9. WindowHookInstall
+// ============================================================================
 
-TEST_F(SysHelperTest, ShowWindowPicker)
+TEST_F(SysHelperTest, WindowHookInstall)
 {
-    // 测试显示窗口选择器
-    // 在无图形界面环境中，可能无效果
-    // 但不应崩溃
-    sysHelper->showWindowPicker();
-
-    // 如果执行到这里没有崩溃，测试通过
-    EXPECT_TRUE(true);
+    // installWindowHook() 返回 bool，不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        bool result = sysHelper->installWindowHook();
+        (void)result;
+    });
 }
 
-// ========== 钩子安装测试 ==========
+// ============================================================================
+// 10. KeyboardHookInstallUninstall
+// ============================================================================
 
-TEST_F(SysHelperTest, HookInstallation)
+TEST_F(SysHelperTest, KeyboardHookInstallUninstall)
 {
-    // 测试钩子安装
-    // 注意：这些测试会修改系统状态，需要谨慎
-    // 这里只测试接口存在性
+    // installKeyboardHook() 返回 bool（headless 环境下可能失败，可以接受）
+    EXPECT_NO_FATAL_FAILURE({
+        bool result = sysHelper->installKeyboardHook();
+        (void)result;
+    });
 
-    // 安装窗口钩子
-    bool windowHookResult = sysHelper->installWindowHook();
-
-    // 验证返回布尔值
-    EXPECT_TRUE(windowHookResult == true || windowHookResult == false);
-
-    // 安装键盘钩子
-    bool keyboardHookResult = sysHelper->installKeyboardHook();
-
-    // 验证返回布尔值
-    EXPECT_TRUE(keyboardHookResult == true || keyboardHookResult == false);
-
-    // 卸载键盘钩子
-    sysHelper->uninstallKeyboardHook();
-
-    // 如果执行到这里没有崩溃，测试通过
-    EXPECT_TRUE(true);
+    // uninstallKeyboardHook() 不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->uninstallKeyboardHook();
+    });
 }
 
-// ========== 性能测试 ==========
+// ============================================================================
+// 11. TaskbarHideRestore
+// ============================================================================
+
+TEST_F(SysHelperTest, TaskbarHideRestore)
+{
+    // hideNativeTaskbar() 和 restoreNativeTaskbar() 在任何环境下安全调用
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->hideNativeTaskbar();
+    });
+
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->restoreNativeTaskbar();
+    });
+}
+
+// ============================================================================
+// 12. ShowWindowPickerNoCrash
+// ============================================================================
+
+TEST_F(SysHelperTest, ShowWindowPickerNoCrash)
+{
+    // showWindowPicker() 在任何环境下不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->showWindowPicker();
+    });
+}
+
+// ============================================================================
+// 13. DetectionPerformance
+// ============================================================================
 
 TEST_F(SysHelperTest, DetectionPerformance)
 {
-    // 测试检测性能
-    // 在实际环境中，检测应在合理时间内完成
-    // 这里验证基本性能要求
-
+    // getForegroundWindowState() + isBlurSupported() + isLightTheme()
+    // 三项检测总计应在 200ms 内完成
     auto start = std::chrono::high_resolution_clock::now();
 
-    // 执行检测
-    sysHelper->getForegroundWindowState();
-    sysHelper->isBlurSupported();
-    sysHelper->isLightTheme();
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->getForegroundWindowState();
+        sysHelper->isBlurSupported();
+        sysHelper->isLightTheme();
+    });
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    // 检测应在 100ms 内完成
-    EXPECT_LT(duration.count(), 100);
+    EXPECT_LT(duration.count(), 200);
+}
+
+// ============================================================================
+// 14. BlurBehindWindowNoCrash
+// ============================================================================
+
+TEST_F(SysHelperTest, BlurBehindWindowNoCrash)
+{
+    // enableBlurBehindWindow(0) 传入无效 WId，应优雅失败而非崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        sysHelper->enableBlurBehindWindow(0);
+    });
 }

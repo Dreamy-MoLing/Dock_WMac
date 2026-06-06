@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Dock_WMac VERSION 0.2.1b LANGUAGES CXX)
+project(Dock_WMac VERSION 0.2.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ add_executable(dock_wmac WIN32
     src/core/ProcessMonitor.cpp
     src/core/SysHelper.cpp
     src/core/Logger.cpp
+    src/core/PinnedItemsReader.cpp
     src/ui/DockWindow.cpp
     src/ui/DockItem.cpp
     include/core/Types.h
@@ -25,13 +26,14 @@ add_executable(dock_wmac WIN32
     include/core/ProcessMonitor.h
     include/core/SysHelper.h
     include/core/Logger.h
+    include/core/PinnedItemsReader.h
     include/ui/DockWindow.h
     include/ui/DockItem.h
     resources/resources.qrc
 )
 
 target_include_directories(dock_wmac PRIVATE include)
-target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg dwmapi)
+target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg dwmapi shlwapi shell32)
 
 # windeployqt 自动部署 Qt 运行时依赖
 find_program(WINDEPLOYQT_EXECUTABLE NAMES windeployqt HINTS "${Qt6_DIR}/../../../bin")

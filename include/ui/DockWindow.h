@@ -88,6 +88,7 @@ private:
 
     // 毛玻璃 & 主题
     void initBlurEffect();
+    void updateBlurRegion();
     void updateTheme();
 
     // 图标添加/移除动画
@@ -131,6 +132,18 @@ private:
 
     // 窗口数量更新定时器
     QTimer *m_windowCountTimer;
+
+    // 窗口预览
+    QTimer *m_previewTimer;        // 悬停延迟定时器 (500ms)
+    QWidget *m_previewPopup;       // 预览弹出面板
+    DockItem *m_previewItem;       // 当前正在预览的图标项
+    void showWindowPreview(DockItem *item);
+    void hideWindowPreview();
+
+    // 底部边缘唤起（Hidden 状态鼠标触碰屏幕底部边缘自动显示）
+    QTimer *m_bottomEdgeTimer;
+
+    QSize m_lastBlurSize;     // 上次模糊区域对应的窗口尺寸（避免无效 DWM 调用）
 
     // 布局常量
     static constexpr int kBaseSpacing = 8;

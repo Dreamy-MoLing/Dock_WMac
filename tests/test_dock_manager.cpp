@@ -2,7 +2,8 @@
  * @file test_dock_manager.cpp
  * @brief DockManager 状态机单元测试
  *
- * 测试状态转换、信号发射、事件处理等功能。
+ * 测试状态转换、信号发射、事件处理、固定/临时项管理等功能。
+ * DockState 枚举仅包含 Docked 和 Hidden（Animating 已在 Phase E2 移除）。
  */
 
 #include <gtest/gtest.h>
@@ -25,157 +26,162 @@ protected:
     DockManager *manager;
 };
 
-TEST_F(DockManagerTest, InitialStateIsDocked)
+// 1. 初始状态应为 Docked
+TEST_F(DockManagerTest, InitialStateDocked)
 {
     EXPECT_EQ(manager->currentState(), DockState::Docked);
 }
 
-TEST_F(DockManagerTest, InitialItemsNotEmpty)
-{
-    // 应加载到默认应用（如果系统有 .desktop 文件）
-    auto items = manager->items();
-    // 不断言数量，因为依赖系统环境
-    // 但至少应该能正常返回
-    EXPECT_GE(items.size(), 0);
-}
-
-TEST_F(DockManagerTest, StateTransitionToHidden)
+// 2. 前台窗口最大化时状态转为 Hidden，信号精确发射一次
+TEST_F(DockManagerTest, StateTransitionDockedToHidden)
 {
     QSignalSpy spy(manager, &DockManager::stateChanged);
-
-    // 模拟前台窗口最大化
     manager->onForegroundWindowChanged(true);
-
     EXPECT_EQ(manager->currentState(), DockState::Hidden);
-    // 应该发射了 stateChanged 信号（Animating + Hidden）
-    EXPECT_GE(spy.count(), 1);
+    EXPECT_EQ(spy.count(), 1);
 }
 
-TEST_F(DockManagerTest, StateTransitionToDocked)
+// 3. 隐藏后恢复：状态转为 Docked，信号精确发射一次
+TEST_F(DockManagerTest, StateTransitionHiddenToDocked)
 {
-    // 先隐藏
     manager->onForegroundWindowChanged(true);
     EXPECT_EQ(manager->currentState(), DockState::Hidden);
 
     QSignalSpy spy(manager, &DockManager::stateChanged);
-
-    // 模拟前台窗口恢复
     manager->onForegroundWindowChanged(false);
-
     EXPECT_EQ(manager->currentState(), DockState::Docked);
-    EXPECT_GE(spy.count(), 1);
+    EXPECT_EQ(spy.count(), 1);
 }
 
+// 4. 重复最大化被忽略：第二次调用不发射信号，状态保持 Hidden
+TEST_F(DockManagerTest, RepeatedMaximizeIgnored)
+{
+    manager->onForegroundWindowChanged(true);
+    EXPECT_EQ(manager->currentState(), DockState::Hidden);
+
+    QSignalSpy spy(manager, &DockManager::stateChanged);
+    manager->onForegroundWindowChanged(true);
+    EXPECT_EQ(spy.count(), 0);
+    EXPECT_EQ(manager->currentState(), DockState::Hidden);
+}
+
+// 5. Win 键恢复隐藏的 Dock：状态转为 Docked，信号精确发射一次
 TEST_F(DockManagerTest, WinKeyShowsHiddenDock)
 {
-    // 先隐藏
     manager->onForegroundWindowChanged(true);
     EXPECT_EQ(manager->currentState(), DockState::Hidden);
 
     QSignalSpy spy(manager, &DockManager::stateChanged);
-
-    // 按下 Win 键
     manager->onWinKeyPressed();
-
     EXPECT_EQ(manager->currentState(), DockState::Docked);
-    EXPECT_GE(spy.count(), 1);
+    EXPECT_EQ(spy.count(), 1);
 }
 
+// 6. Win 键在 Docked 状态下被忽略：无信号，状态保持 Docked
 TEST_F(DockManagerTest, WinKeyIgnoredWhenDocked)
 {
-    // 已经在 Docked 状态
     EXPECT_EQ(manager->currentState(), DockState::Docked);
 
     QSignalSpy spy(manager, &DockManager::stateChanged);
-
-    // 按下 Win 键应该无效果
     manager->onWinKeyPressed();
-
+    EXPECT_EQ(spy.count(), 0);
     EXPECT_EQ(manager->currentState(), DockState::Docked);
-    EXPECT_EQ(spy.count(), 0);
 }
 
-TEST_F(DockManagerTest, RepeatedStateChangeIgnored)
+// 7. 固定项：pinItem 后 isPinned 返回 true，pinnedItems 包含该项
+TEST_F(DockManagerTest, PinItem)
 {
-    // 连续两次最大化应该不重复触发
-    manager->onForegroundWindowChanged(true);
-    QSignalSpy spy(manager, &DockManager::stateChanged);
-
-    // 第二次最大化（已经 Hidden）
-    manager->onForegroundWindowChanged(true);
-
-    // 应该没有额外的信号
-    EXPECT_EQ(spy.count(), 0);
-    EXPECT_EQ(manager->currentState(), DockState::Hidden);
+    DockItemData item{"app", "Name", "/path/app.exe", "", false, 0};
+    manager->pinItem(item);
+    EXPECT_TRUE(manager->isPinned("app"));
+    auto pinned = manager->pinnedItems();
+    ASSERT_EQ(pinned.size(), 1);
+    EXPECT_EQ(pinned[0].appId, "app");
 }
 
-TEST_F(DockManagerTest, ItemSignalsEmitted)
+// 8. 重复固定同一项被忽略：pinnedItems 仍只有 1 个
+TEST_F(DockManagerTest, PinDuplicateIgnored)
 {
-    // 重新创建以触发 itemAdded 信号
-    DockManager manager2;
-    QSignalSpy spy(&manager2, &DockManager::itemAdded);
-    manager2.initialize(sysHelper);
-
-    // 应该为每个固定项发射了信号
-    EXPECT_EQ(spy.count(), manager2.items().size());
+    DockItemData item{"app", "Name", "/path/app.exe", "", false, 0};
+    manager->pinItem(item);
+    manager->pinItem(item);
+    EXPECT_EQ(manager->pinnedItems().size(), 1);
 }
 
-// ========== maxItems 限制测试 ==========
+// 9. 取消固定：pin 后 unpin，isPinned 返回 false，pinnedItemsChanged 信号发射
+TEST_F(DockManagerTest, UnpinItem)
+{
+    DockItemData item{"app", "Name", "/path/app.exe", "", false, 0};
+    manager->pinItem(item);
+    EXPECT_TRUE(manager->isPinned("app"));
 
-TEST_F(DockManagerTest, DefaultMaxItemsIs16)
+    QSignalSpy spy(manager, &DockManager::pinnedItemsChanged);
+    manager->unpinItem("app");
+    EXPECT_FALSE(manager->isPinned("app"));
+    EXPECT_EQ(spy.count(), 1);
+}
+
+// 10. 取消不存在的固定项不崩溃，无信号
+TEST_F(DockManagerTest, UnpinNonexistentNoCrash)
+{
+    QSignalSpy spy(manager, &DockManager::pinnedItemsChanged);
+    manager->unpinItem("nonexistent");
+    EXPECT_EQ(spy.count(), 0);
+    // 不崩溃即为通过
+}
+
+// 11. 固定临时项后从 transients 移除：transientItems 空，pinnedItems 有 1 个
+TEST_F(DockManagerTest, PinRemovesFromTransient)
+{
+    DockItemData item{"app", "Name", "/path/app.exe", "", true, 0};
+    manager->addTransientItem(item);
+    ASSERT_EQ(manager->transientItems().size(), 1);
+
+    manager->pinItem(item);
+    EXPECT_TRUE(manager->transientItems().isEmpty());
+    EXPECT_EQ(manager->pinnedItems().size(), 1);
+}
+
+// 12. 默认最大项数为 16
+TEST_F(DockManagerTest, MaxItemsDefault)
 {
     EXPECT_EQ(manager->maxItems(), 16);
 }
 
-TEST_F(DockManagerTest, SetMaxItems)
-{
-    manager->setMaxItems(8);
-    EXPECT_EQ(manager->maxItems(), 8);
-}
-
+// 13. setMaxItems(0) 下限为 1
 TEST_F(DockManagerTest, SetMaxItemsMinOne)
 {
     manager->setMaxItems(0);
     EXPECT_EQ(manager->maxItems(), 1);
 }
 
-TEST_F(DockManagerTest, TransientItemsRespectMaxLimit)
+// 14. setMaxItems 设相同值不触发 overflowChanged
+TEST_F(DockManagerTest, SetMaxItemsNoChange)
 {
-    manager->setMaxItems(3);
-    DockItemData pinned{"pinned1", "Pinned1", "", "", false, 0};
-    manager->setPinnedItems({pinned});
-    manager->addTransientItem({"t1", "T1", "", "", true, 0});
-    manager->addTransientItem({"t2", "T2", "", "", true, 0});
-    manager->addTransientItem({"t3", "T3", "", "", true, 0});
-    // 总数4 > maxItems 3，visibleItems 应限制为3
-    EXPECT_LE(manager->visibleItems().size(), 3);
+    EXPECT_EQ(manager->maxItems(), 16);
+    QSignalSpy spy(manager, &DockManager::overflowChanged);
+    manager->setMaxItems(16);
+    EXPECT_EQ(spy.count(), 0);
 }
 
-TEST_F(DockManagerTest, PinnedItemsAlwaysShown)
+// 15. 临时项溢出：maxItems=2、pinned=2 时添加 transient，visibleItems=2、overflowItems=1
+TEST_F(DockManagerTest, TransientOverflow)
 {
     manager->setMaxItems(2);
     DockItemData p1{"p1", "P1", "", "", false, 0};
     DockItemData p2{"p2", "P2", "", "", false, 0};
-    DockItemData p3{"p3", "P3", "", "", false, 0};
-    manager->setPinnedItems({p1, p2, p3});
-    // 固定项不受限制
-    EXPECT_EQ(manager->visibleItems().size(), 3);
+    manager->setPinnedItems({p1, p2});
+
+    DockItemData t1{"t1", "T1", "", "", true, 0};
+    manager->addTransientItem(t1);
+
+    EXPECT_EQ(manager->visibleItems().size(), 2);
+    EXPECT_EQ(manager->overflowItems().size(), 1);
+    EXPECT_EQ(manager->overflowItems()[0].appId, "t1");
 }
 
-TEST_F(DockManagerTest, OverflowItemsAccessible)
-{
-    manager->setMaxItems(3);
-    DockItemData pinned{"p1", "P1", "", "", false, 0};
-    manager->setPinnedItems({pinned});
-    manager->addTransientItem({"t1", "T1", "", "", true, 0});
-    manager->addTransientItem({"t2", "T2", "", "", true, 0});
-    manager->addTransientItem({"t3", "T3", "", "", true, 0});
-    auto overflow = manager->overflowItems();
-    EXPECT_GE(overflow.size(), 1);
-    EXPECT_EQ(overflow[0].appId, "t3");
-}
-
-TEST_F(DockManagerTest, MorePinnedThanMaxItems)
+// 16. 固定项超 maxItems：pinned 全部可见，transient 全部溢出
+TEST_F(DockManagerTest, MorePinnedThanMax)
 {
     manager->setMaxItems(2);
     DockItemData p1{"p1", "P1", "", "", false, 0};
@@ -183,81 +189,64 @@ TEST_F(DockManagerTest, MorePinnedThanMaxItems)
     DockItemData p3{"p3", "P3", "", "", false, 0};
     manager->setPinnedItems({p1, p2, p3});
     EXPECT_EQ(manager->visibleItems().size(), 3);
-    manager->addTransientItem({"t1", "T1", "", "", true, 0});
-    // 固定项3个已超maxItems，临时项全进overflow
+
+    DockItemData t1{"t1", "T1", "", "", true, 0};
+    manager->addTransientItem(t1);
     EXPECT_EQ(manager->visibleItems().size(), 3);
     EXPECT_EQ(manager->overflowItems().size(), 1);
 }
 
-TEST_F(DockManagerTest, OverflowChangedSignal)
-{
-    QSignalSpy spy(manager, &DockManager::overflowChanged);
-    manager->setMaxItems(2);
-    DockItemData p1{"p1", "P1", "", "", false, 0};
-    manager->setPinnedItems({p1});
-    // setPinnedItems emits overflowChanged
-    EXPECT_GE(spy.count(), 1);
-    spy.clear();
-
-    manager->addTransientItem({"t1", "T1", "", "", true, 0});
-    manager->addTransientItem({"t2", "T2", "", "", true, 0}); // 超出
-    EXPECT_GE(spy.count(), 1);
-}
-
-TEST_F(DockManagerTest, NoOverflowWhenUnderLimit)
-{
-    manager->setMaxItems(5);
-    DockItemData p1{"p1", "P1", "", "", false, 0};
-    manager->setPinnedItems({p1});
-    manager->addTransientItem({"t1", "T1", "", "", true, 0});
-    EXPECT_TRUE(manager->overflowItems().isEmpty());
-}
-
-// ========== windowCount 测试 ==========
-
-TEST(DockItemDataTest, DefaultWindowCountIsOne)
-{
-    DockItemData item{"app", "App", "", "", false, 0};
-    EXPECT_EQ(item.windowCount, 1);
-}
-
+// 17. 更新窗口数量：信号携带正确的 appId 和 count
 TEST_F(DockManagerTest, UpdateWindowCount)
 {
     DockItemData item{"app", "App", "", "", true, 0};
     manager->addTransientItem(item);
+
     QSignalSpy spy(manager, &DockManager::itemWindowCountChanged);
     manager->updateWindowCount("app", 3);
-    // updateWindowCount 通过信号通知 UI 更新
+
     EXPECT_EQ(spy.count(), 1);
     EXPECT_EQ(spy.at(0).at(0).toString(), "app");
     EXPECT_EQ(spy.at(0).at(1).toInt(), 3);
 }
 
-TEST_F(DockManagerTest, UpdateWindowCountPinned)
-{
-    DockItemData item{"app", "App", "", "", false, 0};
-    manager->setPinnedItems({item});
-    manager->updateWindowCount("app", 5);
-    auto items = manager->pinnedItems();
-    ASSERT_FALSE(items.isEmpty());
-    EXPECT_EQ(items[0].windowCount, 5);
-}
-
-TEST_F(DockManagerTest, WindowCountChangedSignal)
-{
-    DockItemData item{"app", "App", "", "", true, 0};
-    manager->addTransientItem(item);
-    QSignalSpy spy(manager, &DockManager::itemWindowCountChanged);
-    manager->updateWindowCount("app", 3);
-    EXPECT_EQ(spy.count(), 1);
-}
-
+// 18. 窗口数量未变化时不发射信号
 TEST_F(DockManagerTest, WindowCountNoChangeNoSignal)
 {
     DockItemData item{"app", "App", "", "", true, 0};
     manager->addTransientItem(item);
-    manager->updateWindowCount("app", 1); // same as default
+    manager->updateWindowCount("app", 5); // 从默认1改为5
+
     QSignalSpy spy(manager, &DockManager::itemWindowCountChanged);
-    manager->updateWindowCount("app", 1); // still 1
+    manager->updateWindowCount("app", 5); // 相同值
     EXPECT_EQ(spy.count(), 0);
+}
+
+// 19. setPinnedItems 信号：itemAdded 发射两次，overflowChanged 发射
+TEST_F(DockManagerTest, SetPinnedItemsSignals)
+{
+    QSignalSpy itemAddedSpy(manager, &DockManager::itemAdded);
+    QSignalSpy overflowSpy(manager, &DockManager::overflowChanged);
+
+    DockItemData p1{"p1", "P1", "", "", false, 0};
+    DockItemData p2{"p2", "P2", "", "", false, 0};
+    manager->setPinnedItems({p1, p2});
+
+    EXPECT_EQ(itemAddedSpy.count(), 2);
+    EXPECT_EQ(overflowSpy.count(), 1);
+}
+
+// 20. 移除临时项：itemRemoved 和 overflowChanged 均发射
+TEST_F(DockManagerTest, RemoveTransientItem)
+{
+    DockItemData t1{"t1", "T1", "", "", true, 0};
+    manager->addTransientItem(t1);
+
+    QSignalSpy removedSpy(manager, &DockManager::itemRemoved);
+    QSignalSpy overflowSpy(manager, &DockManager::overflowChanged);
+
+    manager->removeTransientItem("t1");
+
+    EXPECT_EQ(removedSpy.count(), 1);
+    EXPECT_EQ(overflowSpy.count(), 1);
 }
