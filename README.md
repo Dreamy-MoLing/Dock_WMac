@@ -147,17 +147,6 @@ Dock_WMac/
 
 ---
 
-## CI/CD
-
-单工作流 `.github/workflows/release.yml`：
-
-| 触发条件 | 操作 |
-|---------|------|
-| `push`（任意分支） | Windows 构建 + 测试 (MSVC, Qt 6.8.2) |
-| tag `v*` push | 同上 + 创建 GitHub Release 并上传 `dock_wmac.exe` |
-
----
-
 ## 许可
 
 [MIT](LICENSE)
