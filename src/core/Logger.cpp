@@ -87,6 +87,11 @@ QString Logger::logFilePath()
     return logDir + "/dock.log";
 }
 
+QString Logger::logDir()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+}
+
 void Logger::init()
 {
 #ifdef Q_OS_WIN

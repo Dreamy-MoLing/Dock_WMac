@@ -26,6 +26,11 @@ QString ConfigManager::configFilePath() const
     return configDir + "/config.json";
 }
 
+QString ConfigManager::configDir()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+}
+
 void ConfigManager::load()
 {
     QFile file(configFilePath());

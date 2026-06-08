@@ -68,7 +68,7 @@ int Application::run()
     // QApplication 必须最先创建、最后销毁
     QApplication app(m_argc, m_argv);
     app.setApplicationName(QStringLiteral("Dock_WMac"));
-    app.setApplicationVersion(QStringLiteral("0.2.2"));
+    app.setApplicationVersion(QStringLiteral("0.2.3"));
 
     setupLogging();
 
@@ -236,3 +236,4 @@ void Application::connectPersistence()
             m_config->set(QStringLiteral("pinnedApps"), list);
         });
 }
+

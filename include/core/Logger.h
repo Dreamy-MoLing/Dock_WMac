@@ -20,6 +20,10 @@ void init();
 /** @brief 获取日志文件路径 */
 QString logFilePath();
 
+/** @brief 获取日志目录路径（用于卸载清理）
+ *  Windows: %LOCALAPPDATA%/Dock_WMac */
+QString logDir();
+
 } // namespace Logger
 
 #endif // LOGGER_H

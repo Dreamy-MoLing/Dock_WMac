@@ -44,6 +44,10 @@ public:
     /** @brief 获取配置文件完整路径（公开用于测试诊断） */
     QString configFilePath() const;
 
+    /** @brief 获取配置文件目录路径（用于卸载清理）
+     *  Windows: %APPDATA%/Dock_WMac */
+    static QString configDir();
+
 private:
     QJsonObject m_config;
     QCache<QString, QPixmap> m_iconCache;

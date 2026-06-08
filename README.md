@@ -26,7 +26,11 @@ Dock_WMac 替代 Windows 原生任务栏，提供 macOS 风格 Dock 体验：鱼
 
 ## 快速开始
 
-### 环境要求
+### 下载使用
+
+从 [Releases](https://github.com/Dreamy-MoLing/Dock_WMac/releases) 下载最新 `dock_wmac_v*.zip`，解压到任意目录，运行 `dock_wmac.exe` 即可。压缩包内含 exe 及所需 Qt 运行时 DLL，解压即用。
+
+### 环境要求（开发者）
 
 | 组件 | 最低版本 |
 |------|---------|
@@ -38,32 +42,26 @@ Dock_WMac 替代 Windows 原生任务栏，提供 macOS 风格 Dock 体验：鱼
 
 ### 构建
 
-```powershell
-# 一键构建（自动发现 VS + Qt + CMake）
-.\build_now.ps1
+从 **VS Developer Command Prompt** 运行：
 
-# 带测试
-.\build_now.ps1 -Tests
-
-# Debug 模式
-.\build_now.ps1 -Debug
-
-# 清理重建
-.\build_now.ps1 -Clean
+```cmd
+cmake --preset default
+cmake --build build --config Release
 ```
 
 产物：`build\Release\dock_wmac.exe`
 
 ### 运行测试
 
-```powershell
-.\build_now.ps1 -Tests
+```cmd
+cmake --preset default -DBUILD_TESTS=ON
+cmake --build build --config Release
 cd build && ctest -C Release
 ```
 
 或单独运行：
 
-```powershell
+```cmd
 build\tests\Release\test_config.exe
 build\tests\Release\test_dock_manager.exe
 build\tests\Release\test_process_monitor.exe
@@ -125,8 +123,8 @@ Dock_WMac/
 ├── resources/            # QRC 资源文件
 ├── tests/                # Google Test 单元测试（8 套）
 ├── .github/workflows/    # CI/CD
-├── build_now.ps1         # 一键构建脚本
-├── setup_msvc.sh         # MSVC 环境注入（bash 用）
+├── CMakePresets.json     # CMake 预设（MSVC + Ninja）
+├── CMakeLists.txt        # CMake 构建定义
 └── build/                # CMake 构建输出
 ```
 
@@ -144,6 +142,17 @@ Dock_WMac/
 | user32 | Win32 窗口 API |
 
 测试：Google Test v1.14.0（CMake `FetchContent` 自动下载）
+
+---
+
+## CI/CD
+
+单工作流 `.github/workflows/release.yml`：
+
+| 触发条件 | 操作 |
+|---------|------|
+| `push`（任意分支） | Windows 构建 (MSVC, Qt 6.8.2, `windeployqt` 部署) |
+| tag `v*` push | 同上 + 创建 GitHub Release + Inno Setup 安装包 |
 
 ---
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Dock_WMac VERSION 0.2.2 LANGUAGES CXX)
+project(Dock_WMac VERSION 0.2.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,10 +41,16 @@ add_executable(dock_wmac WIN32
     include/ui/WindowPreviewPanel.h
     include/ui/OverflowPanel.h
     resources/resources.qrc
+    resources/app.rc
 )
 
 target_include_directories(dock_wmac PRIVATE include)
 target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg dwmapi shlwapi shell32)
+
+# 输出文件名为 Mac任务栏.exe（内部 target 名保持 dock_wmac 不变）
+set_target_properties(dock_wmac PROPERTIES
+    RUNTIME_OUTPUT_NAME "Mac任务栏"
+)
 
 # windeployqt 自动部署 Qt 运行时依赖
 find_program(WINDEPLOYQT_EXECUTABLE NAMES windeployqt HINTS "${Qt6_DIR}/../../../bin")
@@ -59,6 +65,15 @@ if(WINDEPLOYQT_EXECUTABLE)
 else()
     message(WARNING "windeployqt not found. Qt DLLs will not be deployed automatically.")
 endif()
+
+# 独立卸载器（纯 Win32，无 Qt 依赖）
+add_executable(uninstall WIN32
+    src/uninstall/uninstall.cpp
+)
+target_link_libraries(uninstall user32 shell32 shlwapi advapi32)
+set_target_properties(uninstall PROPERTIES
+    RUNTIME_OUTPUT_NAME "uninstall"
+)
 
 # 安装规则
 include(GNUInstallDirs)
