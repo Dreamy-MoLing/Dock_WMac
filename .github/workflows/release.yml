@@ -75,6 +75,7 @@ jobs:
 
       - name: Extract tag name
         id: tag
+        shell: bash
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
       - name: Package release archive
