@@ -5,6 +5,7 @@
  * 测试状态判定逻辑（不依赖真实窗口，通过 mock 行为验证）。
  */
 #include <gtest/gtest.h>
+#include <vector>
 #include "core/ClickStateMachine.h"
 #include "core/WindowCache.h"
 
@@ -58,14 +59,18 @@ TEST_F(ClickStateMachineTest, HandleDoubleClickDoesNotCrash)
 
 TEST_F(ClickStateMachineTest, StateEnumValues)
 {
-    // 验证状态枚举值存在且互不相同
-    auto s0 = ClickStateMachine::State::NoWindows;
-    auto s0p5 = ClickStateMachine::State::BackgroundRunning;
-    auto s1 = ClickStateMachine::State::AllMinimized;
-    auto s2 = ClickStateMachine::State::ForegroundActive;
-    auto s3 = ClickStateMachine::State::BackgroundVisible;
-    EXPECT_NE(static_cast<int>(s0), static_cast<int>(s1));
-    EXPECT_NE(static_cast<int>(s0p5), static_cast<int>(s2));
+    // 验证 5 个状态枚举值全部互不相同
+    using S = ClickStateMachine::State;
+    std::vector<S> states = {
+        S::NoWindows, S::BackgroundRunning, S::AllMinimized,
+        S::ForegroundActive, S::BackgroundVisible
+    };
+    for (size_t i = 0; i < states.size(); ++i) {
+        for (size_t j = i + 1; j < states.size(); ++j) {
+            EXPECT_NE(static_cast<int>(states[i]), static_cast<int>(states[j]))
+                << "状态枚举值冲突: state[" << i << "] == state[" << j << "]";
+        }
+    }
 }
 
 TEST_F(ClickStateMachineTest, EmptyExecPathLaunchAppDoesNotCrash)
@@ -80,14 +85,16 @@ TEST_F(ClickStateMachineTest, EmptyExecPathLaunchAppDoesNotCrash)
 
 TEST_F(ClickStateMachineTest, ActionEnumValues)
 {
-    // 验证动作枚举值存在
-    auto a0 = ClickStateMachine::Action::None;
-    auto a1 = ClickStateMachine::Action::LaunchApp;
-    auto a2 = ClickStateMachine::Action::ShowHiddenWindow;
-    auto a3 = ClickStateMachine::Action::RestoreLastActive;
-    auto a4 = ClickStateMachine::Action::MinimizeAll;
-    auto a5 = ClickStateMachine::Action::BringToForeground;
-    EXPECT_NE(static_cast<int>(a0), static_cast<int>(a1));
-    EXPECT_NE(static_cast<int>(a2), static_cast<int>(a3));
-    EXPECT_NE(static_cast<int>(a4), static_cast<int>(a5));
+    // 验证 6 个动作枚举值全部互不相同
+    using A = ClickStateMachine::Action;
+    std::vector<A> actions = {
+        A::None, A::LaunchApp, A::ShowHiddenWindow,
+        A::RestoreLastActive, A::MinimizeAll, A::BringToForeground
+    };
+    for (size_t i = 0; i < actions.size(); ++i) {
+        for (size_t j = i + 1; j < actions.size(); ++j) {
+            EXPECT_NE(static_cast<int>(actions[i]), static_cast<int>(actions[j]))
+                << "动作枚举值冲突: action[" << i << "] == action[" << j << "]";
+        }
+    }
 }

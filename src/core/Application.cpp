@@ -96,6 +96,7 @@ int Application::run()
 
     // 触发 DockManager 信号连接
     m_dockManager->initialize(m_sysHelper);
+    m_dockManager->setMonitorIndex(m_dockWindow->monitorIndex());
 
     connectPersistence();
 

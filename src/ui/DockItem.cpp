@@ -189,29 +189,42 @@ void DockItem::paintEvent(QPaintEvent *event)
         painter.drawRoundedRect(rect().adjusted(2, 2, -2, -2), 10, 10);
     }
 
-    // 状态指示灯（底部小圆点）
-    // - 多窗口（windowCount > 1）：不绘制绿点
-    // - 有通知：闪烁绿点
-    // - 交互后/新窗口：渐隐绿点（statusOpacity > 0）
-    if (m_windowCount <= 1 && m_isRunning) {
+    // 状态指示灯
+    // - 单窗口 (windowCount <= 1)：光晕小点（内实心 3.5px + 外半透明光晕 7px）
+    // - 多窗口 (windowCount > 1)：底部小横条（8×3px）
+    // - 有通知：闪烁
+    // - 交互后/新窗口：渐隐（statusOpacity > 0）
+    if (m_isRunning) {
         bool shouldDraw = false;
-        QColor dotColor;
+        QColor indicatorColor;
 
         if (m_hasNotifications) {
-            // 通知闪烁
             shouldDraw = m_flashVisible;
-            dotColor = QColor(180, 220, 80);
+            indicatorColor = QColor(120, 210, 100);
         } else if (m_statusOpacity > 0.0) {
-            // 交互后/新窗口渐隐
             shouldDraw = true;
             int alpha = static_cast<int>(m_statusOpacity * 255);
-            dotColor = QColor(180, 220, 80, alpha);
+            indicatorColor = QColor(120, 210, 100, alpha);
         }
 
         if (shouldDraw) {
-            painter.setBrush(dotColor);
             painter.setPen(Qt::NoPen);
-            painter.drawEllipse(QPointF(width() / 2.0, height() - 4), 3, 3);
+
+            if (m_windowCount <= 1) {
+                // ── 方案 C: 光晕小点 ──
+                // 外圈半透明光晕 (半径 3.5)
+                QColor glowColor = indicatorColor;
+                glowColor.setAlpha(static_cast<int>(indicatorColor.alpha() * 0.35));
+                painter.setBrush(glowColor);
+                painter.drawEllipse(QPointF(width() / 2.0, height() - 4), 3.5, 3.5);
+                // 内实心小点 (半径 1.75)
+                painter.setBrush(indicatorColor);
+                painter.drawEllipse(QPointF(width() / 2.0, height() - 4), 1.75, 1.75);
+            } else {
+                // ── 方案 B: 小横条 ──
+                painter.setBrush(indicatorColor);
+                painter.drawRoundedRect(QRectF(width() / 2.0 - 4, height() - 5, 8, 3), 1.5, 1.5);
+            }
         }
     }
 

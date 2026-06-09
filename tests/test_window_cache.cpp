@@ -20,7 +20,7 @@ protected:
 // 1. 初始状态查询返回合理默认值
 // 2. 刷新不崩溃
 // 3. 信号有效
-// 4. 批量注册不泄漏
+// 4. 窗口数量/激活/选择器调用不崩溃
 
 TEST_F(WindowCacheTest, InitialStateEmpty)
 {
@@ -59,6 +59,30 @@ TEST_F(WindowCacheTest, ActivateWindowNonexistent)
 {
     // 对不存在的应用返回 false 且不崩溃
     EXPECT_FALSE(cache->activateWindow("nonexistent_app"));
+}
+
+TEST_F(WindowCacheTest, WindowCountNonNegative)
+{
+    // getWindowCount() 对任意进程名应返回 >= 0 的值
+    int count = cache->getWindowCount("explorer");
+    EXPECT_GE(count, 0);
+}
+
+TEST_F(WindowCacheTest, ActivateWindowDoesNotCrash)
+{
+    // activateWindow("nonexistent_app") 应返回 bool 且不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        bool result = cache->activateWindow("nonexistent_app");
+        (void)result;
+    });
+}
+
+TEST_F(WindowCacheTest, ShowWindowPickerNoCrash)
+{
+    // showWindowPicker() 在任何环境下不崩溃
+    EXPECT_NO_FATAL_FAILURE({
+        cache->showWindowPicker();
+    });
 }
 
 TEST_F(WindowCacheTest, SignalValid)

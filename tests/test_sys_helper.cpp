@@ -15,7 +15,6 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include "core/SysHelper.h"
-#include "core/WindowCache.h"
 
 // ============================================================================
 // Test Fixture
@@ -25,16 +24,12 @@ class SysHelperTest : public ::testing::Test {
 protected:
     void SetUp() override {
         sysHelper = new SysHelper();
-        wc = new WindowCache();
     }
     void TearDown() override {
         delete sysHelper;
         sysHelper = nullptr;
-        delete wc;
-        wc = nullptr;
     }
     SysHelper *sysHelper = nullptr;
-    WindowCache *wc = nullptr;
 };
 
 // ============================================================================
@@ -61,31 +56,7 @@ TEST_F(SysHelperTest, ForegroundWindowStateReturnsBool)
 }
 
 // ============================================================================
-// 3. WindowCountNonNegative
-// ============================================================================
-
-TEST_F(SysHelperTest, WindowCountNonNegative)
-{
-    // getWindowCount() 对任意进程名应返回 >= 0 的值
-    int count = wc->getWindowCount("explorer");
-    EXPECT_GE(count, 0);
-}
-
-// ============================================================================
-// 4. ActivateWindowDoesNotCrash
-// ============================================================================
-
-TEST_F(SysHelperTest, ActivateWindowDoesNotCrash)
-{
-    // activateWindow("nonexistent_app") 应返回 bool 且不崩溃
-    EXPECT_NO_FATAL_FAILURE({
-        bool result = wc->activateWindow("nonexistent_app");
-        (void)result;
-    });
-}
-
-// ============================================================================
-// 5. BlurSupportedReturnsBool
+// 3. BlurSupportedReturnsBool
 // ============================================================================
 
 TEST_F(SysHelperTest, BlurSupportedReturnsBool)
@@ -98,7 +69,7 @@ TEST_F(SysHelperTest, BlurSupportedReturnsBool)
 }
 
 // ============================================================================
-// 6. IsLightThemeReturnsBool
+// 4. IsLightThemeReturnsBool
 // ============================================================================
 
 TEST_F(SysHelperTest, IsLightThemeReturnsBool)
@@ -111,7 +82,7 @@ TEST_F(SysHelperTest, IsLightThemeReturnsBool)
 }
 
 // ============================================================================
-// 7. AutoStartStateCheck
+// 5. AutoStartStateCheck
 // ============================================================================
 
 TEST_F(SysHelperTest, AutoStartStateCheck)
@@ -124,7 +95,7 @@ TEST_F(SysHelperTest, AutoStartStateCheck)
 }
 
 // ============================================================================
-// 8. SetAutoStartRoundtrip
+// 6. SetAutoStartRoundtrip
 // ============================================================================
 
 TEST_F(SysHelperTest, SetAutoStartRoundtrip)
@@ -155,7 +126,7 @@ TEST_F(SysHelperTest, SetAutoStartRoundtrip)
 }
 
 // ============================================================================
-// 9. WindowHookInstall
+// 7. WindowHookInstall
 // ============================================================================
 
 TEST_F(SysHelperTest, WindowHookInstall)
@@ -168,7 +139,7 @@ TEST_F(SysHelperTest, WindowHookInstall)
 }
 
 // ============================================================================
-// 10. KeyboardHookInstallUninstall
+// 8. KeyboardHookInstallUninstall
 // ============================================================================
 
 TEST_F(SysHelperTest, KeyboardHookInstallUninstall)
@@ -186,7 +157,7 @@ TEST_F(SysHelperTest, KeyboardHookInstallUninstall)
 }
 
 // ============================================================================
-// 11. TaskbarHideRestore
+// 9. TaskbarHideRestore
 // ============================================================================
 
 TEST_F(SysHelperTest, TaskbarHideRestore)
@@ -202,19 +173,7 @@ TEST_F(SysHelperTest, TaskbarHideRestore)
 }
 
 // ============================================================================
-// 12. ShowWindowPickerNoCrash
-// ============================================================================
-
-TEST_F(SysHelperTest, ShowWindowPickerNoCrash)
-{
-    // showWindowPicker() 在任何环境下不崩溃
-    EXPECT_NO_FATAL_FAILURE({
-        wc->showWindowPicker();
-    });
-}
-
-// ============================================================================
-// 13. DetectionPerformance
+// 10. DetectionPerformance
 // ============================================================================
 
 TEST_F(SysHelperTest, DetectionPerformance)
@@ -236,7 +195,7 @@ TEST_F(SysHelperTest, DetectionPerformance)
 }
 
 // ============================================================================
-// 14. BlurBehindWindowNoCrash
+// 11. BlurBehindWindowNoCrash
 // ============================================================================
 
 TEST_F(SysHelperTest, BlurBehindWindowNoCrash)

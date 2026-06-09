@@ -211,6 +211,12 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     DwmSetWindowAttribute(popupHwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
                           &DWMWCP_ROUND, sizeof(DWMWCP_ROUND));
 
+    // ── DPI 缩放因子：DWM API 使用物理像素，Qt 坐标是逻辑像素 ──
+    qreal dpiScale = 1.0;
+    if (auto *ps = m_previewPopup->screen()) {
+        dpiScale = ps->devicePixelRatio();
+    }
+
     // ── 注册 DWM 实时缩略图 ──
     QVariantList thumbList;
     bool anyDwmSucceeded = false;
@@ -237,7 +243,13 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
             props.fVisible = TRUE;
             props.opacity = 255;
             props.fSourceClientAreaOnly = TRUE;
-            props.rcDestination = {tx, ty, tx + thumbW, ty + thumbH};
+            // DWM rcDestination 使用物理像素，Qt 坐标为逻辑像素 → 乘以 DPI 缩放
+            props.rcDestination = {
+                static_cast<LONG>(tx * dpiScale),
+                static_cast<LONG>(ty * dpiScale),
+                static_cast<LONG>((tx + thumbW) * dpiScale),
+                static_cast<LONG>((ty + thumbH) * dpiScale)
+            };
 
             RECT srcRect;
             if (GetClientRect(wi.hwnd, &srcRect)) {

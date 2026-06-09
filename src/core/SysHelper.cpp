@@ -246,6 +246,31 @@ struct MonitorScanContext {
     int screenH;
 };
 
+/**
+ * @brief 检查窗口类名是否为已知系统 UI（开始菜单、通知中心等）
+ *
+ * 这些窗口可能覆盖全屏尺寸，但不应该触发 Dock 隐藏。
+ */
+static bool isSystemUiWindow(HWND hwnd)
+{
+    wchar_t className[256] = {};
+    if (!GetClassNameW(hwnd, className, 255)) return false;
+
+    // Windows 10/11 开始菜单、通知中心、搜索等 UWP XAML 窗口
+    if (wcscmp(className, L"Windows.UI.Core.CoreWindow") == 0)
+        return true;
+
+    // 任务视图 (Win+Tab)
+    if (wcscmp(className, L"MultitaskingViewFrame") == 0)
+        return true;
+
+    // XAML Island 宿主窗口
+    if (wcscmp(className, L"XamlExplorerHostIslandWindow") == 0)
+        return true;
+
+    return false;
+}
+
 static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
 {
     auto *ctx = reinterpret_cast<MonitorScanContext *>(lParam);
@@ -256,6 +281,9 @@ static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
 
     LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
     if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
+
+    // 排除系统 UI 窗口（开始菜单、通知中心等）
+    if (isSystemUiWindow(hwnd)) return TRUE;
 
     // 检查窗口是否在目标显示器上
     HMONITOR winMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
