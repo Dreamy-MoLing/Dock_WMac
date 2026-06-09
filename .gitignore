@@ -78,6 +78,9 @@ ehthumbs.db
 *.ico
 *.svg
 
+# 例外：构建必需的资源文件
+!resources/app.ico
+
 # ===== 临时文件 =====
 *.tmp
 *.bak
