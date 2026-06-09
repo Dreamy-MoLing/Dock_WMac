@@ -65,8 +65,8 @@ public:
     void updateWindowCount(const QString &appId, int count);
 
 public slots:
-    /** @brief 处理前台窗口状态变化 */
-    void onForegroundWindowChanged(bool isMaximizedOrFullscreen);
+    /** @brief 处理主屏幕最大化/全屏状态变化 */
+    void onFullscreenStateChanged(bool anyMaximizedOnPrimary);
 
     /** @brief 处理 Win 键按下事件 */
     void onWinKeyPressed();

@@ -38,6 +38,14 @@
 SysHelper::SysHelper(QObject *parent)
     : QObject(parent)
 {
+    // 全屏状态防抖定时器（200ms 防抖，避免高频事件重复扫描）
+    m_fullscreenDebounceTimer = new QTimer(this);
+    m_fullscreenDebounceTimer->setSingleShot(true);
+    m_fullscreenDebounceTimer->setInterval(200);
+    connect(m_fullscreenDebounceTimer, &QTimer::timeout, this, [this]() {
+        bool anyMax = hasMaximizedOrFullscreenWindowOnMonitor();
+        emit fullscreenStateChanged(anyMax);
+    });
 }
 
 // ─── 全局钩子句柄与 SysHelper 指针 ──────────────────────────
@@ -101,10 +109,14 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
     case EVENT_SYSTEM_FOREGROUND:
     case EVENT_SYSTEM_MINIMIZESTART:
     case EVENT_SYSTEM_MAXIMIZESTART:
-        // 延迟一帧后检查状态，确保窗口状态已更新
+        // 旧逻辑：仅检查前台窗口（保留用于兼容，但现在通过新信号驱动）
         QMetaObject::invokeMethod(g_sysHelperForHook, []() {
             bool maximized = g_sysHelperForHook->getForegroundWindowState();
             emit g_sysHelperForHook->foregroundWindowChanged(maximized);
+        }, Qt::QueuedConnection);
+        // 新逻辑：延迟后全量扫描主屏幕，触发自动显隐
+        QMetaObject::invokeMethod(g_sysHelperForHook, []() {
+            g_sysHelperForHook->triggerFullscreenDebounce();
         }, Qt::QueuedConnection);
         break;
     case EVENT_OBJECT_CREATE:
@@ -146,10 +158,13 @@ bool SysHelper::installWindowHook()
         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (!hook) return false;
 
-    // 初始检测
+    // 初始检测 — 新老信号都触发
     QTimer::singleShot(500, this, [this]() {
         bool maximized = getForegroundWindowState();
         emit foregroundWindowChanged(maximized);
+        // 新逻辑：全量扫描主屏幕
+        bool anyMax = hasMaximizedOrFullscreenWindowOnMonitor();
+        emit fullscreenStateChanged(anyMax);
     });
 
     return true;
@@ -214,6 +229,106 @@ bool SysHelper::getForegroundWindowState()
 
     // 全屏：窗口覆盖整个屏幕（允许 10px 容差）
     return (abs(winW - screenW) <= 10 && abs(winH - screenH) <= 10);
+}
+
+// ─── 主屏幕全屏检测 ─────────────────────────────────────────
+
+/**
+ * @brief 检查指定显示器上是否存在最大化或全屏的窗口
+ *
+ * 使用 struct 包装 HMONITOR 和 bool* 传入 EnumWindows 回调
+ * 因为 Win32 回调不支持 C++ lambda 捕获。
+ */
+struct MonitorScanContext {
+    HMONITOR hMonitor;
+    bool found;
+    int screenW;
+    int screenH;
+};
+
+static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
+{
+    auto *ctx = reinterpret_cast<MonitorScanContext *>(lParam);
+    if (!ctx || ctx->found) return FALSE; // 已找到则停止
+
+    // 只检查可见、非最小化、非工具窗口
+    if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
+
+    LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+    if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
+
+    // 检查窗口是否在目标显示器上
+    HMONITOR winMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+    if (winMonitor != ctx->hMonitor) return TRUE;
+
+    // 检查最大化
+    WINDOWPLACEMENT wp;
+    wp.length = sizeof(WINDOWPLACEMENT);
+    if (GetWindowPlacement(hwnd, &wp) && wp.showCmd == SW_SHOWMAXIMIZED) {
+        ctx->found = true;
+        return FALSE;
+    }
+
+    // 检查全屏：窗口尺寸 == 屏幕尺寸
+    RECT winRect;
+    if (!GetWindowRect(hwnd, &winRect)) return TRUE;
+    int winW = winRect.right - winRect.left;
+    int winH = winRect.bottom - winRect.top;
+    if (abs(winW - ctx->screenW) <= 10 && abs(winH - ctx->screenH) <= 10) {
+        ctx->found = true;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+bool SysHelper::hasMaximizedOrFullscreenWindowOnMonitor(int monitorIndex)
+{
+    // 1. 确定目标显示器
+    HMONITOR hMonitor = nullptr;
+
+    if (monitorIndex < 0) {
+        // 主显示器
+        POINT pt = {0, 0};
+        hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+    } else {
+        // 按索引查找显示器 — 使用 EnumDisplayMonitors 简化
+        struct EnumCtx { int target; HMONITOR result; };
+        EnumCtx enumCtx{monitorIndex, nullptr};
+        EnumDisplayMonitors(nullptr, nullptr,
+            [](HMONITOR hMon, HDC, LPRECT, LPARAM lParam) -> BOOL {
+                auto *ctx = reinterpret_cast<EnumCtx *>(lParam);
+                if (ctx->target == 0) { ctx->result = hMon; return FALSE; }
+                ctx->target--;
+                return TRUE;
+            }, reinterpret_cast<LPARAM>(&enumCtx));
+        hMonitor = enumCtx.result;
+    }
+
+    if (!hMonitor) {
+        POINT pt = {0, 0};
+        hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+    }
+
+    // 2. 获取显示器尺寸
+    MONITORINFO mi;
+    mi.cbSize = sizeof(MONITORINFO);
+    if (!GetMonitorInfo(hMonitor, &mi)) return false;
+    int screenW = mi.rcMonitor.right - mi.rcMonitor.left;
+    int screenH = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+    // 3. 枚举所有窗口检查
+    MonitorScanContext ctx{hMonitor, false, screenW, screenH};
+    EnumWindows(EnumMaximizedWindowsProc, reinterpret_cast<LPARAM>(&ctx));
+
+    return ctx.found;
+}
+
+void SysHelper::triggerFullscreenDebounce()
+{
+    if (m_fullscreenDebounceTimer) {
+        m_fullscreenDebounceTimer->start();
+    }
 }
 
 bool SysHelper::setAutoStart(bool enabled)

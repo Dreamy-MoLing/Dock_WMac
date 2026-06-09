@@ -282,7 +282,12 @@ WindowList WindowCache::getWindowsForPreview(const QString &wmClass)
     if (it == m_windowsByClass.end()) return {};
     WindowList result;
     std::copy_if(it->begin(), it->end(), std::back_inserter(result),
-        [](const CachedWindowInfo &w) { return !w.isToolWindow && IsWindow(w.hwnd); });
+        [](const CachedWindowInfo &w) {
+            return !w.isToolWindow
+                && !w.title.trimmed().isEmpty()
+                && (w.isVisible || w.isMinimized)
+                && IsWindow(w.hwnd);
+        });
     return result;
 }
 

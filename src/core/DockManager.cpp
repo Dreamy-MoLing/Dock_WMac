@@ -114,8 +114,9 @@ void DockManager::initialize(SysHelper *sysHelper)
     m_sysHelper = sysHelper;
 
     // 连接 SysHelper 信号到状态机处理槽
-    connect(m_sysHelper, &SysHelper::foregroundWindowChanged,
-            this, &DockManager::onForegroundWindowChanged);
+    // 新逻辑：基于主屏幕全局扫描的显隐控制
+    connect(m_sysHelper, &SysHelper::fullscreenStateChanged,
+            this, &DockManager::onFullscreenStateChanged);
     connect(m_sysHelper, &SysHelper::winKeyPressed,
             this, &DockManager::onWinKeyPressed);
 
@@ -217,14 +218,16 @@ bool DockManager::isPinned(const QString &appId) const
     return false;
 }
 
-void DockManager::onForegroundWindowChanged(bool isMaximizedOrFullscreen)
+void DockManager::onFullscreenStateChanged(bool anyMaximizedOnPrimary)
 {
-    if (isMaximizedOrFullscreen && m_currentState == DockState::Docked) {
+    if (anyMaximizedOnPrimary && m_currentState == DockState::Docked) {
+        // 主屏幕存在最大化/全屏窗口 → 隐藏 Dock
         m_sysHelper->installKeyboardHook();
         m_currentState = DockState::Hidden;
         emit stateChanged(DockState::Hidden);
 
-    } else if (!isMaximizedOrFullscreen && m_currentState == DockState::Hidden) {
+    } else if (!anyMaximizedOnPrimary && m_currentState == DockState::Hidden) {
+        // 所有最大化/全屏窗口都已恢复 → 自动弹出 Dock
         m_sysHelper->uninstallKeyboardHook();
         m_currentState = DockState::Docked;
         emit stateChanged(DockState::Docked);

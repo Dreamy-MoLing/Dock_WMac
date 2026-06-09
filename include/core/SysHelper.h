@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QList>
 #include <QWidget>  // for WId
+#include <QTimer>
 #include "Types.h"
 
 #ifdef Q_OS_WIN
@@ -36,6 +37,13 @@ public:
     /** @brief 返回当前前台窗口是否最大化或全屏 */
     bool getForegroundWindowState();
 
+    /**
+     * @brief 检查主屏幕（或指定屏幕）上是否存在最大化或全屏的窗口
+     * @param monitorIndex -1 表示主屏幕，0+ 表示指定显示器
+     * @return true 如果存在任何最大化/全屏窗口
+     */
+    bool hasMaximizedOrFullscreenWindowOnMonitor(int monitorIndex = -1);
+
     /** @brief 设置开机自启（注册表） */
     bool setAutoStart(bool enabled);
 
@@ -50,6 +58,9 @@ public:
 
     /** @brief 检查系统是否支持 DWM 模糊效果 */
     bool isBlurSupported() const;
+
+    /** @brief 触发全屏状态防抖检测（供 WinEventProc 静态回调调用） */
+    void triggerFullscreenDebounce();
 
     /** @brief 检测当前系统是否为亮色主题 */
     bool isLightTheme() const;
@@ -70,12 +81,22 @@ signals:
     /** @brief 前台窗口状态变化 signal */
     void foregroundWindowChanged(bool isMaximizedOrFullscreen);
 
+    /**
+     * @brief 主屏幕最大化/全屏状态变化 signal
+     * @param anyMaximizedOrFullscreen 主屏幕是否有任何窗口最大化或全屏
+     */
+    void fullscreenStateChanged(bool anyMaximizedOrFullscreen);
+
     /** @brief Win 键被按下 signal */
     void winKeyPressed();
 
     /** @brief 窗口事件发生（CREATE/DESTROY/SHOW/HIDE）
      *  @param pid 窗口所属进程 ID */
     void windowEventOccurred(DWORD pid);
+
+private:
+    /** @brief 全屏状态防抖定时器（避免高频事件触发重复扫描） */
+    QTimer *m_fullscreenDebounceTimer = nullptr;
 };
 
 #endif // SYSHELPER_H

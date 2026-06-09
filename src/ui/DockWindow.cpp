@@ -123,7 +123,6 @@ DockWindow::DockWindow(QWidget *parent)
     m_bottomEdgeTimer->setInterval(200);
     connect(m_bottomEdgeTimer, &QTimer::timeout, this, [this]() {
         if (!m_isHidden || !m_sysHelper || !m_dockManager) return;
-        if (!m_sysHelper->isTaskbarAutoHideEnabled()) return;
 
         QPoint cursor = m_sysHelper->cursorPos();
         if (cursor.isNull()) return;
@@ -597,10 +596,8 @@ void DockWindow::onStateChanged(DockState newState)
     case DockState::Hidden: {
         m_isHidden = true;
 
-        // 启动底部边缘轮询（仅在任务栏自动隐藏开启时生效）
-        if (m_sysHelper && m_sysHelper->isTaskbarAutoHideEnabled()) {
-            m_bottomEdgeTimer->start();
-        }
+        // 启动底部边缘轮询（Dock 隐藏时始终生效）
+        m_bottomEdgeTimer->start();
 
         // 向下滑出 + 淡出
         QPoint currentPos = pos();

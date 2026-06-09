@@ -1,0 +1,50 @@
+<h2>方案 C 整体架构变更</h2>
+<p class="subtitle">绿色 = 新增/重构组件，橙色 = 修改，灰色 = 不变</p>
+
+<div class="section">
+  <h3>修改涉及 5 个组件</h3>
+
+<div style="background:#1e1e1e;border-radius:12px;padding:20px;font-family:monospace;font-size:13px;line-height:1.8">
+
+<div style="border:2px solid #4a9;border-radius:8px;padding:12px;margin:8px 0;">
+  <span style="color:#4a9;font-weight:bold;">🆕 ClickStateMachine</span> <span style="color:#888;">（新文件）</span><br>
+  <span style="color:#aaa;">点击行为状态机 — 取代 DockWindow::handleSingleClick<br>
+  状态: NoWindows / Minimized / Active / Inactive<br>
+  动作: Launch / Restore / Minimize / Activate</span>
+</div>
+
+<div style="border:2px solid #4a9;border-radius:8px;padding:12px;margin:8px 0;">
+  <span style="color:#4a9;font-weight:bold;">🆕 WindowCache</span> <span style="color:#888;">（新文件）</span><br>
+  <span style="color:#aaa;">进程名 → HWND 列表缓存，解决多进程应用匹配<br>
+  定期刷新 + 按需查询，替代每次 EnumWindows</span>
+</div>
+
+<div style="border:2px solid #f90;border-radius:8px;padding:12px;margin:8px 0;">
+  <span style="color:#f90;font-weight:bold;">✏️ IconProvider</span> <span style="color:#888;">（修改）</span><br>
+  <span style="color:#aaa;">新增 UWP/AppX 图标提取 + ExtractIconEx 回退<br>
+  修复极小缩略图 + 模糊问题</span>
+</div>
+
+<div style="border:2px solid #f90;border-radius:8px;padding:12px;margin:8px 0;">
+  <span style="color:#f90;font-weight:bold;">✏️ WindowPreviewPanel</span> <span style="color:#888;">（修改）</span><br>
+  <span style="color:#aaa;">DWM peek（桌面临时置顶预览）<br>
+  多窗口缩略图布局优化<br>
+  鱼眼动画联动（悬停预览时保持放大）</span>
+</div>
+
+<div style="border:2px solid #f90;border-radius:8px;padding:12px;margin:8px 0;">
+  <span style="color:#f90;font-weight:bold;">✏️ DockWindow</span> <span style="color:#888;">（修改）</span><br>
+  <span style="color:#aaa;">对接 ClickStateMachine + WindowCache<br>
+  悬停预览期间锁定鱼眼放大状态</span>
+</div>
+
+</div>
+
+<h3 style="margin-top:24px;">数据流</h3>
+<div style="background:#1e1e1e;border-radius:12px;padding:16px;font-family:monospace;font-size:12px;line-height:2">
+<span style="color:#888;">DockItem 点击</span> → <span style="color:#4a9">ClickStateMachine</span> → 查询 <span style="color:#4a9">WindowCache</span> → 执行动作<br>
+<span style="color:#888">鼠标悬停 DockItem</span> → <span style="color:#f90">DockWindow</span> 锁定鱼眼 → <span style="color:#f90">WindowPreviewPanel</span><br>
+<span style="color:#888">悬停缩略图</span> → <span style="color:#f90">DWM Peek</span>（临时窗口置顶 + 其他窗口透明）<br>
+<span style="color:#888">ProcessMonitor tick</span> → 更新 <span style="color:#4a9">WindowCache</span>
+</div>
+</div>
