@@ -80,7 +80,7 @@ jobs:
 
       - name: Package release archive
         run: |
-          Compress-Archive -Path deploy\* -DestinationPath dock_wmac_v${{ steps.tag.outputs.tag }}_x64.zip
+          Compress-Archive -Path deploy\* -DestinationPath dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -88,7 +88,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
           files: |
-            dock_wmac_v${{ steps.tag.outputs.tag }}_x64.zip
-            dist/Dock_WMac_Setup_v${{ steps.tag.outputs.tag }}.exe
+            dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
+            dist/Dock_WMac_Setup_${{ steps.tag.outputs.tag }}.exe
             LICENSE
           generate_release_notes: true
