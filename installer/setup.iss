@@ -35,7 +35,7 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoDescription=Mac任务栏 — macOS 风格 Windows Dock
 
 [Languages]
-Name: "chinese"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "..\deploy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
