@@ -7,10 +7,10 @@
  */
 
 #include "core/ConfigManager.h"
+#include "core/PathManager.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QStandardPaths>
 #include <QDir>
 
 ConfigManager::ConfigManager(QObject *parent)
@@ -21,14 +21,12 @@ ConfigManager::ConfigManager(QObject *parent)
 
 QString ConfigManager::configFilePath() const
 {
-    // Windows: %APPDATA%/Dock_WMac/config.json
-    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    return configDir + "/config.json";
+    return PathManager::configFile();
 }
 
 QString ConfigManager::configDir()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    return PathManager::dataDir();
 }
 
 void ConfigManager::load()
@@ -88,7 +86,7 @@ void ConfigManager::load()
 
 void ConfigManager::save()
 {
-    QDir().mkpath(QFileInfo(configFilePath()).absolutePath());
+    PathManager::ensureDataDir();  // 惰性创建 data/ 目录
 
     QFile file(configFilePath());
     if (!file.open(QIODevice::WriteOnly)) {
