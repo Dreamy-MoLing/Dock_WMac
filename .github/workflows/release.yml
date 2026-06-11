@@ -38,10 +38,6 @@ jobs:
         run: |
           windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/Mac任务栏.exe
 
-      - name: Copy uninstall.exe to deploy
-        shell: bash
-        run: cp build/uninstall.exe deploy/
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -67,12 +63,6 @@ jobs:
           name: dock_wmac-windows
           path: deploy
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer
-        run: iscc installer/setup.iss
-
       - name: Extract tag name
         id: tag
         shell: bash
@@ -89,6 +79,5 @@ jobs:
           name: Release ${{ steps.tag.outputs.tag }}
           files: |
             dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
-            dist/Dock_WMac_Setup_${{ steps.tag.outputs.tag }}.exe
             LICENSE
           generate_release_notes: true
