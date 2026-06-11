@@ -66,15 +66,6 @@ else()
     message(WARNING "windeployqt not found. Qt DLLs will not be deployed automatically.")
 endif()
 
-# 独立卸载器（纯 Win32，无 Qt 依赖）
-add_executable(uninstall WIN32
-    src/uninstall/uninstall.cpp
-)
-target_link_libraries(uninstall user32 shell32 shlwapi advapi32)
-set_target_properties(uninstall PROPERTIES
-    RUNTIME_OUTPUT_NAME "uninstall"
-)
-
 # 安装规则
 include(GNUInstallDirs)
 install(TARGETS dock_wmac RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

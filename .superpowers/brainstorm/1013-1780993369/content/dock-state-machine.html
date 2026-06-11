@@ -1,0 +1,94 @@
+<h2>Dock 显隐状态机 — 新设计</h2>
+<p class="subtitle">核心改动：3秒隐藏延迟 + Win键冷却 + 系统UI过滤</p>
+
+<div class="mockup">
+  <div class="mockup-header">状态转换图</div>
+  <div class="mockup-body" style="font-family:monospace;font-size:14px;line-height:1.8;padding:24px;color:#e0e0e0">
+
+    <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <div style="background:#1a3a1a;border:1px solid #4a7;border-radius:8px;padding:16px;margin-bottom:16px">
+          <h3 style="color:#4a7;margin:0 0 8px">🟢 常驻 (Docked)</h3>
+          <p style="margin:0;color:#aaa;font-size:13px">Dock 可见，置顶，无键盘钩子</p>
+          <p style="margin:4px 0 0;color:#888;font-size:12px">条件：dock 所在屏幕无全屏窗口</p>
+        </div>
+
+        <div style="text-align:center;color:#888;font-size:24px;margin:8px 0">⬇️ ⬆️</div>
+        <div style="margin-bottom:8px;font-size:12px;color:#888;text-align:center">
+          <div>⬇ 检测到全屏 → 启动 3s 计时器</div>
+          <div>⬆ 3s 内全屏消失 → 取消计时，保持常驻</div>
+        </div>
+
+        <div style="background:#3a1a1a;border:1px solid #c55;border-radius:8px;padding:16px;margin-bottom:16px">
+          <h3 style="color:#c55;margin:0 0 8px">🔴 隐藏 (Hidden)</h3>
+          <p style="margin:0;color:#aaa;font-size:13px">Dock 不可见，键盘钩子+底部边缘轮询激活</p>
+          <p style="margin:4px 0 0;color:#888;font-size:12px">条件：全屏确认持续 &ge; 3 秒</p>
+        </div>
+
+        <div style="text-align:center;color:#888;font-size:24px;margin:8px 0">⬆️</div>
+        <div style="margin-bottom:8px;font-size:12px;color:#888;text-align:center">
+          <div>⚠️ Win键 / 鼠标触底 → 立即显示</div>
+          <div>⚠️ 全屏窗口关闭 → 立即显示</div>
+        </div>
+      </div>
+
+      <div style="flex:0 0 280px;background:#1a1a2e;border-radius:8px;padding:16px">
+        <h3 style="color:#7af;margin:0 0 12px">🛡️ 防冲突机制</h3>
+        <div style="margin-bottom:12px">
+          <div style="color:#7af;font-size:13px;margin-bottom:4px">⏱ 3秒隐藏延迟</div>
+          <div style="color:#aaa;font-size:12px">开始菜单、通知中心等短暂弹出不会误触发隐藏</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="color:#7af;font-size:13px;margin-bottom:4px">❄️ Win键冷却 (1.5s)</div>
+          <div style="color:#aaa;font-size:12px">Win键唤醒后 1.5s 内忽略全屏检测，避免开始菜单导致的立即回藏</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="color:#7af;font-size:13px;margin-bottom:4px">🔍 系统UI过滤</div>
+          <div style="color:#aaa;font-size:12px">全屏检测排除已知系统窗口类名，减少误判</div>
+        </div>
+        <div>
+          <div style="color:#7af;font-size:13px;margin-bottom:4px">🖥️ 屏幕感知</div>
+          <div style="color:#aaa;font-size:12px">仅检查 dock 当前所在屏幕，副屏全屏不隐藏主屏 dock</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>完整事件时序</h3>
+  <div style="background:#1e1e1e;border-radius:8px;padding:16px;font-family:monospace;font-size:13px;line-height:1.7;color:#ccc">
+
+    <div style="color:#4a7;margin-bottom:12px">✅ 正常全屏（如视频播放器、游戏）</div>
+    <div>t=0.0s  全屏检测触发 → 启动 3s 隐藏计时器</div>
+    <div>t=3.0s  计时器到期，全屏仍存在 → <span style="color:#c55">Dock 隐藏</span></div>
+    <div>t=10s   用户关闭全屏 → 全屏检测清空 → <span style="color:#4a7">Dock 立即显示</span></div>
+
+    <div style="color:#7af;margin:16px 0 12px">🛡️ 开始菜单冲突（旧逻辑bug → 新逻辑修复）</div>
+    <div>t=0.0s  用户按 Win键 → <span style="color:#4a7">Dock 立即显示</span> + 启动 1.5s 冷却</div>
+    <div>t=0.1s  开始菜单弹出 → 全屏检测误触发</div>
+    <div style="color:#888">        → 🚫 冷却期内，忽略全屏信号</div>
+    <div style="color:#888">        → 🚫 系统UI类名过滤，不认为是全屏</div>
+    <div>t=0.5s  用户关闭开始菜单</div>
+    <div>t=1.5s  冷却结束，恢复正常检测 → <span style="color:#4a7">Dock 保持常驻 ✓</span></div>
+
+    <div style="color:#fa0;margin:16px 0 12px">⚠️ 边缘情况：Win键 + 已有全屏</div>
+    <div>        Dock隐藏中，用户按 Win键 + 开始菜单弹出</div>
+    <div>        → Dock显示，冷却 1.5s</div>
+    <div>        → 1.5s 后检测到原全屏仍在 → 重新启动 3s 延迟</div>
+    <div>        → 3s 后确认全屏持续 → Dock 再次隐藏 ✓</div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>实现涉及文件</h3>
+  <ul>
+    <li><code>DockManager</code> — 新增 3s 隐藏计时器 + 1.5s Win键冷却计时器 + 屏幕感知</li>
+    <li><code>SysHelper::hasMaximizedOrFullscreenWindowOnMonitor</code> — 新增系统UI窗口类过滤</li>
+    <li><code>DockWindow</code> — 底部边缘检测改用 <code>screen-&gt;geometry()</code></li>
+    <li><code>WindowPreviewPanel</code> — 缩略图 DPI 缩放修复</li>
+    <li><code>DockItem</code> — 运行指示器：单窗口 → 光晕小点，多窗口 → 小横条</li>
+  </ul>
+</div>
