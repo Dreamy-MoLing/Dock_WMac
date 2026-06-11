@@ -46,12 +46,6 @@ private:
      */
     QString resolveShortcut(const QString &lnkPath);
 
-    /**
-     * @brief 提取应用图标
-     * @param appId 应用 ID 或可执行文件路径
-     * @return 图标文件路径，失败时返回空
-     */
-    QString extractAppIcon(const QString &appId);
 };
 
 #endif // PINNEDITEMSREADER_H
