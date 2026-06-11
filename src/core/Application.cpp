@@ -21,7 +21,10 @@
 #include "core/ConfigManager.h"
 #include "core/DockManager.h"
 #include "core/Logger.h"
+#include "core/PathManager.h"
 #include "core/PinnedItemsReader.h"
+#include <QJsonDocument>
+#include <QJsonArray>
 #include "core/ProcessMonitor.h"
 #include "core/SysHelper.h"
 #include "core/WindowCache.h"
@@ -171,70 +174,84 @@ bool Application::checkSingleInstance()
 
 void Application::loadPinnedItems()
 {
-    // 优先从配置文件读取用户固定的项目
-    QVariantList savedPinned = m_config->get(
-        QStringLiteral("pinnedApps"), QVariantList()).toList();
+    // 1. 从系统任务栏读取 .lnk（初始集）
+    PinnedItemsReader reader;
+    QList<DockItemData> pinnedItems = reader.getAllPinnedItems();
+    QSet<QString> systemExecPaths;  // 系统任务栏中的 execPath 集合
+    for (const auto &item : pinnedItems) {
+        systemExecPaths.insert(item.execPath.toLower());
+    }
+    qInfo() << "从系统任务栏读取" << pinnedItems.size() << "个固定项";
 
-    QList<DockItemData> pinnedItems;
+    // 2. 如果 data/pinned.json 存在，合并用户专用固定项
+    QString pinnedPath = PathManager::pinnedFile();
+    if (QFileInfo::exists(pinnedPath)) {
+        QFile file(pinnedPath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+            file.close();
 
-    bool firstRun = !m_config->get(QStringLiteral("firstRunComplete"), false).toBool();
+            if (doc.isArray()) {
+                const QJsonArray arr = doc.array();
+                int mergedCount = 0;
+                for (const QJsonValue &val : arr) {
+                    QJsonObject obj = val.toObject();
+                    QString execPath = obj["execPath"].toString();
+                    if (execPath.isEmpty()) continue;
 
-    if (!savedPinned.isEmpty()) {
-        // 从配置文件恢复
-        pinnedItems.reserve(savedPinned.size());
-        for (const QVariant &v : savedPinned) {
-            QVariantMap entry = v.toMap();
-            DockItemData item;
-            item.appId       = entry.value(QStringLiteral("appId")).toString();
-            item.displayName = entry.value(QStringLiteral("displayName")).toString();
-            item.iconPath    = entry.value(QStringLiteral("iconPath")).toString();
-            item.execPath    = entry.value(QStringLiteral("execPath")).toString();
-            item.isRunning   = false;
-            item.badgeCount  = 0;
-            pinnedItems.append(item);
+                    // 去重：已在系统任务栏中的跳过
+                    if (systemExecPaths.contains(execPath.toLower())) continue;
+
+                    DockItemData item;
+                    item.appId       = obj["appId"].toString();
+                    item.displayName = obj["displayName"].toString();
+                    item.iconPath    = obj["iconPath"].toString();
+                    item.execPath    = execPath;
+                    item.isRunning   = false;
+                    pinnedItems.append(item);
+                    ++mergedCount;
+                }
+                qInfo() << "从 pinned.json 合并" << mergedCount << "个用户项（文件总数" << arr.size() << "）";
+            }
         }
-        qInfo() << "从配置文件恢复" << pinnedItems.size() << "个固定项";
-    } else {
-        // 配置文件为空，从系统原生任务栏导入（首次运行）
-        PinnedItemsReader reader;
-        pinnedItems = reader.getAllPinnedItems();
-        qInfo() << "从系统任务栏导入" << pinnedItems.size() << "个固定项（首次运行）";
     }
 
     m_dockManager->setPinnedItems(pinnedItems);
-
-    // 标记首次运行完成，并将导入的固定项写入配置
-    if (firstRun) {
-        m_config->set(QStringLiteral("firstRunComplete"), true);
-        QVariantList list;
-        for (const auto &item : pinnedItems) {
-            QVariantMap entry;
-            entry[QStringLiteral("appId")]       = item.appId;
-            entry[QStringLiteral("displayName")] = item.displayName;
-            entry[QStringLiteral("iconPath")]    = item.iconPath;
-            entry[QStringLiteral("execPath")]    = item.execPath;
-            list.append(entry);
-        }
-        m_config->set(QStringLiteral("pinnedApps"), list);
-    }
 }
 
 void Application::connectPersistence()
 {
-    // 固定项变更时自动保存到配置
+    // 固定项变更时保存到 data/pinned.json
     connect(m_dockManager, &DockManager::pinnedItemsChanged,
         this, [this](const QList<DockItemData> &items) {
-            QVariantList list;
-            list.reserve(items.size());
-            for (const auto &item : items) {
-                QVariantMap entry;
-                entry[QStringLiteral("appId")]       = item.appId;
-                entry[QStringLiteral("displayName")] = item.displayName;
-                entry[QStringLiteral("iconPath")]    = item.iconPath;
-                entry[QStringLiteral("execPath")]    = item.execPath;
-                list.append(entry);
+            // 读取系统任务栏 execPath 集合，用于过滤
+            QSet<QString> systemExecPaths;
+            PinnedItemsReader reader;
+            const auto systemItems = reader.getAllPinnedItems();
+            for (const auto &sysItem : systemItems) {
+                systemExecPaths.insert(sysItem.execPath.toLower());
             }
-            m_config->set(QStringLiteral("pinnedApps"), list);
+
+            QJsonArray arr;
+            for (const auto &item : items) {
+                // 只保存非系统任务栏中的项（Dock 专用固定项）
+                if (systemExecPaths.contains(item.execPath.toLower())) continue;
+
+                QJsonObject obj;
+                obj["appId"]       = item.appId;
+                obj["displayName"] = item.displayName;
+                obj["iconPath"]    = item.iconPath;
+                obj["execPath"]    = item.execPath;
+                arr.append(obj);
+            }
+
+            PathManager::ensureDataDir();
+            QFile file(PathManager::pinnedFile());
+            if (file.open(QIODevice::WriteOnly)) {
+                QJsonDocument doc(arr);
+                file.write(doc.toJson(QJsonDocument::Indented));
+                file.close();
+            }
         });
 }
 
