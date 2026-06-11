@@ -19,6 +19,10 @@ enable_testing()
 
 find_package(Qt6 REQUIRED COMPONENTS Test Widgets)
 
+# Qt DLL 路径 — 测试运行时需要 Qt DLL 在 PATH 中
+get_target_property(QT_QMAKE Qt6::qmake IMPORTED_LOCATION)
+cmake_path(GET QT_QMAKE PARENT_PATH QT_BIN_DIR)
+
 # 核心源文件编译为 object library，避免每个测试重复编译
 add_library(dock_core_objects OBJECT
     ${CMAKE_SOURCE_DIR}/src/core/ConfigManager.cpp
@@ -84,3 +88,13 @@ add_test(NAME test_window_cache COMMAND test_window_cache)
 add_executable(test_click_state_machine test_click_state_machine.cpp)
 target_link_libraries(test_click_state_machine dock_core_objects ${TEST_LIBS})
 add_test(NAME test_click_state_machine COMMAND test_click_state_machine)
+
+# 确保测试运行时能找到 Qt DLL
+foreach(test_name
+    test_config test_dock_manager test_process_monitor test_sys_helper
+    test_pinned_items_reader test_application test_window_cache test_click_state_machine
+)
+    set_tests_properties(${test_name} PROPERTIES
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT_BIN_DIR}"
+    )
+endforeach()
