@@ -26,6 +26,7 @@ add_executable(dock_wmac WIN32
     src/ui/OverflowPanel.cpp
     include/core/Types.h
     include/core/AppIdHelper.h
+    include/core/PathManager.h
     include/core/Application.h
     include/core/DockManager.h
     include/core/ConfigManager.h
