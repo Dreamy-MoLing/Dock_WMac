@@ -18,9 +18,8 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QScreen>
-#include <QFileIconProvider>
 #include <QGuiApplication>
-#include <QFileInfo>
+#include "core/IconProvider.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QDebug>
@@ -260,18 +259,16 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
             anyDwmSucceeded = true;
         } else {
             entry["thumbId"] = static_cast<qulonglong>(0);
-            // 回退：在 popup 上画应用图标
+            // 回退：在 popup 上画应用图标（IconProvider Jumbo 管道）
             QPixmap thumb(thumbW, thumbH);
             thumb.fill(QColor(50, 50, 50));
-            if (!item->execPath().isEmpty()) {
-                QFileIconProvider provider;
-                QIcon appIcon = provider.icon(QFileInfo(item->execPath()));
-                if (!appIcon.isNull()) {
-                    QPixmap iconPix = appIcon.pixmap(48, 48);
-                    QPainter pp(&thumb);
-                    pp.drawPixmap((thumbW - 48) / 2, (thumbH - 48) / 2, iconPix);
-                    pp.end();
-                }
+            QPixmap iconPix = IconProvider::loadIcon(item->execPath(), item->displayName());
+            if (!iconPix.isNull()) {
+                QPainter pp(&thumb);
+                int s = qMin(thumbW, thumbH) - 16;
+                QPixmap scaled = iconPix.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                pp.drawPixmap((thumbW - scaled.width()) / 2, (thumbH - scaled.height()) / 2, scaled);
+                pp.end();
             }
             QLabel *fallbackLabel = new QLabel(m_previewPopup);
             fallbackLabel->setPixmap(thumb);
