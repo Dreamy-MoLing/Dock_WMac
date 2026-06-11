@@ -1,8 +1,8 @@
 /**
  * @file IconProvider.cpp
- * @brief 图标加载工具 — Win32 Shell API 重写
+ * @brief 图标加载工具 — Jumbo 管道重写
  *
- * 6级回退：图片文件 → UWP → exe/dll → lnk → Jumbo → 占位符
+ * 5级回退：图片文件 → IShellItemImageFactory (UWP) → .lnk解析 → Jumbo → 占位符
  */
 #include "core/IconProvider.h"
 
@@ -15,6 +15,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <shobjidl.h>
 #include <commoncontrols.h>
 #endif
 
@@ -27,97 +28,94 @@ static bool isUwpPath(const QString &exePath)
     return exePath.toLower().contains("\\windowsapps\\");
 }
 
-// ─── UWP 图标提取 ────────────────────────────────────────
+// ─── .lnk 解析（从 PinnedItemsReader 迁移）───────────────
 
-QPixmap IconProvider::extractUwpIcon(const QString &exePath)
+static QString resolveShortcut(const QString &lnkPath)
 {
-    QPixmap result;
-
 #ifdef Q_OS_WIN
-    if (!exePath.isEmpty() && isUwpPath(exePath)) {
-        SHFILEINFOW sfi = {};
-        QString path = QDir::toNativeSeparators(exePath);
-        DWORD_PTR ret = SHGetFileInfoW(
-            reinterpret_cast<LPCWSTR>(path.utf16()),
-            FILE_ATTRIBUTE_NORMAL,
-            &sfi, sizeof(sfi),
-            SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+    if (!QFileInfo::exists(lnkPath)) return {};
 
-        if (ret && sfi.hIcon) {
-            IconHandle guard{sfi.hIcon};
-            result = QPixmap::fromImage(
-                QImage::fromHICON(sfi.hIcon)).scaled(
-                    64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return {};
+
+    IShellLink *psl = nullptr;
+    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IShellLink, reinterpret_cast<void **>(&psl));
+    if (FAILED(hr)) {
+        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        return {};
+    }
+
+    IPersistFile *ppf = nullptr;
+    hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
+    if (FAILED(hr)) {
+        psl->Release();
+        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        return {};
+    }
+
+    WCHAR wszPath[MAX_PATH] = {};
+    lnkPath.toWCharArray(wszPath);
+    hr = ppf->Load(wszPath, STGM_READ);
+
+    QString targetPath;
+    if (SUCCEEDED(hr)) {
+        WIN32_FIND_DATA wfd;
+        WCHAR szPath[MAX_PATH] = {};
+        hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
+        if (SUCCEEDED(hr)) {
+            targetPath = QString::fromWCharArray(szPath);
         }
     }
-#else
-    Q_UNUSED(exePath);
-#endif
 
-    return result;
+    ppf->Release();
+    psl->Release();
+    if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+    return targetPath;
+#else
+    Q_UNUSED(lnkPath);
+    return {};
+#endif
 }
 
-// ─── exe/dll 嵌入图标 ────────────────────────────────────
+// ─── 优先级 2: UWP/AppX → IShellItemImageFactory ─────────
 
-QPixmap IconProvider::extractExeIcon(const QString &exePath)
+static QPixmap extractViaShellImageFactory(const QString &exePath)
 {
     QPixmap result;
-
 #ifdef Q_OS_WIN
-    if (exePath.isEmpty() || !QFileInfo::exists(exePath)) return result;
-
     QString nativePath = QDir::toNativeSeparators(exePath);
-    HICON hIconLarge = nullptr;
-
-    // 提取大图标（索引 0）
-    int extracted = ExtractIconExW(
+    IShellItemImageFactory *pFactory = nullptr;
+    HRESULT hr = SHCreateItemFromParsingName(
         reinterpret_cast<LPCWSTR>(nativePath.utf16()),
-        0,
-        &hIconLarge,
-        nullptr,    // 小图标不需要
-        1);
+        nullptr, IID_PPV_ARGS(&pFactory));
 
-    if (extracted > 0 && hIconLarge) {
-        IconHandle guard{hIconLarge};
-        QImage img = QImage::fromHICON(hIconLarge);
-        if (!img.isNull()) {
-            result = QPixmap::fromImage(img).scaled(
-                64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        }
-    }
-
-    // 回退：SHGetFileInfo
-    if (result.isNull()) {
-        SHFILEINFOW sfi = {};
-        DWORD_PTR ret = SHGetFileInfoW(
-            reinterpret_cast<LPCWSTR>(nativePath.utf16()),
-            0, &sfi, sizeof(sfi),
-            SHGFI_ICON | SHGFI_LARGEICON);
-
-        if (ret && sfi.hIcon) {
-            IconHandle guard{sfi.hIcon};
-            QImage img = QImage::fromHICON(sfi.hIcon);
+    if (SUCCEEDED(hr) && pFactory) {
+        HBITMAP hBitmap = nullptr;
+        SIZE size = {256, 256};
+        hr = pFactory->GetImage(size, SIIGBF_ICONONLY, &hBitmap);
+        if (SUCCEEDED(hr) && hBitmap) {
+            QImage img = QImage::fromHBITMAP(hBitmap);
             if (!img.isNull()) {
-                result = QPixmap::fromImage(img).scaled(
-                    64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                result = QPixmap::fromImage(img);
             }
+            DeleteObject(hBitmap);
         }
+        pFactory->Release();
     }
 #else
     Q_UNUSED(exePath);
 #endif
-
     return result;
 }
 
-// ─── Jumbo 高质量图标 ────────────────────────────────────
+// ─── 优先级 4: 黄金路径 — Jumbo 管道 ─────────────────────
 
-static QPixmap extractJumboIcon(const QString &exePath)
+static QPixmap extractJumboIcon(const QString &filePath)
 {
     QPixmap result;
-
 #ifdef Q_OS_WIN
-    QString nativePath = QDir::toNativeSeparators(exePath);
+    QString nativePath = QDir::toNativeSeparators(filePath);
     SHFILEINFOW sfi = {};
     DWORD_PTR ret = SHGetFileInfoW(
         reinterpret_cast<LPCWSTR>(nativePath.utf16()),
@@ -130,24 +128,22 @@ static QPixmap extractJumboIcon(const QString &exePath)
                                       reinterpret_cast<void **>(&imageList)))) {
             HICON hIcon = nullptr;
             if (SUCCEEDED(imageList->GetIcon(sfi.iIcon, ILD_TRANSPARENT, &hIcon))) {
-                IconProvider::IconHandle guard{hIcon};
                 QImage img = QImage::fromHICON(hIcon);
                 if (!img.isNull()) {
-                    result = QPixmap::fromImage(img).scaled(
-                        64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    result = QPixmap::fromImage(img);
                 }
+                DestroyIcon(hIcon);
             }
             imageList->Release();
         }
     }
 #else
-    Q_UNUSED(exePath);
+    Q_UNUSED(filePath);
 #endif
-
     return result;
 }
 
-// ─── 归一化 ──────────────────────────────────────────────
+// ─── 归一化（保持不变）───────────────────────────────────
 
 static QPixmap normalizePixmap(const QPixmap &source)
 {
@@ -158,7 +154,6 @@ static QPixmap normalizePixmap(const QPixmap &source)
 
     QPixmap scaled;
     if (source.width() < 48 || source.height() < 48) {
-        // 源图标太小 → 放大填满
         scaled = source.scaled(60, 60, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     } else {
         scaled = source.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -170,7 +165,7 @@ static QPixmap normalizePixmap(const QPixmap &source)
     return result;
 }
 
-// ─── 主入口 ──────────────────────────────────────────────
+// ─── 主入口（重排优先级）─────────────────────────────────
 
 QPixmap IconProvider::loadIcon(const QString &iconPath, const QString &displayName)
 {
@@ -188,36 +183,28 @@ QPixmap IconProvider::loadIcon(const QString &iconPath, const QString &displayNa
         }
     }
 
-    // 优先级2: UWP AppX
+    // 优先级2: UWP AppX → IShellItemImageFactory (256×256)
     if (!iconPath.isEmpty() && isUwpPath(iconPath)) {
-        pix = IconProvider::extractUwpIcon(iconPath);
+        pix = extractViaShellImageFactory(iconPath);
         if (!pix.isNull()) return normalizePixmap(pix);
     }
 
-    // 优先级3: exe/dll 嵌入图标（ExtractIconEx）
-    if (!iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
-        QString lower = iconPath.toLower();
-        if (lower.endsWith(".exe") || lower.endsWith(".dll")) {
-            pix = IconProvider::extractExeIcon(iconPath);
-            if (!pix.isNull()) return normalizePixmap(pix);
+    // 优先级3: .lnk → 解析目标 → 进入优先级4
+    QString resolvedPath = iconPath;
+    if (!iconPath.isEmpty() && iconPath.toLower().endsWith(".lnk")) {
+        QString target = resolveShortcut(iconPath);
+        if (!target.isEmpty()) {
+            resolvedPath = target;
         }
     }
 
-    // 优先级4: .lnk 解析目标 → SHGetFileInfo
-    if (!iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
-        if (iconPath.toLower().endsWith(".lnk")) {
-            pix = IconProvider::extractExeIcon(iconPath);
-            if (!pix.isNull()) return normalizePixmap(pix);
-        }
-    }
-
-    // 优先级5: Jumbo 高质量图标
-    if (!iconPath.isEmpty() && QFileInfo::exists(iconPath)) {
-        pix = extractJumboIcon(iconPath);
+    // 优先级4: 黄金路径 — Jumbo 管道（256×256 含 alpha）
+    if (!resolvedPath.isEmpty() && QFileInfo::exists(resolvedPath)) {
+        pix = extractJumboIcon(resolvedPath);
         if (!pix.isNull()) return normalizePixmap(pix);
     }
 
-    // 优先级6: 字母占位符
+    // 优先级5: 字母占位符
     {
         QPixmap placeholder(64, 64);
         placeholder.fill(QColor(80, 80, 80));

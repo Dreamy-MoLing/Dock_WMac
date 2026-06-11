@@ -72,9 +72,7 @@ QList<DockItemData> PinnedItemsReader::readFromLnkFiles()
         item.appId = fi.completeBaseName();
         item.displayName = fi.completeBaseName();
         item.execPath = execPath;
-        // 优先使用提取的图标缓存，如果失败则使用 exe 路径（由 DockItem 提取）
-        QString cachedIcon = extractAppIcon(execPath);
-        item.iconPath = cachedIcon.isEmpty() ? execPath : cachedIcon;
+        item.iconPath = execPath;  // 图标由 IconProvider 在渲染时统一提取
         item.isRunning = false;
         item.badgeCount = 0;
         items.append(item);
@@ -153,87 +151,3 @@ QString PinnedItemsReader::resolveShortcut(const QString &lnkPath)
 #endif
 }
 
-QString PinnedItemsReader::extractAppIcon(const QString &appId)
-{
-#ifdef Q_OS_WIN
-    // 检查缓存是否已存在
-    QString cacheDir = QDir::tempPath() + "/dock_wmac_icons";
-    QString cachePath = cacheDir + "/" + QFileInfo(appId).baseName() + ".png";
-    if (QFileInfo::exists(cachePath)) {
-        return cachePath;
-    }
-
-    // 使用 SHGetFileInfo 提取大图标
-    SHFILEINFO shfi;
-    ZeroMemory(&shfi, sizeof(shfi));
-    DWORD_PTR result = SHGetFileInfo(
-        reinterpret_cast<const wchar_t *>(appId.utf16()),
-        FILE_ATTRIBUTE_NORMAL, &shfi, sizeof(shfi),
-        SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-    if (!result || !shfi.hIcon) {
-        // 回退：直接尝试文件图标
-        result = SHGetFileInfo(
-            reinterpret_cast<const wchar_t *>(appId.utf16()),
-            FILE_ATTRIBUTE_NORMAL, &shfi, sizeof(shfi),
-            SHGFI_ICON | SHGFI_LARGEICON);
-        if (!result || !shfi.hIcon) return {};
-    }
-
-    // HICON → QPixmap（使用 Qt 的 QGuiApplication::instance() 检查）
-    QPixmap pix;
-    if (shfi.hIcon) {
-        // 使用 Windows API 获取图标尺寸
-        ICONINFO iconInfo;
-        if (GetIconInfo(shfi.hIcon, &iconInfo)) {
-            BITMAP bm;
-            if (iconInfo.hbmColor && GetObject(iconInfo.hbmColor, sizeof(bm), &bm)) {
-                int w = bm.bmWidth;
-                int h = bm.bmHeight;
-                if (w > 0 && h > 0) {
-                    // 创建设备上下文和位图
-                    HDC hdc = GetDC(nullptr);
-                    HDC memDC = CreateCompatibleDC(hdc);
-                    HBITMAP hBitmap = CreateCompatibleBitmap(hdc, w, h);
-                    HBITMAP hOld = (HBITMAP)SelectObject(memDC, hBitmap);
-
-                    // 绘制图标到设备上下文
-                    DrawIconEx(memDC, 0, 0, shfi.hIcon, w, h, 0, nullptr, DI_NORMAL);
-
-                    // 转换为 QImage
-                    QImage img(w, h, QImage::Format_ARGB32);
-                    BITMAPINFO bmi;
-                    memset(&bmi, 0, sizeof(bmi));
-                    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                    bmi.bmiHeader.biWidth = w;
-                    bmi.bmiHeader.biHeight = -h; // 顶部开始
-                    bmi.bmiHeader.biPlanes = 1;
-                    bmi.bmiHeader.biBitCount = 32;
-                    bmi.bmiHeader.biCompression = BI_RGB;
-                    GetDIBits(hdc, hBitmap, 0, h, img.bits(), &bmi, DIB_RGB_COLORS);
-
-                    pix = QPixmap::fromImage(img);
-
-                    // 清理
-                    SelectObject(memDC, hOld);
-                    DeleteObject(hBitmap);
-                    DeleteDC(memDC);
-                    ReleaseDC(nullptr, hdc);
-                }
-            }
-            if (iconInfo.hbmColor) DeleteObject(iconInfo.hbmColor);
-            if (iconInfo.hbmMask) DeleteObject(iconInfo.hbmMask);
-        }
-        DestroyIcon(shfi.hIcon);
-    }
-
-    if (pix.isNull()) return {};
-
-    QDir().mkpath(cacheDir);
-    pix.save(cachePath, "PNG");
-    return cachePath;
-#else
-    Q_UNUSED(appId);
-    return {};
-#endif
-}

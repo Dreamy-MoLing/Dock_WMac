@@ -10,10 +10,11 @@
       "name": "default",
       "displayName": "Windows MSVC x64",
       "description": "Native Windows build with MSVC and Qt6",
-      "generator": "Ninja",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/18/Insiders",
         "CMAKE_PREFIX_PATH": "C:/Qt/6.11.1/msvc2022_64"
       }
     },

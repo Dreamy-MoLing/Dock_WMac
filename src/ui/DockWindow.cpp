@@ -123,20 +123,19 @@ DockWindow::DockWindow(QWidget *parent)
     m_bottomEdgeTimer->setInterval(200);
     connect(m_bottomEdgeTimer, &QTimer::timeout, this, [this]() {
         if (!m_isHidden || !m_sysHelper || !m_dockManager) return;
-        if (!m_sysHelper->isTaskbarAutoHideEnabled()) return;
 
         QPoint cursor = m_sysHelper->cursorPos();
         if (cursor.isNull()) return;
 
-        // 获取当前 dock 所在屏幕的底部边缘
+        // 获取当前鼠标所在屏幕的物理底部边缘
         QScreen *scr = QGuiApplication::screenAt(cursor);
         if (!scr) scr = QGuiApplication::primaryScreen();
         if (!scr) return;
 
-        QRect geo = scr->availableGeometry();
+        QRect geo = scr->geometry();
         int bottomEdge = geo.y() + geo.height();
-        // 鼠标在屏幕底部 5px 范围内触发
-        if (cursor.y() >= bottomEdge - 5 && cursor.y() <= bottomEdge) {
+        // 鼠标在屏幕底部 8px 范围内触发（与 kBaseSpacing 一致）
+        if (cursor.y() >= bottomEdge - kBaseSpacing && cursor.y() <= bottomEdge) {
             m_bottomEdgeTimer->stop();
             m_dockManager->onWinKeyPressed();
         }
@@ -291,11 +290,12 @@ void DockWindow::updatePosition()
     }
 
     if (targetScreen) {
-        QRect geo = targetScreen->availableGeometry();
+        // 使用物理屏幕几何（不含任务栏扣除），间距 = 图标间距 kBaseSpacing
+        QRect geo = targetScreen->geometry();
         int w = width();
         int h = height();
         move(geo.x() + (geo.width() - w) / 2,
-             geo.y() + geo.height() - h - 10);
+             geo.y() + geo.height() - h - kBaseSpacing);
     }
 }
 
@@ -565,8 +565,8 @@ void DockWindow::onStateChanged(DockState newState)
         show();
 
         // 从底部滑入 + 淡入
-        QRect geo = screen() ? screen()->availableGeometry() : QGuiApplication::primaryScreen()->availableGeometry();
-        int targetY = geo.y() + geo.height() - height() - 10;
+        QRect geo = screen() ? screen()->geometry() : QGuiApplication::primaryScreen()->geometry();
+        int targetY = geo.y() + geo.height() - height() - kBaseSpacing;
         int targetX = geo.x() + (geo.width() - width()) / 2;
         QPoint startPos(targetX, targetY + 60);  // 从下方 60px 处滑入
         QPoint endPos(targetX, targetY);
@@ -597,10 +597,8 @@ void DockWindow::onStateChanged(DockState newState)
     case DockState::Hidden: {
         m_isHidden = true;
 
-        // 启动底部边缘轮询（仅在任务栏自动隐藏开启时生效）
-        if (m_sysHelper && m_sysHelper->isTaskbarAutoHideEnabled()) {
-            m_bottomEdgeTimer->start();
-        }
+        // 启动底部边缘轮询（Dock 隐藏时始终生效）
+        m_bottomEdgeTimer->start();
 
         // 向下滑出 + 淡出
         QPoint currentPos = pos();

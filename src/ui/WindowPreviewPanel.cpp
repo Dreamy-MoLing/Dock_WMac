@@ -18,9 +18,8 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QScreen>
-#include <QFileIconProvider>
 #include <QGuiApplication>
-#include <QFileInfo>
+#include "core/IconProvider.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QDebug>
@@ -211,6 +210,12 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     DwmSetWindowAttribute(popupHwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
                           &DWMWCP_ROUND, sizeof(DWMWCP_ROUND));
 
+    // ── DPI 缩放因子：DWM API 使用物理像素，Qt 坐标是逻辑像素 ──
+    qreal dpiScale = 1.0;
+    if (auto *ps = m_previewPopup->screen()) {
+        dpiScale = ps->devicePixelRatio();
+    }
+
     // ── 注册 DWM 实时缩略图 ──
     QVariantList thumbList;
     bool anyDwmSucceeded = false;
@@ -237,7 +242,13 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
             props.fVisible = TRUE;
             props.opacity = 255;
             props.fSourceClientAreaOnly = TRUE;
-            props.rcDestination = {tx, ty, tx + thumbW, ty + thumbH};
+            // DWM rcDestination 使用物理像素，Qt 坐标为逻辑像素 → 乘以 DPI 缩放
+            props.rcDestination = {
+                static_cast<LONG>(tx * dpiScale),
+                static_cast<LONG>(ty * dpiScale),
+                static_cast<LONG>((tx + thumbW) * dpiScale),
+                static_cast<LONG>((ty + thumbH) * dpiScale)
+            };
 
             RECT srcRect;
             if (GetClientRect(wi.hwnd, &srcRect)) {
@@ -248,18 +259,16 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
             anyDwmSucceeded = true;
         } else {
             entry["thumbId"] = static_cast<qulonglong>(0);
-            // 回退：在 popup 上画应用图标
+            // 回退：在 popup 上画应用图标（IconProvider Jumbo 管道）
             QPixmap thumb(thumbW, thumbH);
             thumb.fill(QColor(50, 50, 50));
-            if (!item->execPath().isEmpty()) {
-                QFileIconProvider provider;
-                QIcon appIcon = provider.icon(QFileInfo(item->execPath()));
-                if (!appIcon.isNull()) {
-                    QPixmap iconPix = appIcon.pixmap(48, 48);
-                    QPainter pp(&thumb);
-                    pp.drawPixmap((thumbW - 48) / 2, (thumbH - 48) / 2, iconPix);
-                    pp.end();
-                }
+            QPixmap iconPix = IconProvider::loadIcon(item->execPath(), item->displayName());
+            if (!iconPix.isNull()) {
+                QPainter pp(&thumb);
+                int s = qMin(thumbW, thumbH) - 16;
+                QPixmap scaled = iconPix.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                pp.drawPixmap((thumbW - scaled.width()) / 2, (thumbH - scaled.height()) / 2, scaled);
+                pp.end();
             }
             QLabel *fallbackLabel = new QLabel(m_previewPopup);
             fallbackLabel->setPixmap(thumb);

@@ -1,0 +1,79 @@
+<h2>WindowCache — 窗口枚举缓存层</h2>
+<p class="subtitle">合并现有 WindowManager，一次 EnumWindows，多处查询</p>
+
+<div class="section">
+
+<h3>核心数据结构</h3>
+<pre style="background:#1e1e1e;border-radius:8px;padding:16px;font-size:13px;color:#aaa;overflow-x:auto;">
+struct CachedWindowInfo {
+    HWND   hwnd;
+    QString title;
+    DWORD  pid;
+    QString exeName;       // basename（无 .exe）
+    bool   isVisible;      // IsWindowVisible && !IsIconic
+    bool   isMinimized;    // IsIconic
+    bool   isForeground;   // GetForegroundWindow() == hwnd
+    bool   isToolWindow;   // WS_EX_TOOLWINDOW
+};
+
+using WindowList = QList&lt;CachedWindowInfo&gt;;
+
+QHash&lt;QString, WindowList&gt;  m_windowsByClass;   // wmClass → 窗口列表
+QHash&lt;DWORD, QString&gt;        m_pidToExeName;     // PID → exe basename 缓存
+</pre>
+
+<h3>查询接口（供 ClickStateMachine 使用）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;">
+<tr style="background:#333;color:#aaa;">
+  <th style="padding:8px;text-align:left;">方法</th>
+  <th style="padding:8px;text-align:left;">返回</th>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">hasVisibleWindows(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">是否有 IsWindowVisible && !IsIconic 窗口</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">hasMinimizedWindows(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">是否有 IsIconic 窗口</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">hasHiddenWindows(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">是否有不可见且非最小化的窗口（托盘隐藏）</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">isForegroundApp(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">前台窗口是否属于此应用</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">getWindowCount(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">可见窗口数量（保持兼容现有 API）</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">getForegroundHwnd(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">应用的前台窗口 HWND，若无则返回上次激活的</td>
+</tr>
+<tr style="border-bottom:1px solid #444;">
+  <td style="padding:8px;font-family:monospace;color:#6af;">getLastActiveHwnd(wmClass)</td>
+  <td style="padding:8px;color:#aaa;">最近激活过的窗口 HWND（用于恢复）</td>
+</tr>
+</table>
+
+<h3 style="margin-top:20px;">刷新策略</h3>
+<div style="background:#1e1e1e;border-radius:8px;padding:14px;font-size:13px;color:#aaa;line-height:1.8">
+<strong>主动刷新</strong>：ProcessMonitor::onTick 每次调用后触发 WindowCache::refresh()<br>
+<strong>按需刷新</strong>：第一次查询或上次刷新超过 500ms 时自动 refresh<br>
+<strong>事件触发</strong>：DockWindow 收到 WM_ACTIVATE / WM_SETFOCUS 时强制刷新<br><br>
+
+<strong>Zm-order 追踪</strong>：refresh 时记录 GetForegroundWindow() 归属，保留上次激活窗口的 HWND。<br>
+应用切换时更新 lastActiveTime，S1→S2 恢复时优先恢复最近激活的窗口。
+</div>
+
+<h3 style="margin-top:20px;">多进程匹配（解决 Chrome/VS Code 类应用）</h3>
+<div style="background:#1e1e1e;border-radius:8px;padding:14px;font-size:13px;color:#aaa;line-height:1.8">
+1. <strong>主匹配</strong>：execPath basename == 进程 exe basename（现有逻辑）<br>
+2. <strong>PID 反查</strong>：EnumWindows 获取窗口 PID → QueryFullProcessImageName → 与 wmClass 比较<br>
+3. <strong>目录锚点</strong>：对于 Chrome，检查进程路径是否在同一个安装目录下<br>
+4. <strong>已知映射表</strong>：硬编码常见多进程应用的子进程映射（如 "chrome" → "chrome" 所有变体）
+</div>
+
+</div>

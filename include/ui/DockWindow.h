@@ -48,6 +48,9 @@ public:
     /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
     void setMonitor(int index);
 
+    /** @brief 获取当前目标显示器编号 */
+    int monitorIndex() const { return m_monitorIndex; }
+
     /** @brief 锁定鱼眼效果（预览窗显示期间） */
     void lockFishEye(int index);
 

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QTimer>
 #include <QStringList>
 #include "Types.h"
 
@@ -15,11 +16,15 @@ class SysHelper;
  * 管理 Dock 两种状态 (Docked/Hidden) 之间的转换，
  * 协调 SysHelper 的事件输入与 UI 层的渲染输出。
  *
- * 支持固定项（pinned，持久化保存）和临时项（transient，自动跟随运行应用出现/消失）。
+ * 显隐逻辑：
+ * - 常驻 (Docked)：dock 所在屏幕无全屏/最大化窗口 → 默认置顶可见
+ * - 隐藏 (Hidden)：全屏持续 3 秒后确认隐藏，非短暂弹窗
+ * - 唤醒：Win 键 / 鼠标触底 → 立即显示 + 1.5s 冷却防止开始菜单冲突
  */
 
 class DockManager : public QObject {
     Q_OBJECT
+
 public:
     explicit DockManager(QObject *parent = nullptr);
 
@@ -39,6 +44,10 @@ public:
 
     /** @brief 获取最大可见图标数 */
     int maxItems() const;
+
+    /** @brief 设置 Dock 所在屏幕索引（-1 = 主屏幕，用于全屏检测） */
+    void setMonitorIndex(int index);
+    int monitorIndex() const { return m_monitorIndex; }
 
     /** @brief 初始化：关联 SysHelper 并连接信号，加载固定项列表 */
     void initialize(SysHelper *sysHelper);
@@ -64,12 +73,32 @@ public:
     /** @brief 更新指定应用的窗口数量 */
     void updateWindowCount(const QString &appId, int count);
 
-public slots:
-    /** @brief 处理前台窗口状态变化 */
-    void onForegroundWindowChanged(bool isMaximizedOrFullscreen);
+    // ── 仅供测试使用的状态机内部接口 ────────────────────────
+    // 这些方法不应在生产代码中直接调用，它们由 onHideDelayTimeout() /
+    // onWinKeyPressed() / onFullscreenStateChanged() 内部驱动。
 
-    /** @brief 处理 Win 键按下事件 */
+    /** @brief 执行 Docked → Hidden 转换（安装键盘钩子、发射信号） */
+    void enterHiddenState();
+
+    /** @brief 执行 Hidden → Docked 转换（卸载键盘钩子、发射信号） */
+    void enterDockedState();
+
+    /** @brief 测试：获取隐藏延迟定时器指针 */
+    QTimer *hideDelayTimer() const { return m_hideDelayTimer; }
+
+    /** @brief 测试：获取 Win 键冷却定时器指针 */
+    QTimer *winKeyCooldownTimer() const { return m_winKeyCooldownTimer; }
+
+public slots:
+    /** @brief 处理屏幕最大化/全屏状态变化（信号来自 SysHelper） */
+    void onFullscreenStateChanged(bool anyMaximizedOnAnyScreen);
+
+    /** @brief 处理 Win 键按下事件（来自键盘钩子或鼠标触底） */
     void onWinKeyPressed();
+
+private slots:
+    void onHideDelayTimeout();
+    void onWinKeyCooldownTimeout();
 
 signals:
     void stateChanged(DockState newState);
@@ -89,6 +118,17 @@ private:
     QList<DockItemData> m_transientItems;
     SysHelper *m_sysHelper;
     int m_maxItems = 16;
+
+    // 屏幕感知
+    int m_monitorIndex = -1;
+
+    // 隐藏延迟（3s — 全屏确认非短暂弹窗后才隐藏）
+    QTimer *m_hideDelayTimer = nullptr;
+    static constexpr int kHideDelayMs = 3000;
+
+    // Win 键冷却（1.5s — 防止开始菜单弹出后全屏检测把 dock 又按回去）
+    QTimer *m_winKeyCooldownTimer = nullptr;
+    static constexpr int kWinKeyCooldownMs = 1500;
 };
 
 #endif // DOCKMANAGER_H

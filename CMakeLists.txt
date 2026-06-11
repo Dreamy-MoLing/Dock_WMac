@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Dock_WMac VERSION 0.2.3 LANGUAGES CXX)
+project(Dock_WMac VERSION 0.2.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,7 @@ add_executable(dock_wmac WIN32
     src/ui/OverflowPanel.cpp
     include/core/Types.h
     include/core/AppIdHelper.h
+    include/core/PathManager.h
     include/core/Application.h
     include/core/DockManager.h
     include/core/ConfigManager.h
@@ -65,15 +66,6 @@ if(WINDEPLOYQT_EXECUTABLE)
 else()
     message(WARNING "windeployqt not found. Qt DLLs will not be deployed automatically.")
 endif()
-
-# 独立卸载器（纯 Win32，无 Qt 依赖）
-add_executable(uninstall WIN32
-    src/uninstall/uninstall.cpp
-)
-target_link_libraries(uninstall user32 shell32 shlwapi advapi32)
-set_target_properties(uninstall PROPERTIES
-    RUNTIME_OUTPUT_NAME "uninstall"
-)
 
 # 安装规则
 include(GNUInstallDirs)

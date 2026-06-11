@@ -15,6 +15,7 @@
 #include <QJsonObject>
 #include <QPixmap>
 #include <QStandardPaths>
+#include <QCoreApplication>
 #include <QTemporaryDir>
 #include "core/ConfigManager.h"
 
@@ -44,10 +45,9 @@ protected:
     ConfigManager *config;
     static QApplication *app;
 
-    /// 获取配置文件完整路径
+    /// 获取配置文件完整路径（与 PathManager::configFile() 一致）
     static QString configPath() {
-        return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
-               + "/config.json";
+        return QCoreApplication::applicationDirPath() + "/data/config.json";
     }
 
     /// 删除配置文件，确保后续 load() 创建默认配置

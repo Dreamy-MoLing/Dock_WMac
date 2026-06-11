@@ -1,0 +1,69 @@
+<h2>ClickStateMachine — 点击状态转移</h2>
+<p class="subtitle">取代 DockWindow::handleSingleClick 的 if-else 分支，4 状态 + 4 转移</p>
+
+<div class="section">
+  <h3>状态定义（由 WindowCache 查询结果判定）</h3>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+
+<div style="background:#2a2a2a;border-left:4px solid #888;border-radius:8px;padding:12px;">
+  <span class="label" style="color:#888;">S0</span>
+  <h4 style="margin:4px 0;color:#ccc;">NoWindows</h4>
+  <p style="color:#999;font-size:13px;">应用未启动，或进程在运行但无可见顶层窗口</p>
+</div>
+
+<div style="background:#2a2a2a;border-left:4px solid #e90;border-radius:8px;padding:12px;">
+  <span class="label" style="color:#e90;">S1</span>
+  <h4 style="margin:4px 0;color:#ccc;">AllMinimized</h4>
+  <p style="color:#999;font-size:13px;">有窗口，但全部处于 SW_MINIMIZE 状态</p>
+</div>
+
+<div style="background:#2a2a2a;border-left:4px solid #4a9;border-radius:8px;padding:12px;">
+  <span class="label" style="color:#4a9;">S2</span>
+  <h4 style="margin:4px 0;color:#ccc;">ForegroundActive</h4>
+  <p style="color:#999;font-size:13px;">当前前台激活窗口属于此应用</p>
+</div>
+
+<div style="background:#2a2a2a;border-left:4px solid #6af;border-radius:8px;padding:12px;">
+  <span class="label" style="color:#6af;">S3</span>
+  <h4 style="margin:4px 0;color:#ccc;">BackgroundVisible</h4>
+  <p style="color:#999;font-size:13px;">有可见窗口，但非当前前台焦点</p>
+</div>
+
+</div>
+
+<h3>点击转移（4 条边）</h3>
+
+<div style="background:#1e1e1e;border-radius:12px;padding:20px;font-family:monospace;font-size:14px;line-height:2.4">
+
+  <strong>S0 NoWindows</strong> <span style="color:#ff6;font-size:20px;">→</span> <span style="color:#4f9;font-weight:bold;">LaunchApp()</span><br>
+  <span style="color:#888;margin-left:20px;">QProcess::startDetached + 等待 ProcessMonitor 确认运行</span><br><br>
+
+  <strong>S1 AllMinimized</strong> <span style="color:#ff6;font-size:20px;">→</span> <span style="color:#4f9;font-weight:bold;">RestoreLastActive()</span><br>
+  <span style="color:#888;margin-left:20px;">ShowWindow(SW_RESTORE) + SetForegroundWindow → 进入 S2</span><br><br>
+
+  <strong>S2 ForegroundActive</strong> <span style="color:#ff6;font-size:20px;">→</span> <span style="color:#f66;font-weight:bold;">MinimizeAll()</span><br>
+  <span style="color:#888;margin-left:20px;">遍历应用所有窗口 ShowWindow(SW_MINIMIZE) → 进入 S1</span><br><br>
+
+  <strong>S3 BackgroundVisible</strong> <span style="color:#ff6;font-size:20px;">→</span> <span style="color:#4f9;font-weight:bold;">BringToForeground()</span><br>
+  <span style="color:#888;margin-left:20px;">AllowSetForegroundWindow + SetForegroundWindow(lastActiveHwnd) → 进入 S2</span>
+
+</div>
+
+<h3 style="margin-top:20px;">状态判定逻辑</h3>
+
+<pre style="background:#1e1e1e;border-radius:8px;padding:16px;font-size:13px;color:#aaa;overflow-x:auto;">
+bool hasAnyWindow    = WindowCache::hasWindows(wmClass);
+bool allMinimized    = WindowCache::allMinimized(wmClass);
+bool isForeground    = WindowCache::isForegroundApp(wmClass);
+
+State state;
+if (!hasAnyWindow)              state = NoWindows;
+else if (allMinimized)          state = AllMinimized;
+else if (isForeground)          state = ForegroundActive;
+else                            state = BackgroundVisible;
+</pre>
+
+<h3 style="margin-top:20px;">DoubleClick：永远走 Launch 路径（不变）</h3>
+<p style="color:#999;">双击行为维持现有一致：无论当前状态，始终 QProcess::startDetached 启动新实例。</p>
+</div>

@@ -7,6 +7,7 @@
  */
 
 #include "core/Logger.h"
+#include "core/PathManager.h"
 
 #include <QFile>
 #include <QDir>
@@ -83,13 +84,12 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
 
 QString Logger::logFilePath()
 {
-    QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    return logDir + "/dock.log";
+    return PathManager::logFile();
 }
 
 QString Logger::logDir()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    return PathManager::dataDir();
 }
 
 void Logger::init()
@@ -99,9 +99,9 @@ void Logger::init()
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    QString path = logFilePath();
-    QDir().mkpath(QFileInfo(path).absolutePath());
+    PathManager::ensureDataDir();
 
+    QString path = logFilePath();
     s_logFile.setFileName(path);
     s_logFile.open(QIODevice::Append | QIODevice::Text);
 
