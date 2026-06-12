@@ -45,7 +45,7 @@
 
 1. 从 [Releases](https://github.com/Dreamy-MoLing/Dock_WMac/releases) 下载最新 `dock_wmac_v*.zip`
 2. 解压到任意目录（建议固定英文路径，如 `D:\Tools\Dock_WMac\`）
-3. 双击 `Mac任务栏.exe`
+3. 双击 `WMacDock.exe`
 
 首次运行自动导入系统任务栏固定项作为初始内容。
 
@@ -53,7 +53,7 @@
 
 ```
 Dock_WMac/
-├── Mac任务栏.exe          ← 主程序
+├── WMacDock.exe          ← 主程序
 ├── Qt6Core.dll            ← Qt 运行时
 ├── Qt6Gui.dll
 ├── Qt6Widgets.dll
@@ -88,7 +88,7 @@ Dock_WMac/
 ```bash
 cmake --preset default
 cmake --build build --config Release
-# 产物: build\Mac任务栏.exe
+# 产物: build\WMacDock.exe
 ```
 
 CMakePresets.json 已配置好 VS 生成器和 Qt 路径，无需额外设置环境变量。
@@ -113,7 +113,7 @@ test_pinned_items_reader test_application
 
 ```bash
 cmake --build build --config Release
-windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build\Mac任务栏.exe
+windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build\WMacDock.exe
 # deploy\ 即完整便携包，压缩分发给用户
 ```
 

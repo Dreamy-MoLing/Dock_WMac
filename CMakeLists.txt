@@ -48,9 +48,9 @@ add_executable(dock_wmac WIN32
 target_include_directories(dock_wmac PRIVATE include)
 target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg dwmapi shlwapi shell32)
 
-# 输出文件名为 Mac任务栏.exe（内部 target 名保持 dock_wmac 不变）
+# 输出文件名为 WMacDock.exe（内部 target 名保持 dock_wmac 不变）
 set_target_properties(dock_wmac PROPERTIES
-    RUNTIME_OUTPUT_NAME "Mac任务栏"
+    RUNTIME_OUTPUT_NAME "WMacDock"
 )
 
 # windeployqt 自动部署 Qt 运行时依赖

@@ -42,7 +42,7 @@ jobs:
       - name: Deploy Qt runtime dependencies
         shell: bash
         run: |
-          windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/Mac任务栏.exe
+          windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/WMacDock.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -83,7 +83,53 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
+          body: |
+            ## 安装
+
+            从附件下载 `dock_wmac_*.zip`，解压到任意目录，双击 `WMacDock.exe`。
+
+            首次运行自动导入系统任务栏固定项。卸载只需删除文件夹。
+
+            ## 变更
+
+            ### v0.2.4 — 便携模式 + 图标管道重写
+
+            **破坏性变更：** 从安装式应用转为便携应用，数据和配置路径已变更。
+
+            **新功能：**
+            - **便携模式** — 所有数据（配置、日志、固定项）存储在程序目录 `./data/`，解压即用，无需安装、无需管理员权限
+            - **PathManager** — 新增 header-only 路径管理命名空间，统一所有数据路径
+
+            **图标管道重写：**
+            - Jumbo 图标 (`SHGetImageList(SHIL_JUMBO)`) 提升为主力提取通道
+            - UWP/AppX 图标改用 `IShellItemImageFactory`（替代旧 `SHGetFileInfo` 路径）
+            - 移除低质量的 `extractExeIcon`、`extractUwpIcon` 公共 API
+            - 图标回退链精简为 5 级（原 6 级）
+
+            **固定项管理重写：**
+            - 系统任务栏 `.lnk` 为只读基准，用户额外固定项持久化到 `data/pinned.json`
+            - 启动时自动合并：系统项 + 用户项（按 `execPath` 去重）
+            - 移除 `pinnedApps` 配置键和 `firstRunComplete` 标志
+
+            **移除：**
+            - Inno Setup 安装包构建（`installer/`）
+            - `uninstall.exe` 安全卸载器（`src/uninstall/`）
+            - PinnedItemsReader 的 `%TEMP%/dock_wmac_icons/` 图标缓存
+
+            **开发体验：**
+            - CI 构建流水线添加 `ctest` 测试步骤
+            - 测试运行时 Qt DLL PATH 自动注入（`ENVIRONMENT_MODIFICATION`）
+            - 项目测试覆盖：8 套可执行文件，89 个用例
+            - 重构：WindowManager → WindowCache + ClickStateMachine + IconProvider + AppIdHelper + OverflowPanel + WindowPreviewPanel
+            - 二进制更名为 WMacDock.exe
+
+            ## v0.2.3 已知问题（在 v0.2.4 中修复）
+
+            - **安装包臃肿** — Inno Setup 生成的安装包包含 Qt 运行时，体积大且安装流程复杂
+            - **图标模糊** — `ExtractIconEx` 路径提取的 32×32 图标在高 DPI 下模糊
+            - **数据碎片化** — 配置文件、日志、图标缓存分散在 `%APPDATA%`、`%LOCALAPPDATA%`、`%TEMP%` 三个位置
+            - **无法直接移动** — 安装目录固定，不能随意移动程序文件夹
           files: |
             dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
             LICENSE
-          generate_release_notes: true
+          generate_release_notes: false

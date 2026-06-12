@@ -62,6 +62,7 @@ ehthumbs.db
 
 # ===== Claude Code =====
 .claude/
+graphify-out/
 
 # ===== 脚本文件（不上传构建/辅助脚本）=====
 *.ps1
