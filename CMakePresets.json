@@ -27,6 +27,19 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI (Windows MSVC x64)",
+      "description": "CI build — VS 和 Qt 路径通过环境变量注入",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_GENERATOR_INSTANCE": "$env{VS_INSTALL_PATH}",
+        "CMAKE_PREFIX_PATH": "$env{QT_ROOT_DIR}",
+        "BUILD_TESTS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -39,6 +52,11 @@
       "name": "debug",
       "configurePreset": "debug",
       "description": "Build for Windows (Debug)"
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "description": "Build for CI (Release)"
     }
   ]
 }

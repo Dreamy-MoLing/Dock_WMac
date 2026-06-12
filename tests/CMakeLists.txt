@@ -13,6 +13,8 @@ FetchContent_Declare(
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# Prevent GTest from adding install() rules (we only need it for testing)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
@@ -24,31 +26,10 @@ get_target_property(QT_QMAKE Qt6::qmake IMPORTED_LOCATION)
 cmake_path(GET QT_QMAKE PARENT_PATH QT_BIN_DIR)
 
 # 核心源文件编译为 object library，避免每个测试重复编译
+# 源文件列表由父 CMakeLists.txt 的 DOCK_CORE_SOURCES/DOCK_CORE_HEADERS 统一定义
 add_library(dock_core_objects OBJECT
-    ${CMAKE_SOURCE_DIR}/src/core/ConfigManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/DockManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/ProcessMonitor.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/WindowCache.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/ClickStateMachine.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/IconProvider.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/Logger.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/PinnedItemsReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/WindowPreviewPanel.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/OverflowPanel.cpp
-    ${CMAKE_SOURCE_DIR}/include/core/Types.h
-    ${CMAKE_SOURCE_DIR}/include/core/ConfigManager.h
-    ${CMAKE_SOURCE_DIR}/include/core/AppIdHelper.h
-    ${CMAKE_SOURCE_DIR}/include/core/DockManager.h
-    ${CMAKE_SOURCE_DIR}/include/core/ProcessMonitor.h
-    ${CMAKE_SOURCE_DIR}/include/core/SysHelper.h
-    ${CMAKE_SOURCE_DIR}/include/core/WindowCache.h
-    ${CMAKE_SOURCE_DIR}/include/core/ClickStateMachine.h
-    ${CMAKE_SOURCE_DIR}/include/core/IconProvider.h
-    ${CMAKE_SOURCE_DIR}/include/core/Logger.h
-    ${CMAKE_SOURCE_DIR}/include/core/PinnedItemsReader.h
-    ${CMAKE_SOURCE_DIR}/include/ui/WindowPreviewPanel.h
-    ${CMAKE_SOURCE_DIR}/include/ui/OverflowPanel.h
+    ${DOCK_CORE_SOURCES}
+    ${DOCK_CORE_HEADERS}
 )
 target_include_directories(dock_core_objects PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi)

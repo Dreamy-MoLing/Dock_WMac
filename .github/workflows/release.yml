@@ -25,13 +25,12 @@ jobs:
           version: '6.8.2'
           arch: win64_msvc2022_64
 
-      - name: Configure CMake
+      - name: Set MSVC path
         shell: bash
-        run: |
-          VS_PATH=$(vswhere -latest -property installationPath)
-          cmake --preset default -DBUILD_TESTS=ON \
-            -DCMAKE_GENERATOR_INSTANCE="$VS_PATH" \
-            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+        run: echo "VS_INSTALL_PATH=$(vswhere -latest -property installationPath)" >> "$GITHUB_ENV"
+
+      - name: Configure CMake
+        run: cmake --preset ci
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
@@ -39,17 +38,15 @@ jobs:
       - name: Test
         run: cd build && ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
 
-      - name: Deploy Qt runtime dependencies
+      - name: Package with CPack
         shell: bash
-        run: |
-          cp build/Release/WMacDock.exe deploy/
-          windeployqt --no-translations --no-opengl-sw --compiler-runtime deploy/WMacDock.exe
+        run: cd build && cpack -G ZIP -C Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: dock_wmac-windows
-          path: deploy
+          path: build/Dock_WMac_*.zip
           if-no-files-found: error
 
   # ---- Release (tag only) ----
@@ -68,16 +65,12 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: dock_wmac-windows
-          path: deploy
+          path: .
 
       - name: Extract tag name
         id: tag
         shell: bash
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-
-      - name: Package release archive
-        run: |
-          Compress-Archive -Path deploy\* -DestinationPath dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -87,7 +80,7 @@ jobs:
           body: |
             ## 安装
 
-            从附件下载 `dock_wmac_*.zip`，解压到任意目录，双击 `WMacDock.exe`。
+            从附件下载 `Dock_WMac_*.zip`，解压到任意目录，双击 `WMacDock.exe`。
 
             首次运行自动导入系统任务栏固定项。卸载只需删除文件夹。
 
@@ -123,6 +116,7 @@ jobs:
             - 项目测试覆盖：8 套可执行文件，89 个用例
             - 重构：WindowManager → WindowCache + ClickStateMachine + IconProvider + AppIdHelper + OverflowPanel + WindowPreviewPanel
             - 二进制更名为 WMacDock.exe
+            - **构建管道全面工具化：CMake + Qt6 deploy API + CPack，消除手写 shell 步骤**
 
             ## v0.2.3 已知问题（在 v0.2.4 中修复）
 
@@ -131,6 +125,6 @@ jobs:
             - **数据碎片化** — 配置文件、日志、图标缓存分散在 `%APPDATA%`、`%LOCALAPPDATA%`、`%TEMP%` 三个位置
             - **无法直接移动** — 安装目录固定，不能随意移动程序文件夹
           files: |
-            dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
+            Dock_WMac_*.zip
             LICENSE
           generate_release_notes: false
