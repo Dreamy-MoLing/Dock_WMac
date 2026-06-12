@@ -96,6 +96,7 @@ plan.md
 plan_legacy.md
 openspec/
 docs/
+.superpower/
 
 # ===== Clangd / LSP =====
 .cache/
