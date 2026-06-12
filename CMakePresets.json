@@ -31,8 +31,7 @@
     {
       "name": "ci",
       "displayName": "CI (Windows MSVC x64)",
-      "description": "CI build — VS 和 Qt 路径通过环境变量注入",
-      "generator": "Visual Studio 17 2022",
+      "description": "CI build — VS 和 Qt 路径通过环境变量注入。生成器由 workflow YAML 动态传入（-G flag）",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {

@@ -25,12 +25,22 @@ jobs:
           version: '6.8.2'
           arch: win64_msvc2022_64
 
-      - name: Set MSVC path
+      - name: Set MSVC path & generator
         shell: bash
-        run: echo "VS_INSTALL_PATH=$(vswhere -latest -property installationPath)" >> "$GITHUB_ENV"
+        run: |
+          VS_PATH=$(vswhere -latest -property installationPath)
+          VS_VER=$(vswhere -latest -property installationVersion)
+          VS_MAJOR=$(echo "$VS_VER" | cut -d. -f1)
+          case "$VS_MAJOR" in
+            17) VS_YEAR=2022 ;;
+            18) VS_YEAR=2026 ;;
+            *)  echo "未知 VS major: $VS_MAJOR"; exit 1 ;;
+          esac
+          echo "VS_INSTALL_PATH=$VS_PATH" >> "$GITHUB_ENV"
+          echo "CMAKE_GENERATOR=Visual Studio ${VS_MAJOR} ${VS_YEAR}" >> "$GITHUB_ENV"
 
       - name: Configure CMake
-        run: cmake --preset ci
+        run: cmake --preset ci -G "${{ env.CMAKE_GENERATOR }}"
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
