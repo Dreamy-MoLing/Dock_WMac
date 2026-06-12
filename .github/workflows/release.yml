@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
@@ -25,14 +25,13 @@ jobs:
           version: '6.8.2'
           arch: win64_msvc2022_64
 
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
-
       - name: Configure CMake
+        shell: bash
         run: |
+          VS_PATH=$(vswhere -latest -property installationPath)
           cmake --preset default -DBUILD_TESTS=ON \
-            -DCMAKE_GENERATOR_INSTANCE="${{ env.VSINSTALLDIR }}" \
-            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+            -DCMAKE_GENERATOR_INSTANCE="$VS_PATH" \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
@@ -45,7 +44,7 @@ jobs:
           windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/Mac任务栏.exe
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dock_wmac-windows
           path: deploy
@@ -61,10 +60,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dock_wmac-windows
           path: deploy
@@ -79,7 +78,7 @@ jobs:
           Compress-Archive -Path deploy\* -DestinationPath dock_wmac_${{ steps.tag.outputs.tag }}_x64.zip
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
