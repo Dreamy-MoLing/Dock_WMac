@@ -40,6 +40,7 @@ jobs:
         run: cd build && ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
 
       - name: Deploy Qt runtime dependencies
+        shell: bash
         run: |
           windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build/Mac任务栏.exe
 
