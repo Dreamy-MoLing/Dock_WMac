@@ -29,7 +29,10 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure CMake
-        run: cmake --preset default -DBUILD_TESTS=ON -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
+        run: |
+          cmake --preset default -DBUILD_TESTS=ON \
+            -DCMAKE_GENERATOR_INSTANCE="${{ env.VSINSTALLDIR }}" \
+            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
