@@ -9,12 +9,14 @@
 
 #include "ui/DockWindow.h"
 #include "ui/DockItem.h"
+#include "ui/DockAnimation.h"
 #include "core/DockManager.h"
 #include "core/SysHelper.h"
 #include "core/AppIdHelper.h"
 #include "core/ProcessMonitor.h"
 #include "core/WindowCache.h"
 #include "core/ClickStateMachine.h"
+#include "core/ConfigManager.h"
 #include "ui/WindowPreviewPanel.h"
 #include "ui/OverflowPanel.h"
 #include <QPainter>
@@ -60,18 +62,17 @@ DockWindow::DockWindow(QWidget *parent)
     , m_monitorIndex(-1)
     , m_hoveredIndex(-1)
     , m_slideAnim(nullptr)
-    , m_opacityEffect(new QGraphicsOpacityEffect(this))
+    , m_fadeOpacity(1.0)
     , m_blurInitialized(false)
     , m_isLightTheme(false)
     , m_themeTimer(new QTimer(this))
-    , m_clickTimer(new QTimer(this))
-    , m_pendingClickItem(nullptr)
     , m_overflowItem(nullptr)
     , m_windowCountTimer(new QTimer(this))
     , m_previewItem(nullptr)
     , m_bottomEdgeTimer(new QTimer(this))
     , m_windowPreview(new WindowPreviewPanel(this))
     , m_overflowPanel(new OverflowPanel(this))
+    , m_animation(new DockAnimation(this))
 {
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -79,10 +80,6 @@ DockWindow::DockWindow(QWidget *parent)
     setAcceptDrops(true);
     setMouseTracking(true);
     installEventFilter(this);
-
-    // 透明度效果（用于显示/隐藏动画）
-    m_opacityEffect->setOpacity(1.0);
-    setGraphicsEffect(m_opacityEffect);
 
     connect(qApp, &QGuiApplication::screenAdded, this, [this](QScreen *) {
         updateDpiScale();
@@ -95,16 +92,6 @@ DockWindow::DockWindow(QWidget *parent)
 
     updateDpiScale();
     updatePosition();
-
-    // 单双击检测定时器（250ms 内无第二次点击则为单击）
-    m_clickTimer->setSingleShot(true);
-    m_clickTimer->setInterval(250);
-    connect(m_clickTimer, &QTimer::timeout, this, [this]() {
-        if (m_pendingClickItem) {
-            handleSingleClick(m_pendingClickItem);
-            m_pendingClickItem = nullptr;
-        }
-    });
 
     // 主题轮询检测（每 5 秒检查一次，兼容无 WM_SETTINGCHANGE 的场景）
     m_themeTimer->setInterval(5000);
@@ -140,6 +127,9 @@ DockWindow::DockWindow(QWidget *parent)
             m_dockManager->onWinKeyPressed();
         }
     });
+
+    // 动画 → 布局联动（批处理去抖，帧级合并）
+    connect(m_animation, &DockAnimation::relayoutRequested, this, &DockWindow::relayoutItems);
 
 }
 
@@ -178,6 +168,23 @@ void DockWindow::setProcessMonitor(ProcessMonitor *monitor)
             this, &DockWindow::onRunningAppExited);
 }
 
+void DockWindow::setConfigManager(ConfigManager *config)
+{
+    m_config = config;
+    m_animation->setConfig(config);
+    if (config) {
+        qreal opacity = config->get(QStringLiteral("opacity"), 0.95).toReal();
+        setWindowOpacity(qBound(0.1, opacity, 1.0));
+    }
+}
+
+void DockWindow::setFadeOpacity(qreal opacity)
+{
+    m_fadeOpacity = qBound(0.0, opacity, 1.0);
+    setWindowOpacity(m_fadeOpacity);
+    update();
+}
+
 void DockWindow::setWindowCache(WindowCache *cache)
 {
     m_windowCache = cache;
@@ -186,13 +193,18 @@ void DockWindow::setWindowCache(WindowCache *cache)
     m_windowPreview->setWindowCache(cache);
     m_overflowPanel->setWindowCache(cache);
 
-    // 预览窗鱼眼联动
+    // 预览窗鱼眼联动 + 阻止 Dock 隐藏
     connect(m_windowPreview, &WindowPreviewPanel::previewShown, this, [this]() {
         if (m_hoveredIndex >= 0)
-            lockFishEye(m_hoveredIndex);
+            m_animation->lockFishEye(m_hoveredIndex);
+        if (m_dockManager)
+            m_dockManager->setPreviewActive(true);
     });
     connect(m_windowPreview, &WindowPreviewPanel::previewHidden, this, [this]() {
-        unlockFishEye();
+        m_hoveredIndex = -1;
+        m_animation->unlockFishEye(m_items);
+        if (m_dockManager)
+            m_dockManager->setPreviewActive(false);
     });
 }
 
@@ -216,7 +228,10 @@ void DockWindow::relayoutItems()
     if (m_items.isEmpty()) return;
 
     int baseSize = m_items[0]->baseSize();
-    int maxItemW = static_cast<int>(baseSize * 1.5);  // 最大缩放后的单图标宽度
+    qreal maxScale = m_config
+        ? m_config->get(QStringLiteral("magnification"), 1.5).toReal()
+        : 1.5;
+    int maxItemW = static_cast<int>(baseSize * maxScale);
     int n = m_items.size();
 
     // ── 窗口高度固定，宽度随内容动态变化 ──
@@ -330,25 +345,41 @@ void DockWindow::paintEvent(QPaintEvent *event)
 
     if (m_items.isEmpty()) return;
 
+    // 从 config 读取参数
+    int cornerRadius = m_config
+        ? m_config->get(QStringLiteral("cornerRadius"), 16).toInt()
+        : 16;
+
     // 背景条固定在窗口底部，高度不变
-    int barH = kMarginTop + m_items[0]->baseSize() + kMarginBottom;
+    int baseSize = m_items[0]->baseSize();
+    int barH = kMarginTop + baseSize + kMarginBottom;
     int barTop = height() - barH;
     QRect barRect(0, barTop, width(), barH);
+
+    // 绘制柔和扩散阴影（多层渐变）
+    painter.setPen(Qt::NoPen);
+    for (int i = 3; i >= 0; --i) {
+        int spread = (i + 1) * 3;
+        int alpha = 12 - i * 3;
+        painter.setBrush(QColor(0, 0, 0, alpha));
+        painter.drawRoundedRect(barRect.adjusted(-spread, 1, spread, spread + 4),
+                                cornerRadius + i * 2, cornerRadius + i * 2);
+    }
 
     // 主题自适应背景色
     QColor bgColor;
     QColor borderColor;
     if (m_isLightTheme) {
-        bgColor = QColor(245, 245, 245, static_cast<int>(0.75 * 255));
-        borderColor = QColor(200, 200, 200, 120);
+        bgColor = QColor(245, 245, 245, static_cast<int>(0.65 * 255));
+        borderColor = QColor(200, 200, 200, 80);
     } else {
-        bgColor = QColor(40, 40, 40, static_cast<int>(0.7 * 255));
-        borderColor = QColor(80, 80, 80, 100);
+        bgColor = QColor(40, 40, 40, static_cast<int>(0.55 * 255));
+        borderColor = QColor(80, 80, 80, 60);
     }
 
     painter.setBrush(bgColor);
     painter.setPen(QPen(borderColor, 1));
-    painter.drawRoundedRect(barRect.adjusted(1, 1, -1, -1), 16, 16);
+    painter.drawRoundedRect(barRect.adjusted(1, 1, -1, -1), cornerRadius, cornerRadius);
 }
 
 // ─── 毛玻璃 & 主题 ──────────────────────────────────────────
@@ -384,13 +415,35 @@ void DockWindow::updateBlurRegion()
 
 void DockWindow::updateTheme()
 {
+    if (m_hasThemeOverride) {
+        if (m_themeOverride != m_isLightTheme) {
+            m_isLightTheme = m_themeOverride;
+            update();
+        }
+        return;
+    }
     if (!m_sysHelper) return;
     bool newTheme = m_sysHelper->isLightTheme();
     if (newTheme != m_isLightTheme) {
         m_isLightTheme = newTheme;
         qInfo() << "主题切换:" << (m_isLightTheme ? "亮色" : "暗色");
-        update();  // 触发重绘
+        update();
     }
+}
+
+void DockWindow::simulateHover(int index)
+{
+    if (index < 0 || index >= m_items.size()) return;
+    m_hoveredIndex = index;
+    m_animation->applyFishEye(index, m_items);
+}
+
+void DockWindow::setThemeOverride(bool isLight)
+{
+    m_hasThemeOverride = true;
+    m_themeOverride = isLight;
+    m_isLightTheme = isLight;
+    update();
 }
 
 // ─── 鼠标事件 ─────────────────────────────────────────────
@@ -406,7 +459,10 @@ void DockWindow::enterEvent(QEnterEvent *event)
 void DockWindow::leaveEvent(QEvent *event)
 {
     Q_UNUSED(event);
-    resetFishEyeEffect();
+    m_animation->resetFishEye(m_items);
+    if (!m_animation->isFishEyeLocked())
+        m_hoveredIndex = -1;
+    m_windowPreview->startDelayedHide();
 }
 
 /**
@@ -430,11 +486,12 @@ void DockWindow::mouseMoveEvent(QMouseEvent *event)
     if (m_items.isEmpty()) return;
 
     int index = itemAtPos(event->pos().x(), event->pos().y());
-    if (index != m_hoveredIndex) {
+    if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
+        m_hoveredIndex = index;
         if (index >= 0)
-            applyFishEyeEffect(index);
+            m_animation->applyFishEye(index, m_items);
         else
-            resetFishEyeEffect();
+            m_animation->resetFishEye(m_items);
     }
 }
 
@@ -447,16 +504,16 @@ bool DockWindow::eventFilter(QObject *obj, QEvent *event)
 {
     if (event->type() == QEvent::MouseMove && obj->isWidgetType()) {
         QWidget *w = static_cast<QWidget *>(obj);
-        // 只处理属于 DockItem 的子组件
         if (w->parent() == this && !m_items.isEmpty()) {
             QMouseEvent *me = static_cast<QMouseEvent *>(event);
             QPoint posInDock = mapFromGlobal(me->globalPosition().toPoint());
             int index = itemAtPos(posInDock.x(), posInDock.y());
-            if (index != m_hoveredIndex) {
+            if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
+                m_hoveredIndex = index;
                 if (index >= 0)
-                    applyFishEyeEffect(index);
+                    m_animation->applyFishEye(index, m_items);
                 else
-                    resetFishEyeEffect();
+                    m_animation->resetFishEye(m_items);
             }
 
             // 窗口预览：悬停时委托给 WindowPreviewPanel
@@ -467,9 +524,6 @@ bool DockWindow::eventFilter(QObject *obj, QEvent *event)
                     m_previewItem = hoveredItem;
                     m_windowPreview->showPreview(hoveredItem);
                 }
-            } else {
-                m_windowPreview->hidePreview();
-                m_previewItem = nullptr;
             }
         }
     }
@@ -488,21 +542,18 @@ void DockWindow::onItemAdded(const DockItemData &data)
     item->setRunning(data.isRunning);
     item->setBadgeCount(data.badgeCount);
 
+    // 从 config 读取图标基础大小
+    if (m_config) {
+        int iconSize = m_config->get(QStringLiteral("iconSize"), 48).toInt();
+        item->setBaseSize(qBound(24, iconSize, 128));
+    }
+
     m_itemMap[data.appId] = item;
     m_items.append(item);
 
-    // 连接点击：单双击检测
+    // 连接点击：直接处理单击
     connect(item, &DockItem::clicked, this, [this, item](const QString &) {
-        if (m_pendingClickItem == item) {
-            // 第二次点击 → 双击：打开新窗口
-            m_clickTimer->stop();
-            m_pendingClickItem = nullptr;
-            handleDoubleClick(item);
-        } else {
-            // 第一次点击 → 启动定时器等待可能的第二次点击
-            m_pendingClickItem = item;
-            m_clickTimer->start();
-        }
+        handleSingleClick(item);
     });
 
     // 连接固定/取消固定请求到 DockManager
@@ -526,8 +577,8 @@ void DockWindow::onItemAdded(const DockItemData &data)
     relayoutItems();
     updatePosition();
 
-    // 图标添加动画：从 scale 0.0 → 1.0
-    animateItemAdd(item);
+    // 图标添加动画
+    m_animation->animateItemAdd(item);
 }
 
 void DockWindow::onItemRemoved(const QString &appId)
@@ -538,8 +589,10 @@ void DockWindow::onItemRemoved(const QString &appId)
     DockItem *item = it.value();
     m_itemMap.erase(it);
 
-    // 图标移除动画：scale 1.0 → 0.0，完成后删除
-    animateItemRemove(item, appId);
+    m_animation->animateItemRemove(item, [this, item]() {
+        m_items.removeOne(item);
+        item->deleteLater();
+    });
 }
 
 void DockWindow::onItemStateChanged(const QString &appId, bool isRunning)
@@ -572,20 +625,17 @@ void DockWindow::onStateChanged(DockState newState)
         QPoint endPos(targetX, targetY);
 
         m_slideAnim = new QPropertyAnimation(this, "pos");
-        m_slideAnim->setDuration(300);
+        m_slideAnim->setDuration(m_animation->animDuration(300));
         m_slideAnim->setStartValue(startPos);
         m_slideAnim->setEndValue(endPos);
         m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-        m_opacityEffect->setOpacity(0.0);
-        QPropertyAnimation *fadeAnim = new QPropertyAnimation(m_opacityEffect, "opacity");
-        fadeAnim->setDuration(300);
+        QPropertyAnimation *fadeAnim = new QPropertyAnimation(this, "fadeOpacity");
+        fadeAnim->setDuration(m_animation->animDuration(300));
         fadeAnim->setStartValue(0.0);
         fadeAnim->setEndValue(1.0);
         fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-        // Qt 的 DeleteWhenStopped 会在动画结束后自动删除
-        // 使用 destroyed 信号清除悬空指针
         connect(m_slideAnim, &QObject::destroyed, this, [this]() {
             m_slideAnim = nullptr;
         });
@@ -610,8 +660,8 @@ void DockWindow::onStateChanged(DockState newState)
         m_slideAnim->setEndValue(endPos);
         m_slideAnim->setEasingCurve(QEasingCurve::InCubic);
 
-        QPropertyAnimation *fadeAnim = new QPropertyAnimation(m_opacityEffect, "opacity");
-        fadeAnim->setDuration(250);
+        QPropertyAnimation *fadeAnim = new QPropertyAnimation(this, "fadeOpacity");
+        fadeAnim->setDuration(m_animation->animDuration(250));
         fadeAnim->setStartValue(1.0);
         fadeAnim->setEndValue(0.0);
         fadeAnim->setEasingCurve(QEasingCurve::InCubic);
@@ -623,7 +673,8 @@ void DockWindow::onStateChanged(DockState newState)
         // hide() 在动画完成后通过 finished 信号触发
         connect(fadeAnim, &QPropertyAnimation::finished, this, [this]() {
             hide();
-            m_opacityEffect->setOpacity(1.0);
+            m_fadeOpacity = 1.0;
+            setWindowOpacity(1.0);
         });
 
         m_slideAnim->start(QAbstractAnimation::DeleteWhenStopped);
@@ -685,7 +736,6 @@ void DockWindow::updateOverflowItem()
         m_itemMap["__overflow__"] = m_overflowItem;
         m_items.append(m_overflowItem);
 
-        // 点击事件：弹出溢出菜单
         connect(m_overflowItem, &DockItem::clicked, this, [this](const QString &) {
             showOverflowPopup();
         });
@@ -694,7 +744,7 @@ void DockWindow::updateOverflowItem()
         m_overflowItem->show();
         relayoutItems();
         updatePosition();
-        animateItemAdd(m_overflowItem);
+        m_animation->animateItemAdd(m_overflowItem);
 
     } else if (!hasOverflow && m_overflowItem) {
         // 移除抽屉图标
@@ -702,9 +752,12 @@ void DockWindow::updateOverflowItem()
         if (it != m_itemMap.end()) {
             m_itemMap.erase(it);
         }
-        m_items.removeOne(m_overflowItem);
-        animateItemRemove(m_overflowItem, "__overflow__");
+        DockItem *removing = m_overflowItem;
         m_overflowItem = nullptr;
+        m_items.removeOne(removing);
+        m_animation->animateItemRemove(removing, [removing]() {
+            removing->deleteLater();
+        });
     }
 }
 
@@ -747,151 +800,16 @@ void DockWindow::handleSingleClick(DockItem *item)
     });
 }
 
-/**
- * @brief 双击处理：始终打开新窗口
- */
-void DockWindow::handleDoubleClick(DockItem *item)
-{
-    launchApp(item);
-    // 双击启动新实例后延迟触发指示器
-    QTimer::singleShot(2000, item, [item]() {
-        item->triggerInteractionIndicator();
-    });
-}
-
 QVariant DockWindow::isItemPinned(QVariant appId)
 {
     if (!m_dockManager) return false;
     return m_dockManager->isPinned(appId.toString());
 }
 
-// ─── 图标添加/移除动画 ──────────────────────────────────────
-
-void DockWindow::animateItemAdd(DockItem *item)
-{
-    if (!item) return;
-
-    // 初始状态：scale 0.0
-    item->setVisualScale(0.0);
-
-    QPropertyAnimation *anim = new QPropertyAnimation(item, "visualScale", this);
-    anim->setDuration(200);
-    anim->setStartValue(0.0);
-    anim->setEndValue(1.0);
-    anim->setEasingCurve(QEasingCurve::OutBack);
-
-    connect(anim, &QPropertyAnimation::valueChanged, this, [this]() {
-        relayoutItems();
-    });
-
-    anim->start(QAbstractAnimation::DeleteWhenStopped);
-}
-
-void DockWindow::animateItemRemove(DockItem *item, const QString &appId)
-{
-    if (!item) return;
-
-    // 清理鱼眼动画
-    auto animIt = m_fishEyeAnims.find(item);
-    if (animIt != m_fishEyeAnims.end()) {
-        animIt.value()->stop();
-        animIt.value()->deleteLater();
-        m_fishEyeAnims.erase(animIt);
-    }
-
-    QPropertyAnimation *anim = new QPropertyAnimation(item, "visualScale", this);
-    anim->setDuration(150);
-    anim->setStartValue(item->visualScale());
-    anim->setEndValue(0.0);
-    anim->setEasingCurve(QEasingCurve::InCubic);
-
-    connect(anim, &QPropertyAnimation::valueChanged, this, [this]() {
-        relayoutItems();
-    });
-
-    connect(anim, &QPropertyAnimation::finished, this, [this, item, appId]() {
-        m_items.removeOne(item);
-        item->deleteLater();
-        relayoutItems();
-    });
-
-    anim->start(QAbstractAnimation::DeleteWhenStopped);
-}
-
-// ─── 鱼眼动画 ─────────────────────────────────────────────
-
-void DockWindow::animateItemToScale(DockItem *item, qreal targetScale)
-{
-    auto it = m_fishEyeAnims.find(item);
-    if (it != m_fishEyeAnims.end()) {
-        it.value()->stop();
-        it.value()->deleteLater();
-    }
-
-    if (qFuzzyCompare(item->visualScale(), targetScale)) {
-        m_fishEyeAnims.remove(item);
-        return;
-    }
-
-    QPropertyAnimation *anim = new QPropertyAnimation(item, "visualScale", this);
-    anim->setDuration(180);
-    anim->setStartValue(item->visualScale());
-    anim->setEndValue(targetScale);
-    anim->setEasingCurve(QEasingCurve::OutBack);
-
-    // 每帧动画后重新布局
-    connect(anim, &QPropertyAnimation::valueChanged, this, [this]() {
-        relayoutItems();
-    });
-
-    anim->start(QAbstractAnimation::DeleteWhenStopped);
-
-    connect(anim, &QPropertyAnimation::finished, this, [this, item]() {
-        m_fishEyeAnims.remove(item);
-    });
-
-    m_fishEyeAnims[item] = anim;
-}
-
-void DockWindow::applyFishEyeEffect(int hoveredIndex)
-{
-    // 预览窗显示期间锁定鱼眼，不响应鼠标移动
-    if (m_fishEyeLocked) return;
-    m_hoveredIndex = hoveredIndex;
-
-    for (int i = 0; i < m_items.size(); ++i) {
-        int dist = qAbs(i - hoveredIndex);
-        qreal factor;
-        switch (dist) {
-        case 0:  factor = 1.5;  break;  // 悬停图标
-        case 1:  factor = 1.25; break;  // 相邻图标
-        case 2:  factor = 1.1;  break;  // 次相邻
-        default: factor = 1.0;  break;  // 其余
-        }
-        animateItemToScale(m_items[i], factor);
-    }
-}
-
-void DockWindow::resetFishEyeEffect()
-{
-    if (m_fishEyeLocked) return;
-    m_hoveredIndex = -1;
-    for (int i = 0; i < m_items.size(); ++i) {
-        animateItemToScale(m_items[i], 1.0);
-    }
-}
-
-void DockWindow::lockFishEye(int index)
-{
-    m_fishEyeLocked = true;
-    m_fishEyeLockedIndex = index;
-}
-
 void DockWindow::unlockFishEye()
 {
-    m_fishEyeLocked = false;
-    m_fishEyeLockedIndex = -1;
-    resetFishEyeEffect();
+    m_hoveredIndex = -1;
+    m_animation->unlockFishEye(m_items);
 }
 
 // ─── DPI ──────────────────────────────────────────────────

@@ -11,11 +11,15 @@
 #include <QSignalSpy>
 #include <QApplication>
 #include <QSharedMemory>
-#include <QVariantList>
-#include <QVariantMap>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QCoreApplication>
 
 #include "core/ConfigManager.h"
 #include "core/DockManager.h"
+#include "core/PathManager.h"
 #include "core/Types.h"
 
 // ─── 测试套件（静态 QApplication）─────────────────────────────
@@ -36,6 +40,33 @@ protected:
         app = nullptr;
     }
 
+    void SetUp() override {
+        // 清理 pinned.json 避免测试间干扰
+        QFile::remove(PathManager::pinnedFile());
+    }
+
+    void TearDown() override {
+        QFile::remove(PathManager::pinnedFile());
+    }
+
+    /// 写入 pinned.json（模拟 Application::connectPersistence 的输出格式）
+    static void writePinnedJson(const QJsonArray &arr) {
+        PathManager::ensureDataDir();
+        QFile file(PathManager::pinnedFile());
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+            file.close();
+        }
+    }
+
+    /// 读取 pinned.json
+    static QJsonArray readPinnedJson() {
+        QFile file(PathManager::pinnedFile());
+        if (!file.open(QIODevice::ReadOnly)) return {};
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        return doc.isArray() ? doc.array() : QJsonArray{};
+    }
+
     static QApplication *app;
 };
 
@@ -54,151 +85,179 @@ TEST_F(ApplicationTest, CheckSingleInstanceFirstInstance)
     EXPECT_FALSE(secondInstance.create(1));
 }
 
-// 2. ConfigManager → DockManager 数据流（模拟 loadPinnedItems）
-TEST_F(ApplicationTest, LoadPinnedItemsFromConfig)
+// 2. pinned.json 写入/读取往返 — 模拟 Application::connectPersistence 输出
+TEST_F(ApplicationTest, PinnedJsonRoundtrip)
 {
-    ConfigManager config;
-    config.load();
-
-    // 模拟配置文件中有 2 个 pinnedApps
-    QVariantList pinnedApps;
+    QJsonArray arr;
     {
-        QVariantMap item;
-        item["appId"]       = "com.example.AppOne";
-        item["displayName"] = "App One";
-        item["iconPath"]    = "/icons/one.svg";
-        item["execPath"]    = "/usr/bin/appone";
-        pinnedApps.append(item);
+        QJsonObject obj;
+        obj["appId"] = "com.example.AppOne";
+        obj["displayName"] = "App One";
+        obj["iconPath"] = "/icons/one.svg";
+        obj["execPath"] = "/usr/bin/appone";
+        arr.append(obj);
     }
     {
-        QVariantMap item;
-        item["appId"]       = "com.example.AppTwo";
-        item["displayName"] = "App Two";
-        item["iconPath"]    = "/icons/two.svg";
-        item["execPath"]    = "/usr/bin/apptwo";
-        pinnedApps.append(item);
+        QJsonObject obj;
+        obj["appId"] = "com.example.AppTwo";
+        obj["displayName"] = "App Two";
+        obj["iconPath"] = "/icons/two.svg";
+        obj["execPath"] = "/usr/bin/apptwo";
+        arr.append(obj);
     }
-    config.set("pinnedApps", pinnedApps);
 
-    // 从配置读取并构造 DockItemData 列表（模拟 Application::loadPinnedItems）
-    QVariantList savedPinned = config.get("pinnedApps").toList();
+    writePinnedJson(arr);
+
+    // 读取并验证
+    QJsonArray loaded = readPinnedJson();
+    ASSERT_EQ(loaded.size(), 2);
+    EXPECT_EQ(loaded[0].toObject()["appId"].toString(), "com.example.AppOne");
+    EXPECT_EQ(loaded[1].toObject()["displayName"].toString(), "App Two");
+}
+
+// 3. DockManager 加载 pinned.json 数据 — 模拟 Application::loadPinnedItems 后半段
+TEST_F(ApplicationTest, LoadPinnedItemsFromJson)
+{
+    // 写入 pinned.json
+    QJsonArray arr;
+    {
+        QJsonObject obj;
+        obj["appId"] = "com.example.AppOne";
+        obj["displayName"] = "App One";
+        obj["iconPath"] = "/icons/one.svg";
+        obj["execPath"] = "/usr/bin/appone";
+        arr.append(obj);
+    }
+    writePinnedJson(arr);
+
+    // 读取 pinned.json 并构造 DockItemData（模拟 Application::loadPinnedItems 合并逻辑）
+    QFile file(PathManager::pinnedFile());
+    ASSERT_TRUE(file.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
     QList<DockItemData> items;
-    for (const QVariant &v : savedPinned) {
-        QVariantMap entry = v.toMap();
+    QSet<QString> systemExecPaths;  // 模拟空的系统任务栏（测试环境无固定项）
+
+    const QJsonArray loadedArr = doc.array();
+    for (const QJsonValue &val : loadedArr) {
+        QJsonObject obj = val.toObject();
+        QString execPath = obj["execPath"].toString();
+        if (execPath.isEmpty()) continue;
+        if (systemExecPaths.contains(execPath.toLower())) continue;
+
         DockItemData item;
-        item.appId       = entry.value("appId").toString();
-        item.displayName = entry.value("displayName").toString();
-        item.iconPath    = entry.value("iconPath").toString();
-        item.execPath    = entry.value("execPath").toString();
+        item.appId = obj["appId"].toString();
+        item.displayName = obj["displayName"].toString();
+        item.iconPath = obj["iconPath"].toString();
+        item.execPath = execPath;
+        item.isRunning = false;
         items.append(item);
     }
 
     DockManager manager;
     manager.setPinnedItems(items);
 
-    ASSERT_EQ(manager.pinnedItems().size(), 2);
+    ASSERT_EQ(manager.pinnedItems().size(), 1);
     EXPECT_EQ(manager.pinnedItems()[0].appId, "com.example.AppOne");
-    EXPECT_EQ(manager.pinnedItems()[1].displayName, "App Two");
+    EXPECT_EQ(manager.pinnedItems()[0].displayName, "App One");
 }
 
-// 3. 空配置场景：pinnedItems 应为空
-TEST_F(ApplicationTest, LoadPinnedItemsEmptyConfig)
+// 4. 空 pinned.json 场景
+TEST_F(ApplicationTest, LoadPinnedItemsEmptyJson)
 {
-    ConfigManager config;
-    config.load();
+    writePinnedJson(QJsonArray{});
 
-    // 显式清空 pinnedApps，模拟无固定项配置
-    config.set("pinnedApps", QVariantList());
+    QFile file(PathManager::pinnedFile());
+    ASSERT_TRUE(file.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
 
-    QVariantList savedPinned = config.get("pinnedApps", QVariantList()).toList();
-    EXPECT_TRUE(savedPinned.isEmpty());
+    EXPECT_TRUE(doc.array().isEmpty());
 
     DockManager manager;
     EXPECT_TRUE(manager.pinnedItems().isEmpty());
 }
 
-// 4. 持久化信号连接模式（模拟 connectPersistence）
-TEST_F(ApplicationTest, ConnectPersistenceSignal)
+// 5. 持久化信号连接模式（模拟 connectPersistence 写入 pinned.json）
+TEST_F(ApplicationTest, ConnectPersistenceWritesPinnedJson)
 {
-    ConfigManager config;
-    config.load();
-
     DockManager manager;
 
-    QList<DockItemData> capturedItems;
-    QSignalSpy spy(&manager, &DockManager::pinnedItemsChanged);
-
-    // 模拟 Application::connectPersistence 的信号连接模式
+    // 模拟 Application::connectPersistence 的信号连接
     QObject::connect(&manager, &DockManager::pinnedItemsChanged,
-        &manager, [&capturedItems, &config](const QList<DockItemData> &items) {
-            capturedItems = items;
-            QVariantList list;
-            for (const auto &it : items) {
-                QVariantMap entry;
-                entry["appId"]       = it.appId;
-                entry["displayName"] = it.displayName;
-                entry["iconPath"]    = it.iconPath;
-                entry["execPath"]    = it.execPath;
-                list.append(entry);
+        &manager, [](const QList<DockItemData> &items) {
+            // 读取系统任务栏（测试环境为空）
+            QSet<QString> systemExecPaths;
+
+            QJsonArray arr;
+            for (const auto &item : items) {
+                if (systemExecPaths.contains(item.execPath.toLower())) continue;
+                QJsonObject obj;
+                obj["appId"] = item.appId;
+                obj["displayName"] = item.displayName;
+                obj["iconPath"] = item.iconPath;
+                obj["execPath"] = item.execPath;
+                arr.append(obj);
             }
-            config.set("pinnedApps", list);
+
+            PathManager::ensureDataDir();
+            QFile file(PathManager::pinnedFile());
+            if (file.open(QIODevice::WriteOnly)) {
+                file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+                file.close();
+            }
         });
 
     DockItemData item;
-    item.appId       = "signal.test.app";
+    item.appId = "signal.test.app";
     item.displayName = "Signal Test App";
-    item.execPath    = "/path/to/test";
+    item.execPath = "/path/to/test";
     manager.pinItem(item);
 
-    // 信号已发射
-    EXPECT_EQ(spy.count(), 1);
-
-    // lambda 已捕获更新后的列表
-    ASSERT_EQ(capturedItems.size(), 1);
-    EXPECT_EQ(capturedItems[0].appId, "signal.test.app");
-
-    // 配置已持久化
-    QVariantList saved = config.get("pinnedApps").toList();
+    // 验证 pinned.json 已被写入
+    QJsonArray saved = readPinnedJson();
     ASSERT_EQ(saved.size(), 1);
-    EXPECT_EQ(saved[0].toMap()["appId"].toString(), "signal.test.app");
+    EXPECT_EQ(saved[0].toObject()["appId"].toString(), "signal.test.app");
 }
 
-// 5. Config ↔ DockManager 完整往返测试
+// 6. Config ↔ DockManager 完整往返测试
 TEST_F(ApplicationTest, ConfigToDockManagerRoundtrip)
 {
-    // ── 第 1 步：ConfigManager 写入 pinnedApps ──
-    ConfigManager config;
-    config.load();
-
-    QVariantList originalList;
+    // ── 第 1 步：写入 pinned.json ──
+    QJsonArray arr;
     {
-        QVariantMap item;
-        item["appId"]       = "roundtrip.app1";
+        QJsonObject item;
+        item["appId"] = "roundtrip.app1";
         item["displayName"] = "RoundTrip One";
-        item["iconPath"]    = "/icons/rt1.svg";
-        item["execPath"]    = "/bin/rt1";
-        originalList.append(item);
+        item["iconPath"] = "/icons/rt1.svg";
+        item["execPath"] = "/bin/rt1";
+        arr.append(item);
     }
     {
-        QVariantMap item;
-        item["appId"]       = "roundtrip.app2";
+        QJsonObject item;
+        item["appId"] = "roundtrip.app2";
         item["displayName"] = "RoundTrip Two";
-        item["iconPath"]    = "/icons/rt2.svg";
-        item["execPath"]    = "/bin/rt2";
-        originalList.append(item);
+        item["iconPath"] = "/icons/rt2.svg";
+        item["execPath"] = "/bin/rt2";
+        arr.append(item);
     }
-    config.set("pinnedApps", originalList);
+    writePinnedJson(arr);
 
-    // ── 第 2 步：DockManager 加载固定项并验证 ──
-    QVariantList loaded = config.get("pinnedApps").toList();
+    // ── 第 2 步：读取 pinned.json 并加载到 DockManager ──
+    QFile file(PathManager::pinnedFile());
+    ASSERT_TRUE(file.open(QIODevice::ReadOnly));
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
     QList<DockItemData> items;
-    for (const QVariant &v : loaded) {
-        QVariantMap entry = v.toMap();
+    for (const QJsonValue &v : doc.array()) {
+        QJsonObject entry = v.toObject();
         DockItemData d;
-        d.appId       = entry.value("appId").toString();
-        d.displayName = entry.value("displayName").toString();
-        d.iconPath    = entry.value("iconPath").toString();
-        d.execPath    = entry.value("execPath").toString();
+        d.appId = entry["appId"].toString();
+        d.displayName = entry["displayName"].toString();
+        d.iconPath = entry["iconPath"].toString();
+        d.execPath = entry["execPath"].toString();
         items.append(d);
     }
 
@@ -209,38 +268,39 @@ TEST_F(ApplicationTest, ConfigToDockManagerRoundtrip)
     EXPECT_EQ(manager.pinnedItems()[0].appId, "roundtrip.app1");
     EXPECT_EQ(manager.pinnedItems()[1].displayName, "RoundTrip Two");
 
-    // ── 第 3 步：pinItem → 信号 → 持久化 ──
-    QList<DockItemData> signalCaptured;
-    QSignalSpy spy(&manager, &DockManager::pinnedItemsChanged);
-
+    // ── 第 3 步：pinItem → 信号 → 写入 pinned.json ──
+    // 复用 ConnectPersistenceWritesPinnedJson 的信号连接
     QObject::connect(&manager, &DockManager::pinnedItemsChanged,
-        &manager, [&signalCaptured, &config](const QList<DockItemData> &items) {
-            signalCaptured = items;
-            QVariantList list;
+        &manager, [](const QList<DockItemData> &items) {
+            QSet<QString> systemExecPaths;
+            QJsonArray arr;
             for (const auto &it : items) {
-                QVariantMap entry;
-                entry["appId"]       = it.appId;
+                if (systemExecPaths.contains(it.execPath.toLower())) continue;
+                QJsonObject entry;
+                entry["appId"] = it.appId;
                 entry["displayName"] = it.displayName;
-                entry["iconPath"]    = it.iconPath;
-                entry["execPath"]    = it.execPath;
-                list.append(entry);
+                entry["iconPath"] = it.iconPath;
+                entry["execPath"] = it.execPath;
+                arr.append(entry);
             }
-            config.set("pinnedApps", list);
+            PathManager::ensureDataDir();
+            QFile file(PathManager::pinnedFile());
+            if (file.open(QIODevice::WriteOnly)) {
+                file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+                file.close();
+            }
         });
 
     DockItemData newItem;
-    newItem.appId       = "roundtrip.app3";
+    newItem.appId = "roundtrip.app3";
     newItem.displayName = "RoundTrip Three";
-    newItem.iconPath    = "/icons/rt3.svg";
-    newItem.execPath    = "/bin/rt3";
+    newItem.iconPath = "/icons/rt3.svg";
+    newItem.execPath = "/bin/rt3";
     manager.pinItem(newItem);
 
-    ASSERT_EQ(signalCaptured.size(), 3);
-    EXPECT_EQ(signalCaptured[2].appId, "roundtrip.app3");
-
-    // ── 第 4 步：重新加载配置，验证完整往返 ──
-    QVariantList reloaded = config.get("pinnedApps").toList();
+    // ── 第 4 步：重新读取 pinned.json，验证完整往返 ──
+    QJsonArray reloaded = readPinnedJson();
     ASSERT_EQ(reloaded.size(), 3);
-    EXPECT_EQ(reloaded[2].toMap()["appId"].toString(), "roundtrip.app3");
-    EXPECT_EQ(reloaded[2].toMap()["displayName"].toString(), "RoundTrip Three");
+    EXPECT_EQ(reloaded[2].toObject()["appId"].toString(), "roundtrip.app3");
+    EXPECT_EQ(reloaded[2].toObject()["displayName"].toString(), "RoundTrip Three");
 }

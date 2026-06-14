@@ -43,6 +43,9 @@ public:
     /** @brief 隐藏预览面板 */
     void hidePreview();
 
+    /** @brief 延迟隐藏预览面板（给鼠标移动到预览窗口的时间） */
+    void startDelayedHide();
+
     /** @brief 检查面板是否正在显示 */
     bool isVisible() const;
 

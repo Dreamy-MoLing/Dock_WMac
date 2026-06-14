@@ -21,6 +21,7 @@ public:
     explicit DockItem(const QString &appId, const QString &iconPath,
                       const QString &displayName, QWidget *parent = nullptr);
 
+    void setBaseSize(int size) { m_baseSize = size; }
     void setRunning(bool running);
     bool isRunning() const { return m_isRunning; }
     void setBadgeCount(int count);
@@ -41,7 +42,7 @@ public:
     void setVisualScale(qreal scale);
 
     /** @brief 基础图标尺寸（未缩放） */
-    int baseSize() const { return 48; }
+    int baseSize() const { return m_baseSize; }
 
 signals:
     void clicked(const QString &appId);
@@ -74,6 +75,7 @@ private:
     QPixmap m_icon;
     bool    m_isRunning;
     int     m_badgeCount;
+    int     m_baseSize = 48;
     int     m_windowCount;          // 窗口数量（>1 时绘制堆叠效果）
     bool    m_isForegroundActive = false;  // 前台激活指示器
     bool    m_isHovered;

@@ -110,11 +110,11 @@ void ClickStateMachine::showHiddenWindow(const QString &wmClass)
     // 获取所有窗口（包括隐藏的），排除 toolwindow
     WindowList allWindows = m_cache->getWindowsForPreview(wmClass);
 
-    // 查找不可见且非最小化的窗口
+    // 查找不可见的窗口（包括最小化的）
     HWND target = nullptr;
     DWORD bestTime = 0;
     for (const auto &w : allWindows) {
-        if (!w.isVisible && !w.isMinimized && !w.isToolWindow && IsWindow(w.hwnd)) {
+        if (!w.isVisible && !w.isToolWindow && IsWindow(w.hwnd)) {
             if (!target || w.lastActiveTime > bestTime) {
                 target = w.hwnd;
                 bestTime = w.lastActiveTime;
@@ -126,6 +126,7 @@ void ClickStateMachine::showHiddenWindow(const QString &wmClass)
         ShowWindow(target, SW_SHOW);
         AllowSetForegroundWindow(ASFW_ANY);
         SetForegroundWindow(target);
+        SetFocus(target);
     }
 }
 
@@ -154,6 +155,11 @@ void ClickStateMachine::bringToForeground(const QString &wmClass)
 {
     HWND hwnd = m_cache->getLastActiveHwnd(wmClass);
     if (!hwnd || !IsWindow(hwnd)) return;
+
+    // 如果窗口被最小化，先恢复
+    if (IsIconic(hwnd)) {
+        ShowWindow(hwnd, SW_RESTORE);
+    }
 
     AllowSetForegroundWindow(ASFW_ANY);
     SetForegroundWindow(hwnd);

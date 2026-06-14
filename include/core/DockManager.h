@@ -45,6 +45,9 @@ public:
     /** @brief 获取最大可见图标数 */
     int maxItems() const;
 
+    /** @brief 预览面板激活期间阻止 Dock 隐藏 */
+    void setPreviewActive(bool active);
+
     /** @brief 设置 Dock 所在屏幕索引（-1 = 主屏幕，用于全屏检测） */
     void setMonitorIndex(int index);
     int monitorIndex() const { return m_monitorIndex; }
@@ -129,6 +132,9 @@ private:
     // Win 键冷却（1.5s — 防止开始菜单弹出后全屏检测把 dock 又按回去）
     QTimer *m_winKeyCooldownTimer = nullptr;
     static constexpr int kWinKeyCooldownMs = 1500;
+
+    // 预览激活标志（阻止预览期间 Dock 被全屏检测隐藏）
+    bool m_previewActive = false;
 };
 
 #endif // DOCKMANAGER_H

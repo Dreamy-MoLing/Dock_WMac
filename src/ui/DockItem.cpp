@@ -174,6 +174,21 @@ void DockItem::paintEvent(QPaintEvent *event)
     QPixmap scaled = m_icon.scaled(drawSize, drawSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     painter.drawPixmap(offset, offset, scaled);
 
+    // 图标倒影（绘制在图标下方，半透明翻转，高度为图标的 30%）
+    int reflectionH = static_cast<int>(drawSize * 0.3);
+    int reflectionTop = offset + drawSize;
+    if (reflectionTop + reflectionH <= height()) {
+        painter.save();
+        painter.setOpacity(0.15);
+        // 翻转绘制
+        painter.translate(0, 2 * reflectionTop + reflectionH);
+        painter.scale(1.0, -1.0);
+        QRectF srcRect(0, 0, scaled.width(), scaled.height());
+        QRectF dstRect(offset, reflectionTop, drawSize, reflectionH);
+        painter.drawPixmap(dstRect, scaled, srcRect);
+        painter.restore();
+    }
+
     // 按下效果（下沉 2px）
     if (m_isHovered && QApplication::mouseButtons() & Qt::LeftButton) {
         painter.translate(0, 2);

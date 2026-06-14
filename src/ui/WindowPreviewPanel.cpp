@@ -41,7 +41,7 @@ WindowPreviewPanel::WindowPreviewPanel(QObject *parent)
             this, &WindowPreviewPanel::onPreviewTimerTimeout);
 
     m_leaveTimer->setSingleShot(true);
-    m_leaveTimer->setInterval(200);
+    m_leaveTimer->setInterval(300);
     connect(m_leaveTimer, &QTimer::timeout,
             this, &WindowPreviewPanel::onLeaveTimerTimeout);
 
@@ -85,6 +85,13 @@ void WindowPreviewPanel::hidePreview()
     m_previewItem = nullptr;
     clearContent();
     emit previewHidden();
+}
+
+void WindowPreviewPanel::startDelayedHide()
+{
+    if (m_previewPopup && m_previewPopup->isVisible()) {
+        m_leaveTimer->start();
+    }
 }
 
 bool WindowPreviewPanel::isVisible() const

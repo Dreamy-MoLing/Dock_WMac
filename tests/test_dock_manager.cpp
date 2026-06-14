@@ -94,22 +94,19 @@ TEST_F(DockManagerTest, NoDoubleEnterDocked)
     EXPECT_EQ(spy.count(), 0);
 }
 
-// 6. onFullscreenStateChanged(false) 在 Hidden 状态下恢复 Docked
-//    注意：依赖 hasMaximizedOrFullscreenWindowOnMonitor，可能因系统环境而有不同结果
-//    这里直接验证状态转换核心逻辑 — enterDockedState 从 Hidden 正确恢复
+// 6. enterDockedState 从 Hidden 恢复 — 确定性测试
+//    直接测试状态转换核心逻辑，不依赖系统全屏状态
 TEST_F(DockManagerTest, FullscreenGoneRestoresDock)
 {
     manager->enterHiddenState();
     EXPECT_EQ(manager->currentState(), DockState::Hidden);
 
+    // 直接调用 enterDockedState — 这是 onFullscreenStateChanged 内部的最终动作
     QSignalSpy spy(manager, &DockManager::stateChanged);
-    manager->onFullscreenStateChanged(false);
-    // hasMaximizedOrFullscreenWindowOnMonitor 在非纯净环境下可能返回 true，
-    // 导致不进入恢复逻辑，测试仅验证 "若有恢复，信号正确"
-    if (spy.count() >= 1) {
-        EXPECT_EQ(spy.at(0).at(0).value<DockState>(), DockState::Docked);
-        EXPECT_EQ(manager->currentState(), DockState::Docked);
-    }
+    manager->enterDockedState();
+    EXPECT_EQ(spy.count(), 1);
+    EXPECT_EQ(spy.at(0).at(0).value<DockState>(), DockState::Docked);
+    EXPECT_EQ(manager->currentState(), DockState::Docked);
 }
 
 // 7. 无真实全屏窗口时不启动隐藏延迟

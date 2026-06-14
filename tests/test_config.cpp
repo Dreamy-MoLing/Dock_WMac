@@ -18,6 +18,7 @@
 #include <QCoreApplication>
 #include <QTemporaryDir>
 #include "core/ConfigManager.h"
+#include "core/PathManager.h"
 
 // QPixmap 依赖 QApplication
 static int argc = 1;
@@ -45,9 +46,9 @@ protected:
     ConfigManager *config;
     static QApplication *app;
 
-    /// 获取配置文件完整路径（与 PathManager::configFile() 一致）
+    /// 获取配置文件完整路径（使用 PathManager 保持一致）
     static QString configPath() {
-        return QCoreApplication::applicationDirPath() + "/data/config.json";
+        return PathManager::configFile();
     }
 
     /// 删除配置文件，确保后续 load() 创建默认配置

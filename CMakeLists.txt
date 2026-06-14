@@ -44,9 +44,11 @@ add_executable(dock_wmac WIN32
     src/core/Application.cpp
     src/ui/DockWindow.cpp
     src/ui/DockItem.cpp
+    src/ui/DockAnimation.cpp
     include/core/Application.h
     include/ui/DockWindow.h
     include/ui/DockItem.h
+    include/ui/DockAnimation.h
     ${DOCK_CORE_SOURCES}
     ${DOCK_CORE_HEADERS}
     resources/resources.qrc

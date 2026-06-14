@@ -253,6 +253,12 @@ void DockManager::onFullscreenStateChanged(bool anyMaximizedOnAnyScreen)
 {
     if (!m_sysHelper) return;
 
+    // 预览面板激活期间阻止隐藏
+    if (m_previewActive) {
+        m_hideDelayTimer->stop();
+        return;
+    }
+
     // 用当前 dock 屏幕指数重新查询（屏幕感知 — 不依赖信号参数的主屏判断）
     bool anyMaxOnDockScreen = m_sysHelper->hasMaximizedOrFullscreenWindowOnMonitor(m_monitorIndex);
 
@@ -308,7 +314,6 @@ void DockManager::onWinKeyPressed()
 void DockManager::onWinKeyCooldownTimeout()
 {
     qInfo() << "Win 键冷却结束，恢复正常全屏检测";
-    // 冷却结束，重新检查全屏状态
     if (m_sysHelper && m_currentState == DockState::Docked) {
         bool anyMax = m_sysHelper->hasMaximizedOrFullscreenWindowOnMonitor(m_monitorIndex);
         if (anyMax) {
@@ -316,4 +321,9 @@ void DockManager::onWinKeyCooldownTimeout()
             m_hideDelayTimer->start();
         }
     }
+}
+
+void DockManager::setPreviewActive(bool active)
+{
+    m_previewActive = active;
 }

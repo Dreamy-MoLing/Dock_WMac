@@ -9,6 +9,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QTimer>
 #include "core/Types.h"
+#include "ui/DockAnimation.h"
 
 class DockItem;
 class DockManager;
@@ -18,6 +19,7 @@ class WindowPreviewPanel;
 class OverflowPanel;
 class WindowCache;
 class ClickStateMachine;
+class ConfigManager;
 
 /**
  * @file DockWindow.h
@@ -30,8 +32,12 @@ class ClickStateMachine;
 
 class DockWindow : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(qreal fadeOpacity READ fadeOpacity WRITE setFadeOpacity)
 public:
     explicit DockWindow(QWidget *parent = nullptr);
+
+    qreal fadeOpacity() const { return m_fadeOpacity; }
+    void setFadeOpacity(qreal opacity);
 
     /** @brief 关联 DockManager，连接信号 */
     void setDockManager(DockManager *manager);
@@ -41,6 +47,9 @@ public:
 
     /** @brief 连接 ProcessMonitor 信号 */
     void setProcessMonitor(ProcessMonitor *monitor);
+
+    /** @brief 关联 ConfigManager（读取视觉参数） */
+    void setConfigManager(ConfigManager *config);
 
     /** @brief 设置 WindowCache + ClickStateMachine（窗口枚举/点击状态机） */
     void setWindowCache(WindowCache *cache);
@@ -52,10 +61,19 @@ public:
     int monitorIndex() const { return m_monitorIndex; }
 
     /** @brief 锁定鱼眼效果（预览窗显示期间） */
-    void lockFishEye(int index);
+    void lockFishEye(int index) { m_animation->lockFishEye(index); }
 
     /** @brief 释放鱼眼锁定 */
     void unlockFishEye();
+
+    /** @brief 截图模式：模拟鼠标悬停在指定图标上 */
+    void simulateHover(int index);
+
+    /** @brief 截图模式：覆盖主题检测（true=强制亮色，false=强制暗色） */
+    void setThemeOverride(bool isLight);
+
+    /** @brief 获取当前图标数量 */
+    int itemCount() const { return m_items.size(); }
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -97,12 +115,8 @@ public slots:
 private:
     void updatePosition();
     void updateDpiScale();
-    void applyFishEyeEffect(int hoveredIndex);
-    void resetFishEyeEffect();
     void launchApp(DockItem *item);
     void handleSingleClick(DockItem *item);
-    void handleDoubleClick(DockItem *item);
-    void animateItemToScale(DockItem *item, qreal targetScale);
     int  itemAtPos(int mouseX, int mouseY) const;
     void relayoutItems();
 
@@ -110,10 +124,6 @@ private:
     void initBlurEffect();
     void updateBlurRegion();
     void updateTheme();
-
-    // 图标添加/移除动画
-    void animateItemAdd(DockItem *item);
-    void animateItemRemove(DockItem *item, const QString &appId);
 
     // 抽屉图标管理
     void updateOverflowItem();
@@ -125,8 +135,8 @@ private:
     SysHelper *m_sysHelper;
     WindowCache       *m_windowCache = nullptr;
     ClickStateMachine *m_clickStateMachine = nullptr;
-    bool               m_fishEyeLocked = false;
-    int                m_fishEyeLockedIndex = -1;
+    ConfigManager     *m_config = nullptr;
+    DockAnimation     *m_animation = nullptr;
     int m_baseIconSize;
     int m_fixedWindowH;
     qreal m_opacity;
@@ -134,21 +144,16 @@ private:
     int m_monitorIndex;
     int m_hoveredIndex;
 
-    // 鱼眼动画
-    QMap<DockItem *, QPropertyAnimation *> m_fishEyeAnims;
-
     // 显示/隐藏动画
     QPropertyAnimation *m_slideAnim;
-    QGraphicsOpacityEffect *m_opacityEffect;
+    qreal m_fadeOpacity = 1.0;
 
     // 毛玻璃 & 主题
     bool m_blurInitialized;
     bool m_isLightTheme;
+    bool m_themeOverride = false;
+    bool m_hasThemeOverride = false;
     QTimer *m_themeTimer;
-
-    // 单双击检测
-    QTimer *m_clickTimer;
-    DockItem *m_pendingClickItem;
 
     // 抽屉图标（溢出折叠）
     DockItem *m_overflowItem;
