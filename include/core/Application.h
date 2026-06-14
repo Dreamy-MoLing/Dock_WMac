@@ -29,15 +29,11 @@ public:
     /** @brief 初始化所有组件并进入事件循环，返回退出码 */
     int run();
 
-    /** @brief 检查是否为截图模式 */
-    bool isScreenshotMode() const { return m_screenshotMode; }
-
 private:
     void setupLogging();
     bool checkSingleInstance();
     void loadPinnedItems();
     void connectPersistence();
-    int runScreenshotMode();
 
     // 构造时保存，run() 中传给 QApplication
     int &m_argc;
@@ -53,12 +49,6 @@ private:
     DockManager *m_dockManager = nullptr;
     DockWindow *m_dockWindow = nullptr;
     ProcessMonitor *m_processMonitor = nullptr;
-
-    // 截图模式
-    bool m_screenshotMode = false;
-    int m_screenshotHoverIndex = -1;
-    QString m_screenshotTheme;
-    QString m_screenshotOutput;
 };
 
 #endif // APPLICATION_H

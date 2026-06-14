@@ -16,9 +16,6 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QTimer>
-#include <QElapsedTimer>
-#include <QThread>
-#include <QPixmap>
 #include <csignal>
 
 #include "core/ConfigManager.h"
@@ -75,35 +72,6 @@ int Application::run()
     QApplication app(m_argc, m_argv);
     app.setApplicationName(QStringLiteral("Dock_WMac"));
     app.setApplicationVersion(QStringLiteral("0.2.4"));
-
-    // 检测 --screenshot 模式
-    QStringList args = QCoreApplication::arguments();
-    if (args.contains("--screenshot")) {
-        m_screenshotMode = true;
-
-        // 解析 --state hover:N
-        int stateIdx = args.indexOf("--state");
-        if (stateIdx >= 0 && stateIdx + 1 < args.size()) {
-            QString stateVal = args[stateIdx + 1];
-            if (stateVal.startsWith("hover:")) {
-                m_screenshotHoverIndex = stateVal.section(":", 1).toInt();
-            }
-        }
-
-        // 解析 --theme dark|light
-        int themeIdx = args.indexOf("--theme");
-        if (themeIdx >= 0 && themeIdx + 1 < args.size()) {
-            m_screenshotTheme = args[themeIdx + 1].toLower();
-        }
-
-        // 解析 --out path
-        int outIdx = args.indexOf("--out");
-        if (outIdx >= 0 && outIdx + 1 < args.size()) {
-            m_screenshotOutput = args[outIdx + 1];
-        }
-
-        return runScreenshotMode();
-    }
 
     setupLogging();
 
@@ -286,86 +254,5 @@ void Application::connectPersistence()
                 file.close();
             }
         });
-}
-
-int Application::runScreenshotMode()
-{
-    setupLogging();
-
-    // 核心层初始化
-    m_config = new ConfigManager(this);
-    m_config->load();
-
-    m_sysHelper = new SysHelper(this);
-    m_windowCache = new WindowCache(this);
-
-    m_dockManager = new DockManager(this);
-    m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
-
-    // UI 层初始化
-    m_dockWindow = new DockWindow();
-    m_dockWindow->setDockManager(m_dockManager);
-    m_dockWindow->setSysHelper(m_sysHelper);
-    m_dockWindow->setWindowCache(m_windowCache);
-    m_dockWindow->setConfigManager(m_config);
-
-    // 加载固定项
-    loadPinnedItems();
-
-    // 触发 DockManager 信号连接
-    m_dockManager->initialize(m_sysHelper);
-    m_dockManager->setMonitorIndex(m_dockWindow->monitorIndex());
-
-    // 创建 ProcessMonitor 并连接 DockWindow
-    m_processMonitor = new ProcessMonitor(this);
-    m_processMonitor->registerApps(m_dockManager->pinnedItems());
-    m_dockWindow->setProcessMonitor(m_processMonitor);
-    m_processMonitor->start();
-
-    // 主题覆盖
-    if (m_screenshotTheme == "dark") {
-        m_dockWindow->setThemeOverride(false);
-    } else if (m_screenshotTheme == "light") {
-        m_dockWindow->setThemeOverride(true);
-    }
-
-    m_dockWindow->show();
-
-    // 等待窗口渲染完成
-    QApplication::processEvents();
-    QApplication::processEvents();
-
-    // 模拟悬停状态
-    if (m_screenshotHoverIndex >= 0 && m_screenshotHoverIndex < m_dockWindow->itemCount()) {
-        m_dockWindow->simulateHover(m_screenshotHoverIndex);
-        // 等待鱼眼动画完成
-        QElapsedTimer timer;
-        timer.start();
-        while (timer.elapsed() < 300) {
-            QApplication::processEvents();
-            QThread::msleep(10);
-        }
-    }
-
-    // 截图
-    QString outputPath = m_screenshotOutput;
-    if (outputPath.isEmpty()) {
-        PathManager::ensureDataDir();
-        outputPath = PathManager::dataDir() + "/screenshot.png";
-    }
-
-    QPixmap pixmap = m_dockWindow->grab();
-    bool saved = pixmap.save(outputPath, "PNG");
-    qInfo() << "Screenshot saved:" << outputPath << "ok:" << saved;
-
-    // 清理
-    delete m_processMonitor; m_processMonitor = nullptr;
-    delete m_dockWindow; m_dockWindow = nullptr;
-    delete m_dockManager; m_dockManager = nullptr;
-    delete m_windowCache; m_windowCache = nullptr;
-    delete m_sysHelper; m_sysHelper = nullptr;
-    delete m_config; m_config = nullptr;
-
-    return saved ? 0 : 1;
 }
 

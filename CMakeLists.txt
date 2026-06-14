@@ -13,6 +13,8 @@ set(DOCK_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/core/DockManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ProcessMonitor.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SysHelper_winhooks.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SysHelper_dwm.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WindowCache.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ClickStateMachine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/IconProvider.cpp
@@ -43,6 +45,9 @@ add_executable(dock_wmac WIN32
     src/main.cpp
     src/core/Application.cpp
     src/ui/DockWindow.cpp
+    src/ui/DockWindow_theme.cpp
+    src/ui/DockWindow_transition.cpp
+    src/ui/DockWindow_itemmanager.cpp
     src/ui/DockItem.cpp
     src/ui/DockAnimation.cpp
     include/core/Application.h

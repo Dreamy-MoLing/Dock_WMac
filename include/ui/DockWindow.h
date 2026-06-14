@@ -66,12 +66,6 @@ public:
     /** @brief 释放鱼眼锁定 */
     void unlockFishEye();
 
-    /** @brief 截图模式：模拟鼠标悬停在指定图标上 */
-    void simulateHover(int index);
-
-    /** @brief 截图模式：覆盖主题检测（true=强制亮色，false=强制暗色） */
-    void setThemeOverride(bool isLight);
-
     /** @brief 获取当前图标数量 */
     int itemCount() const { return m_items.size(); }
 
@@ -151,8 +145,6 @@ private:
     // 毛玻璃 & 主题
     bool m_blurInitialized;
     bool m_isLightTheme;
-    bool m_themeOverride = false;
-    bool m_hasThemeOverride = false;
     QTimer *m_themeTimer;
 
     // 抽屉图标（溢出折叠）
