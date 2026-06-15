@@ -7,6 +7,7 @@
  */
 
 #include "core/PinnedItemsReader.h"
+#include "core/SysHelper.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -102,52 +103,6 @@ QList<DockItemData> PinnedItemsReader::deduplicateItems(const QList<DockItemData
 
 QString PinnedItemsReader::resolveShortcut(const QString &lnkPath)
 {
-    if (!QFileInfo::exists(lnkPath)) return {};
-
-#ifdef Q_OS_WIN
-    // 使用 IShellLink COM 接口解析 .lnk
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return {};
-
-    IShellLink *psl = nullptr;
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_IShellLink, reinterpret_cast<void **>(&psl));
-    if (FAILED(hr)) {
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-        return {};
-    }
-
-    IPersistFile *ppf = nullptr;
-    hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
-    if (FAILED(hr)) {
-        psl->Release();
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-        return {};
-    }
-
-    // 加载 .lnk 文件
-    WCHAR wszPath[MAX_PATH];
-    lnkPath.toWCharArray(wszPath);
-    wszPath[lnkPath.length()] = 0;
-    hr = ppf->Load(wszPath, STGM_READ);
-
-    QString execPath;
-    if (SUCCEEDED(hr)) {
-        WIN32_FIND_DATA wfd;
-        WCHAR szPath[MAX_PATH];
-        hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
-        if (SUCCEEDED(hr)) {
-            execPath = QString::fromWCharArray(szPath);
-        }
-    }
-
-    ppf->Release();
-    psl->Release();
-    if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-    return execPath;
-#else
-    Q_UNUSED(lnkPath);
-    return {};
-#endif
+    return SysHelper::resolveShortcut(lnkPath);
 }
 

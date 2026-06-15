@@ -50,7 +50,6 @@ void DockWindow::onItemAdded(const DockItemData &data)
     item->installEventFilter(this);
     item->show();
     relayoutItems();
-    updatePosition();
 
     m_animation->animateItemAdd(item);
 }

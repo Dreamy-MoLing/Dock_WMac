@@ -93,8 +93,8 @@ DockWindow::DockWindow(QWidget *parent)
     // 初始主题检测
     updateTheme();
 
-    // 窗口数量定时更新（每 2 秒）
-    m_windowCountTimer->setInterval(2000);
+    // 窗口数量定时更新（每 10 秒兜底）
+    m_windowCountTimer->setInterval(10000);
     connect(m_windowCountTimer, &QTimer::timeout, this, &DockWindow::updateWindowCounts);
     m_windowCountTimer->start();
 
@@ -310,13 +310,8 @@ bool DockWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
 {
     Q_UNUSED(result);
 
-    if (eventType == "xcb_generic_event_t") {
-        QMetaObject::invokeMethod(this, [this]() {
-            updatePosition();
-        }, Qt::QueuedConnection);
-    }
 #ifdef Q_OS_WIN
-    else if (eventType == "windows_generic_MSG") {
+    if (eventType == "windows_generic_MSG") {
         MSG *msg = static_cast<MSG *>(message);
         if (msg->message == WM_SETTINGCHANGE) {
             // 系统设置变更 → 检查主题是否切换
@@ -336,9 +331,6 @@ bool DockWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
 void DockWindow::enterEvent(QEnterEvent *event)
 {
     Q_UNUSED(event);
-    if (m_isHidden && m_dockManager) {
-        m_dockManager->onWinKeyPressed();
-    }
 }
 
 void DockWindow::leaveEvent(QEvent *event)

@@ -12,11 +12,21 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
+#include <QTimer>
 
 ConfigManager::ConfigManager(QObject *parent)
     : QObject(parent)
     , m_iconCache(kCacheLimit)
+    , m_saveTimer(new QTimer(this))
 {
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(500);
+    connect(m_saveTimer, &QTimer::timeout, this, &ConfigManager::save);
+}
+
+ConfigManager::~ConfigManager()
+{
+    flush();
 }
 
 QString ConfigManager::configFilePath() const
@@ -110,6 +120,14 @@ void ConfigManager::set(const QString &key, const QVariant &value)
 {
     m_config[key] = QJsonValue::fromVariant(value);
     save();
+    m_saveTimer->start();
+}
+
+void ConfigManager::flush()
+{
+    if (m_saveTimer->isActive()) {
+        m_saveTimer->stop();
+    }
 }
 
 QString ConfigManager::resolveIcon(const QString &appId) const

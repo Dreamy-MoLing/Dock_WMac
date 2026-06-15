@@ -77,6 +77,9 @@ public:
     /** @brief 恢复原生任务栏显示 */
     void restoreNativeTaskbar();
 
+    /** @brief 解析 .lnk 快捷方式文件，返回目标路径 */
+    static QString resolveShortcut(const QString &lnkPath);
+
 signals:
     /** @brief 前台窗口状态变化 signal */
     void foregroundWindowChanged(bool isMaximizedOrFullscreen);

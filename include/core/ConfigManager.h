@@ -12,13 +12,14 @@
  * @brief JSON 配置读写与图标映射缓存
  *
  * 管理配置文件（JSON 格式）的读写、图标映射表的维护与 LRU 缓存。
- * 直接使用 QFile + QJsonDocument 读写 %APPDATA%/Dock_WMac/config.json。
+ * 直接使用 QFile + QJsonDocument 读写便携模式 data/config.json。
  */
 
 class ConfigManager : public QObject {
     Q_OBJECT
 public:
     explicit ConfigManager(QObject *parent = nullptr);
+    ~ConfigManager() override;
 
     /** @brief 加载配置文件，不存在则创建默认配置 */
     void load();
@@ -26,10 +27,13 @@ public:
     /** @brief 保存当前配置到文件 */
     void save();
 
+    /** @brief 立即刷写脏数据到磁盘（debounce 调度后调用） */
+    void flush();
+
     /** @brief 读取指定键的配置值 */
     QVariant get(const QString &key, const QVariant &defaultValue = QVariant()) const;
 
-    /** @brief 设置配置值并保存 */
+    /** @brief 设置配置值并保存（debounce 500ms 合并写盘） */
     void set(const QString &key, const QVariant &value);
 
     /** @brief 获取应用对应的高清图标路径（优先映射表，其次缓存） */
@@ -45,12 +49,13 @@ public:
     QString configFilePath() const;
 
     /** @brief 获取配置文件目录路径（用于卸载清理）
-     *  Windows: %APPDATA%/Dock_WMac */
+     *  便携模式: ./data/ */
     static QString configDir();
 
 private:
     QJsonObject m_config;
     QCache<QString, QPixmap> m_iconCache;
+    QTimer *m_saveTimer = nullptr;
     static const int kCacheLimit = 128;
 };
 

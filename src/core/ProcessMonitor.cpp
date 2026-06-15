@@ -262,7 +262,7 @@ void ProcessMonitor::scanTransientApps()
                 continue;
             }
             // 跳过没有用户界面的系统进程
-            if (lower.contains("\\windowsapp\\") ||        // UWP 运行时容器
+            if (lower.contains("\\windowsapps\\") ||       // UWP 运行时容器
                 lower.contains("\\windows.old\\") ||
                 lower.endsWith("svchost.exe") ||
                 lower.endsWith("dllhost.exe") ||

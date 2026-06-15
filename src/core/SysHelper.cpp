@@ -16,8 +16,11 @@
 #include "core/SysHelper.h"
 
 #include <windows.h>
+#include <shlobj.h>
+#include <shobjidl.h>
 #include <QDebug>
 #include <QTimer>
+#include <QFileInfo>
 #include <QCoreApplication>
 #include <vector>
 
@@ -153,6 +156,10 @@ void SysHelper::hideNativeTaskbar()
         g_taskbarHandle = hTaskbar;
         ShowWindow(hTaskbar, SW_HIDE);
     }
+    HWND hSecondary = FindWindow(L"Shell_SecondaryTrayWnd", nullptr);
+    if (hSecondary) {
+        ShowWindow(hSecondary, SW_HIDE);
+    }
 }
 
 void SysHelper::restoreNativeTaskbar()
@@ -166,4 +173,58 @@ void SysHelper::restoreNativeTaskbar()
                      SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
         g_taskbarHandle = nullptr;
     }
+    HWND hSecondary = FindWindow(L"Shell_SecondaryTrayWnd", nullptr);
+    if (hSecondary) {
+        SetWindowPos(hSecondary, HWND_TOP, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    }
+}
+
+QString SysHelper::resolveShortcut(const QString &lnkPath)
+{
+    if (!QFileInfo::exists(lnkPath)) return {};
+
+#ifdef Q_OS_WIN
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return {};
+
+    IShellLink *psl = nullptr;
+    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IShellLink, reinterpret_cast<void **>(&psl));
+    if (FAILED(hr)) {
+        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        return {};
+    }
+
+    IPersistFile *ppf = nullptr;
+    hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
+    if (FAILED(hr)) {
+        psl->Release();
+        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        return {};
+    }
+
+    WCHAR wszPath[MAX_PATH];
+    lnkPath.toWCharArray(wszPath);
+    wszPath[lnkPath.length()] = 0;
+    hr = ppf->Load(wszPath, STGM_READ);
+
+    QString execPath;
+    if (SUCCEEDED(hr)) {
+        WIN32_FIND_DATA wfd;
+        WCHAR szPath[MAX_PATH];
+        hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
+        if (SUCCEEDED(hr)) {
+            execPath = QString::fromWCharArray(szPath);
+        }
+    }
+
+    ppf->Release();
+    psl->Release();
+    if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+    return execPath;
+#else
+    Q_UNUSED(lnkPath);
+    return {};
+#endif
 }

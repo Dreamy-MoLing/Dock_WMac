@@ -5,6 +5,7 @@
  * 5级回退：图片文件 → IShellItemImageFactory (UWP) → .lnk解析 → Jumbo → 占位符
  */
 #include "core/IconProvider.h"
+#include "core/SysHelper.h"
 
 #include <QFileInfo>
 #include <QPainter>
@@ -28,54 +29,11 @@ static bool isUwpPath(const QString &exePath)
     return exePath.toLower().contains("\\windowsapps\\");
 }
 
-// ─── .lnk 解析（从 PinnedItemsReader 迁移）───────────────
+// ─── .lnk 解析（委托 SysHelper::resolveShortcut）───────────────
 
-static QString resolveShortcut(const QString &lnkPath)
+static inline QString resolveShortcut(const QString &lnkPath)
 {
-#ifdef Q_OS_WIN
-    if (!QFileInfo::exists(lnkPath)) return {};
-
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return {};
-
-    IShellLink *psl = nullptr;
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_IShellLink, reinterpret_cast<void **>(&psl));
-    if (FAILED(hr)) {
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-        return {};
-    }
-
-    IPersistFile *ppf = nullptr;
-    hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
-    if (FAILED(hr)) {
-        psl->Release();
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-        return {};
-    }
-
-    WCHAR wszPath[MAX_PATH] = {};
-    lnkPath.toWCharArray(wszPath);
-    hr = ppf->Load(wszPath, STGM_READ);
-
-    QString targetPath;
-    if (SUCCEEDED(hr)) {
-        WIN32_FIND_DATA wfd;
-        WCHAR szPath[MAX_PATH] = {};
-        hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
-        if (SUCCEEDED(hr)) {
-            targetPath = QString::fromWCharArray(szPath);
-        }
-    }
-
-    ppf->Release();
-    psl->Release();
-    if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
-    return targetPath;
-#else
-    Q_UNUSED(lnkPath);
-    return {};
-#endif
+    return SysHelper::resolveShortcut(lnkPath);
 }
 
 // ─── 优先级 2: UWP/AppX → IShellItemImageFactory ─────────

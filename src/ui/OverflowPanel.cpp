@@ -15,6 +15,11 @@
 #include <QVBoxLayout>
 #include <QPushButton>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+#endif
+
 OverflowPanel::OverflowPanel(QObject *parent)
     : QObject(parent)
 {
@@ -77,6 +82,14 @@ void OverflowPanel::showPopup(DockItem *anchorItem, QWidget * /*dockParent*/)
         layout->addWidget(btn);
     }
     m_popup->show();
+
+#ifdef Q_OS_WIN
+    HWND popupHwnd = reinterpret_cast<HWND>(m_popup->winId());
+    const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    const int DWMWCP_ROUND = 2;
+    DwmSetWindowAttribute(popupHwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+                          &DWMWCP_ROUND, sizeof(DWMWCP_ROUND));
+#endif
 }
 
 void OverflowPanel::hidePopup()

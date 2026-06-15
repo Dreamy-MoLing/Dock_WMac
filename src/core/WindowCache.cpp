@@ -326,9 +326,17 @@ bool WindowCache::activateWindow(const QString &wmClass)
 
 void WindowCache::showWindowPicker()
 {
-    keybd_event(VK_LWIN, 0, 0, 0);
-    keybd_event(VK_TAB, 0, 0, 0);
-    keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
-    keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
+    INPUT inputs[4] = {};
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = VK_LWIN;
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = VK_TAB;
+    inputs[2].type = INPUT_KEYBOARD;
+    inputs[2].ki.wVk = VK_TAB;
+    inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+    inputs[3].type = INPUT_KEYBOARD;
+    inputs[3].ki.wVk = VK_LWIN;
+    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(4, inputs, sizeof(INPUT));
 }
 
