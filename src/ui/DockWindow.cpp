@@ -148,6 +148,18 @@ void DockWindow::setSysHelper(SysHelper *helper)
     // 设置预览面板的 SysHelper
     m_windowPreview->setSysHelper(m_sysHelper);
     m_overflowPanel->setSysHelper(m_sysHelper);
+
+    // 通知状态捕获：窗口变为可见时触发 DockItem 绿色光点
+    connect(m_sysHelper, &SysHelper::windowShowOccurred, this,
+        [this](DWORD pid) {
+            if (!m_windowCache) return;
+            QString appId = m_windowCache->getAppIdForPid(pid);
+            if (appId.isEmpty()) return;
+            auto it = m_itemMap.find(appId);
+            if (it != m_itemMap.end()) {
+                it.value()->triggerInteractionIndicator();
+            }
+        });
 }
 
 void DockWindow::setProcessMonitor(ProcessMonitor *monitor)
@@ -271,202 +283,9 @@ void DockWindow::relayoutItems()
     update();  // 触发重绘背景
 }
 
-// ─── 窗口定位 ────────────────────────────────────────────
-
-void DockWindow::requestUpdatePosition()
-{
-    updatePosition();
-}
-
-void DockWindow::updatePosition()
-{
-    QScreen *targetScreen = nullptr;
-
-    if (m_monitorIndex >= 0) {
-        const auto screens = QGuiApplication::screens();
-        if (m_monitorIndex < screens.size()) {
-            targetScreen = screens.at(m_monitorIndex);
-        }
-    }
-
-    if (!targetScreen) {
-        targetScreen = QGuiApplication::screenAt(QCursor::pos());
-    }
-    if (!targetScreen) {
-        targetScreen = QGuiApplication::primaryScreen();
-    }
-
-    if (targetScreen) {
-        // 使用物理屏幕几何（不含任务栏扣除），间距 = 图标间距 kBaseSpacing
-        QRect geo = targetScreen->geometry();
-        int w = width();
-        int h = height();
-        move(geo.x() + (geo.width() - w) / 2,
-             geo.y() + geo.height() - h - kBaseSpacing);
-    }
-}
-
-bool DockWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
-{
-    Q_UNUSED(result);
-
-#ifdef Q_OS_WIN
-    if (eventType == "windows_generic_MSG") {
-        MSG *msg = static_cast<MSG *>(message);
-        if (msg->message == WM_SETTINGCHANGE) {
-            // 系统设置变更 → 检查主题是否切换
-            QMetaObject::invokeMethod(this, &DockWindow::updateTheme, Qt::QueuedConnection);
-        }
-    }
-#endif
-    return false;
-}
-
 // ─── 绘制 & 毛玻璃 & 主题 → DockWindow_theme.cpp ───────────
 // ─── 显示/隐藏过渡动画 → DockWindow_transition.cpp ──────────
 // ─── 图标生命周期管理 → DockWindow_itemmanager.cpp ──────────
-
-// ─── 鼠标事件 ─────────────────────────────────────────────
-
-void DockWindow::enterEvent(QEnterEvent *event)
-{
-    Q_UNUSED(event);
-}
-
-void DockWindow::leaveEvent(QEvent *event)
-{
-    Q_UNUSED(event);
-    m_animation->resetFishEye(m_items);
-    if (!m_animation->isFishEyeLocked())
-        m_hoveredIndex = -1;
-    m_windowPreview->startDelayedHide();
-}
-
-/**
- * @brief 检查鼠标位置是否在某个 item 范围内
- * @return item 索引，如果不在任何 item 上则返回 -1
- */
-int DockWindow::itemAtPos(int mouseX, int mouseY) const
-{
-    for (int i = 0; i < m_items.size(); ++i) {
-        QRect r = m_items[i]->geometry();
-        if (mouseX >= r.left() && mouseX <= r.right() &&
-            mouseY >= r.top() && mouseY <= r.bottom()) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-void DockWindow::mouseMoveEvent(QMouseEvent *event)
-{
-    if (m_items.isEmpty()) return;
-
-    int index = itemAtPos(event->pos().x(), event->pos().y());
-    if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
-        m_hoveredIndex = index;
-        if (index >= 0)
-            m_animation->applyFishEye(index, m_items);
-        else
-            m_animation->resetFishEye(m_items);
-    }
-}
-
-/**
- * @brief 拦截子 item 的鼠标移动事件，转发给 DockWindow 处理鱼眼
- *
- * 解决子 widget 消费 mouseMoveEvent 导致父窗口收不到事件的问题。
- */
-bool DockWindow::eventFilter(QObject *obj, QEvent *event)
-{
-    if (event->type() == QEvent::MouseMove && obj->isWidgetType()) {
-        QWidget *w = static_cast<QWidget *>(obj);
-        if (w->parent() == this && !m_items.isEmpty()) {
-            QMouseEvent *me = static_cast<QMouseEvent *>(event);
-            QPoint posInDock = mapFromGlobal(me->globalPosition().toPoint());
-            int index = itemAtPos(posInDock.x(), posInDock.y());
-            if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
-                m_hoveredIndex = index;
-                if (index >= 0)
-                    m_animation->applyFishEye(index, m_items);
-                else
-                    m_animation->resetFishEye(m_items);
-            }
-
-            // 窗口预览：悬停时委托给 WindowPreviewPanel
-            if (index >= 0) {
-                DockItem *hoveredItem = m_items[index];
-                if (hoveredItem != m_previewItem) {
-                    m_windowPreview->hidePreview();
-                    m_previewItem = hoveredItem;
-                    m_windowPreview->showPreview(hoveredItem);
-                }
-            }
-        }
-    }
-
-    return QWidget::eventFilter(obj, event);
-}
-
-// ─── 单击处理 ────────────────────────────────────────────
-
-/**
- * @brief 启动应用（新窗口）
- */
-void DockWindow::launchApp(DockItem *item)
-{
-    if (!item || item->execPath().isEmpty()) return;
-    // 不分割路径（路径可能包含空格如 "C:\Program Files\..."）
-    QString nativePath = QDir::toNativeSeparators(item->execPath());
-    QProcess::startDetached(nativePath, QStringList());
-}
-
-/**
- * @brief 单击处理 — 由 ClickStateMachine 5 状态状态机判定
- */
-void DockWindow::handleSingleClick(DockItem *item)
-{
-    if (!item || !m_clickStateMachine) {
-        launchApp(item);
-        return;
-    }
-
-    QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
-    bool isRunning = item->isRunning();
-
-    m_clickStateMachine->handleClick(wmClass, item->execPath(), isRunning);
-
-    // 触发交互指示器（1 秒延迟等待窗口操作生效）
-    QTimer::singleShot(1000, item, [item]() {
-        item->triggerInteractionIndicator();
-    });
-}
-
-QVariant DockWindow::isItemPinned(QVariant appId)
-{
-    if (!m_dockManager) return false;
-    return m_dockManager->isPinned(appId.toString());
-}
-
-void DockWindow::unlockFishEye()
-{
-    m_hoveredIndex = -1;
-    m_animation->unlockFishEye(m_items);
-}
-
-// ─── DPI ──────────────────────────────────────────────────
-
-void DockWindow::updateDpiScale()
-{
-    QScreen *screen = windowHandle() ? windowHandle()->screen() : QGuiApplication::primaryScreen();
-    if (!screen) return;
-
-    qreal dpi = screen->logicalDotsPerInch();
-    qreal scale = qBound(0.5, dpi / 96.0, 3.0);
-    m_baseIconSize = static_cast<int>(48 * scale);
-
-    qInfo() << "DPI:" << dpi << "scale:" << scale << "iconSize:" << m_baseIconSize;
-}
 
 // ─── ProcessMonitor 响应 ─────────────────────────────────────
 
@@ -492,74 +311,4 @@ void DockWindow::onRunningAppExited(const QString &appId)
     }
 }
 
-// ─── 拖拽 ─────────────────────────────────────────────────
-
-void DockWindow::dragEnterEvent(QDragEnterEvent *event)
-{
-    if (event->mimeData()->hasText()) {
-        event->acceptProposedAction();
-    }
-}
-
-void DockWindow::dragMoveEvent(QDragMoveEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-void DockWindow::dropEvent(QDropEvent *event)
-{
-    QString appId = event->mimeData()->text();
-    auto it = m_itemMap.find(appId);
-    if (it == m_itemMap.end()) return;
-
-    DockItem *draggedItem = it.value();
-
-    // 计算放置位置
-    int dropIndex = 0;
-    for (int i = 0; i < m_items.size(); ++i) {
-        if (event->position().toPoint().x() > m_items[i]->geometry().center().x()) {
-            dropIndex = i + 1;
-        }
-    }
-
-    m_items.removeOne(draggedItem);
-    m_items.insert(dropIndex, draggedItem);
-    relayoutItems();
-
-    event->acceptProposedAction();
-}
-
-// ─── 右键菜单 ─────────────────────────────────────────────
-
-void DockWindow::contextMenuEvent(QContextMenuEvent *event)
-{
-    // 检查右键位置是否在某个 DockItem 上
-    int index = itemAtPos(event->pos().x(), event->pos().y());
-    if (index >= 0) {
-        // 在 DockItem 上，让 DockItem 自己处理右键菜单
-        return;
-    }
-
-    // 在 Dock 背景空白区域，显示系统操作菜单
-    QMenu menu(this);
-
-    QAction *taskMgrAction = menu.addAction("任务管理器");
-    connect(taskMgrAction, &QAction::triggered, this, []() {
-        QProcess::startDetached("taskmgr", QStringList());
-    });
-
-    QAction *taskbarSettingsAction = menu.addAction("任务栏设置");
-    connect(taskbarSettingsAction, &QAction::triggered, this, []() {
-        QDesktopServices::openUrl(QUrl("ms-settings:taskbar"));
-    });
-
-    menu.addSeparator();
-
-    QAction *quitAction = menu.addAction("退出 Dock");
-    connect(quitAction, &QAction::triggered, this, []() {
-        qApp->quit();
-    });
-
-    menu.exec(event->globalPos());
-}
 

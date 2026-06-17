@@ -175,7 +175,7 @@ Dock_WMac/
 - **Core 层** — Application（生命周期）、DockManager（`Docked`/`Hidden` 状态机 + 全屏检测）、WindowCache（`EnumWindows` 缓存 + WinEvent 增量更新）、ClickStateMachine（5 状态点击决策）、IconProvider（5 级 Win32 图标回退链）、ConfigManager（JSON 配置 + LRU 图标缓存）、ProcessMonitor（`CreateToolhelp32Snapshot` 每 2s 轮询）、PinnedItemsReader（COM `IShellLink` 读取系统任务栏固定项）、AppIdHelper（进程名推导）、PathManager（便携路径 header-only）
 - **System 层** — SysHelper：WinEvent 窗口钩子、`WH_KEYBOARD_LL` 键盘钩子、DWM 模糊、全屏检测、主题检测（注册表）、任务栏控制、开机自启
 
-> 完整开发文档见仓库内 [CLAUDE.md](./CLAUDE.md)（面向 AI 编码助手）。开发者也可参考其中的架构细节、设计决策和重构历史。
+> 当前开发与接手说明见仓库内 [AGENTS.md](./AGENTS.md)。历史规划和诊断文档已归档到 `docs/archive/`，以 README、AGENTS 和当前源码为准。
 
 ---
 
@@ -188,3 +188,4 @@ Dock_WMac/
 ## 许可
 
 [MIT](LICENSE)
+

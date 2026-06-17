@@ -286,6 +286,43 @@ TEST_F(DockManagerTest, PinRemovesFromTransient)
     EXPECT_EQ(removedSpy.count(), 1);
 }
 
+// 19. 固定项重排：只按已固定 appId 重排，并触发持久化信号
+TEST_F(DockManagerTest, ReorderPinnedItemsPersistsOrder)
+{
+    DockItemData p1{"p1", "P1", "", "", false, 0};
+    DockItemData p2{"p2", "P2", "", "", false, 0};
+    DockItemData p3{"p3", "P3", "", "", false, 0};
+    DockItemData t1{"t1", "T1", "", "", true, 0};
+    manager->setPinnedItems({p1, p2, p3});
+    manager->addTransientItem(t1);
+
+    QSignalSpy pinnedSpy(manager, &DockManager::pinnedItemsChanged);
+    QSignalSpy overflowSpy(manager, &DockManager::overflowChanged);
+
+    EXPECT_TRUE(manager->reorderPinnedItems({"t1", "p3", "p1"}));
+
+    ASSERT_EQ(manager->pinnedItems().size(), 3);
+    EXPECT_EQ(manager->pinnedItems()[0].appId, "p3");
+    EXPECT_EQ(manager->pinnedItems()[1].appId, "p1");
+    EXPECT_EQ(manager->pinnedItems()[2].appId, "p2");
+    EXPECT_EQ(manager->transientItems().size(), 1);
+    EXPECT_EQ(manager->transientItems()[0].appId, "t1");
+    EXPECT_EQ(pinnedSpy.count(), 1);
+    EXPECT_EQ(overflowSpy.count(), 1);
+}
+
+// 20. 重排为相同顺序时不触发持久化
+TEST_F(DockManagerTest, ReorderPinnedItemsNoChangeNoSignal)
+{
+    DockItemData p1{"p1", "P1", "", "", false, 0};
+    DockItemData p2{"p2", "P2", "", "", false, 0};
+    manager->setPinnedItems({p1, p2});
+
+    QSignalSpy pinnedSpy(manager, &DockManager::pinnedItemsChanged);
+
+    EXPECT_FALSE(manager->reorderPinnedItems({"p1", "p2"}));
+    EXPECT_EQ(pinnedSpy.count(), 0);
+}
 // ============================================================================
 // 最大项数与溢出
 // ============================================================================
@@ -406,3 +443,4 @@ TEST_F(DockManagerTest, RemoveTransientItem)
     EXPECT_EQ(removedSpy.count(), 1);
     EXPECT_EQ(overflowSpy.count(), 1);
 }
+

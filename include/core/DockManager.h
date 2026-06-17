@@ -70,6 +70,9 @@ public:
     /** @brief 从 Dock 移除固定项 */
     void unpinItem(const QString &appId);
 
+    /** @brief 按 UI 顺序重排固定项并触发持久化 */
+    bool reorderPinnedItems(const QStringList &orderedAppIds);
+
     /** @brief 检查应用是否为固定项 */
     bool isPinned(const QString &appId) const;
 
@@ -138,3 +141,4 @@ private:
 };
 
 #endif // DOCKMANAGER_H
+

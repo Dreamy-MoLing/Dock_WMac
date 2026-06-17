@@ -1,0 +1,56 @@
+version: '3'
+
+vars:
+  BUILD_TYPE: '{{default "Release" .BUILD_TYPE}}'
+  BUILD_DIR: '{{default "build" .BUILD_DIR}}'
+
+tasks:
+  configure:
+    desc: Configure the MSVC/Qt build.
+    cmds:
+      - cmake --preset default
+
+  configure-ci:
+    desc: Configure the CI build. Requires CMAKE_GENERATOR, VS_INSTALL_PATH, and QT_ROOT_DIR.
+    cmds:
+      - powershell -NoProfile -Command "cmake --preset ci -G \"$env:CMAKE_GENERATOR\""
+
+  build:
+    desc: Build the application.
+    deps: [configure]
+    cmds:
+      - cmake --build {{.BUILD_DIR}} --config {{.BUILD_TYPE}}
+
+  test:
+    desc: Run unit tests.
+    cmds:
+      - cmake --build {{.BUILD_DIR}} --config {{.BUILD_TYPE}}
+      - cmd: ctest -C {{.BUILD_TYPE}} --output-on-failure
+        dir: '{{.BUILD_DIR}}'
+
+  package:
+    desc: Build the CPack ZIP package.
+    deps: [test]
+    cmds:
+      - cmd: cpack -G ZIP -C {{.BUILD_TYPE}}
+        dir: '{{.BUILD_DIR}}'
+
+  ci:
+    desc: Run the same build/test/package flow used by GitHub Actions.
+    cmds:
+      - task: configure-ci
+      - task: test
+      - task: package
+
+  local-ci:
+    desc: Run the full local configure/build/test/package flow.
+    cmds:
+      - task: configure
+      - task: test
+      - task: package
+
+  clean-build:
+    desc: Remove generated build directories.
+    cmds:
+      - powershell -NoProfile -Command "Remove-Item -Recurse -Force build,build-debug -ErrorAction SilentlyContinue"
+

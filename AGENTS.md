@@ -1,8 +1,28 @@
 # AGENTS.md
 
-Windows-only macOS-style dock (Qt6 + C++17). Replaces native taskbar with fisheye magnification, auto-hide, DWM blur.
+Windows-only macOS-style dock written in Qt6 + C++17. The product goal is to preserve core Windows taskbar behavior while adding macOS-style Dock animation and interaction: fisheye magnification, auto-hide, DWM blur, window previews, pinned/running app management, and portable runtime data.
+
+## Source of Truth
+
+- `README.md` is user-facing usage/build documentation.
+- `AGENTS.md` is the current engineering handoff document.
+- `docs/archive/` contains historical or agent-generated plans and may be stale.
+- `.claude/`, `.mimocode/`, and `graphify-out/` are external agent/plugin outputs, not authoritative source code.
 
 ## Build & Test
+
+Use go-task for local and CI parity:
+
+```bash
+task configure   # cmake --preset default
+task build       # build Release
+task test        # build + ctest
+task package     # test + CPack ZIP
+task local-ci    # configure + test + package
+task ci          # CI path; requires CMAKE_GENERATOR, VS_INSTALL_PATH, QT_ROOT_DIR
+```
+
+Direct fallback:
 
 ```bash
 cmake --preset default -DBUILD_TESTS=ON
@@ -10,61 +30,41 @@ cmake --build build --config Release
 cd build && ctest -C Release --output-on-failure
 ```
 
-Single test: `build/tests/Release/test_<name>.exe`
-
-Qt DLLs auto-injected into test PATH via CMake `ENVIRONMENT_MODIFICATION` — no manual setup needed.
-
-## Key Gotchas
-
-- **MSVC generator**: Visual Studio 18 2026, hardcoded in `CMakePresets.json`. No Developer Command Prompt needed.
-- **Qt path**: `C:/Qt/6.11.1/msvc2022_64` (hardcoded in presets). CI uses Qt 6.11.1 — same version.
-- **Binary name**: `WMacDock.exe`, CMake target: `dock_wmac`
-- **New source files**: Add to `DOCK_CORE_SOURCES` in root `CMakeLists.txt` only — tests link via `dock_core_objects` object library.
-- **Header-only modules**: `AppIdHelper.h`, `PathManager.h` — no .cpp files.
-- **Portable mode**: All runtime data in `./data/` (config.json, pinned.json, dock.log). Lazy-created.
-- **WIN32 subsystem**: `add_executable(dock_wmac WIN32 ...)` — no console window on launch.
-- **Resources**: `resources/resources.qrc` + `resources/app.rc` linked in CMakeLists.txt. `.ico` must be in git (`.gitignore` has `!` exception).
-
-## CI Lessons Learned
-
-5 fix commits in a row on CI alone — don't repeat these:
-
-- **Deploy paths are fragile**: `windeployqt --dir` copies DLLs only, not exe. VS multi-config outputs to `build/Release/`, not `build/`. Always verify the zip contents locally before pushing CI packaging changes.
-- **Shell matters**: Default pwsh breaks on Chinese paths and tag extraction. Use `shell: bash` for all release/deploy steps.
-- **.gitignore wildcards are dangerous**: `*.ico` killed `resources/app.ico`. Always add `!` exceptions for build-critical resources.
-- **CMakePresets hardcodes local paths**: The `default` preset has `C:/Qt/6.11.1/...` and VS 18 Insiders path. CI uses the `ci` preset with env var overrides. Never modify the `ci` preset's env var pattern — it's the only CI-safe path.
-- **permissions: write required**: GitHub Actions needs `contents: write` to create releases. Forgot this once → 403.
-- **Branch name is `master`** not `main`.
-- **CI Qt version must match local**: Keep `release.yml` Qt version in sync with `CMakePresets.json` to avoid silent API differences.
+Qt DLLs are injected into test PATH via CMake `ENVIRONMENT_MODIFICATION`.
 
 ## Architecture
 
-Three-layer: **UI → Core → System**. SysHelper is the only System-layer class.
+Three layers: **UI -> Core -> System**.
 
-```
-src/main.cpp → Application.cpp → DockManager.cpp → DockWindow.cpp
-```
+- UI: `DockWindow`, `DockItem`, `DockAnimation`, `WindowPreviewPanel`, `OverflowPanel`
+- Core: `Application`, `DockManager`, `ConfigManager`, `ProcessMonitor`, `WindowCache`, `ClickStateMachine`, `IconProvider`, `AppIdHelper`, `PinnedItemsReader`, `Logger`, `PathManager`
+- System: `SysHelper` wraps Win32/COM/DWM behavior
 
-Key classes:
-- `WindowCache` — central window state cache, WinEvent-driven updates
-- `ClickStateMachine` — 5-state click behavior (no windows / background / minimized / foreground active / background visible)
-- `IconProvider` — 5-level Win32 icon fallback chain
-- `ProcessMonitor` — CreateToolhelp32Snapshot every 2s
+Keep new code on the correct side of the boundary. UI collects events and renders. Core owns state and decisions. System owns direct Win32/COM/DWM calls. Existing direct Win32 calls in `ClickStateMachine`, `WindowCache`, and `WindowPreviewPanel` are known debt to be reduced, not copied.
 
-Init order: Logger → Config → SysHelper → WindowCache → DockManager → UI → ProcessMonitor
+## Module Boundaries
 
-Single-instance: `QSharedMemory` key `"Dock_WMac_Instance"` — second launch exits immediately.
+`DockWindow.cpp` should stay a coordinator: construction, dependency injection, signal wiring, and shared layout. Put focused behavior in sibling implementation files:
 
-## Conventions
+- `DockWindow_position.cpp` for screen positioning, DPI, and native setting events
+- `DockWindow_input.cpp` for mouse, click, drag, and hit-test behavior
+- `DockWindow_menu.cpp` for Dock background context menu behavior
+- `DockWindow_itemmanager.cpp` for DockItem lifecycle and overflow item management
+- `DockWindow_theme.cpp` for painting, blur, and theme updates
+- `DockWindow_transition.cpp` for show/hide animations
 
-- C++17, Qt6, Google Test v1.14.0 (FetchContent)
-- Test shared compilation: `dock_core_objects` object library (no per-test recompile)
-- Config keys use camelCase (v0.3.0+)
-- CLAUDE.md is gitignored (local dev reference). README.md is user-facing.
-- System libs: `dwmapi`, `shlwapi`, `shell32`, `user32` — linked in CMakeLists.txt
+Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so UI order and `pinned.json` persistence stay aligned.
 
-## References
+## Key Gotchas
 
-- `CLAUDE.md` — comprehensive dev doc with full architecture, refactoring history
-- `README.md` — user-facing project overview
-- `graphify-out/` — knowledge graph (gitignored, generate with `graphify update .`). Codebase questions: `graphify query/explain/path` before reading source files.
+- Binary name: `WMacDock.exe`; CMake target: `dock_wmac`.
+- Portable mode: runtime data lives in `./data/` beside the executable.
+- Single-instance key: `Dock_WMac_Instance`.
+- Default preset hardcodes local Visual Studio and Qt paths; CI uses the `ci` preset with env var overrides.
+- Branch name is `master`.
+- `resources/app.ico` must remain tracked despite image ignore rules.
+- Do not treat archived Markdown as current requirements without checking source and tests.
+
+## CI/CD
+
+GitHub Actions installs Qt and go-task, detects the Visual Studio generator, then runs `task ci`. Packaging is CPack ZIP. Tag releases use `softprops/action-gh-release` with GitHub-generated release notes.

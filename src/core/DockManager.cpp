@@ -17,6 +17,7 @@
 #include "core/DockManager.h"
 #include "core/SysHelper.h"
 #include <QDebug>
+#include <QSet>
 
 DockManager::DockManager(QObject *parent)
     : QObject(parent)
@@ -220,6 +221,50 @@ void DockManager::unpinItem(const QString &appId)
     }
 }
 
+bool DockManager::reorderPinnedItems(const QStringList &orderedAppIds)
+{
+    if (m_pinnedItems.size() < 2 || orderedAppIds.isEmpty())
+        return false;
+
+    QList<DockItemData> reordered;
+    QSet<QString> used;
+
+    for (const QString &appId : orderedAppIds) {
+        if (used.contains(appId))
+            continue;
+        for (const auto &item : m_pinnedItems) {
+            if (item.appId == appId) {
+                reordered.append(item);
+                used.insert(appId);
+                break;
+            }
+        }
+    }
+
+    for (const auto &item : m_pinnedItems) {
+        if (!used.contains(item.appId))
+            reordered.append(item);
+    }
+
+    if (reordered.size() != m_pinnedItems.size())
+        return false;
+
+    bool changed = false;
+    for (int i = 0; i < m_pinnedItems.size(); ++i) {
+        if (m_pinnedItems[i].appId != reordered[i].appId) {
+            changed = true;
+            break;
+        }
+    }
+    if (!changed)
+        return false;
+
+    m_pinnedItems = reordered;
+    emit pinnedItemsChanged(m_pinnedItems);
+    emit overflowChanged();
+    return true;
+}
+
 bool DockManager::isPinned(const QString &appId) const
 {
     for (const auto &p : m_pinnedItems) {
@@ -327,3 +372,5 @@ void DockManager::setPreviewActive(bool active)
 {
     m_previewActive = active;
 }
+
+

@@ -70,10 +70,23 @@ add_executable(test_click_state_machine test_click_state_machine.cpp)
 target_link_libraries(test_click_state_machine dock_core_objects ${TEST_LIBS})
 add_test(NAME test_click_state_machine COMMAND test_click_state_machine)
 
+add_executable(test_dwm_state test_dwm_state.cpp)
+target_link_libraries(test_dwm_state dock_core_objects ${TEST_LIBS})
+add_test(NAME test_dwm_state COMMAND test_dwm_state)
+
+add_executable(test_window_cloaked test_window_cloaked.cpp)
+target_link_libraries(test_window_cloaked dock_core_objects ${TEST_LIBS})
+add_test(NAME test_window_cloaked COMMAND test_window_cloaked)
+
+add_executable(test_display_affinity test_display_affinity.cpp)
+target_link_libraries(test_display_affinity dock_core_objects ${TEST_LIBS})
+add_test(NAME test_display_affinity COMMAND test_display_affinity)
+
 # 确保测试运行时能找到 Qt DLL
 foreach(test_name
     test_config test_dock_manager test_process_monitor test_sys_helper
     test_pinned_items_reader test_application test_window_cache test_click_state_machine
+    test_dwm_state test_window_cloaked test_display_affinity
 )
     set_tests_properties(${test_name} PROPERTIES
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT_BIN_DIR}"

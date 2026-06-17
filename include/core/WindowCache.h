@@ -52,6 +52,9 @@ public:
     WindowList getWindowsForPreview(const QString &wmClass);
     HWND getLastActiveHwnd(const QString &wmClass);
 
+    /** @brief 通过 PID 查找对应的 exe basename（用于信号→DockItem 映射） */
+    QString getAppIdForPid(DWORD pid);
+
     // ── 动作接口（原 WindowManager）──
     bool activateWindow(const QString &wmClass);
     void showWindowPicker();
@@ -69,6 +72,9 @@ public:
 signals:
     /** @brief 缓存更新后发出（DockWindow 刷新图标状态） */
     void cacheUpdated();
+
+    /** @brief 窗口从隐藏变为可见时发出（用于触发 DockItem 绿色光点） */
+    void windowShowOccurred(DWORD pid);
 
 private:
     void addWindowToCache(const CachedWindowInfo &info, const QString &wmClass);

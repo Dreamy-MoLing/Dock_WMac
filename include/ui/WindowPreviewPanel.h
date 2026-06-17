@@ -6,6 +6,11 @@
 #include <QList>
 #include <QWidget>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <shobjidl.h>  // IVirtualDesktopManager
+#endif
+
 class DockItem;
 class SysHelper;
 class WindowCache;
@@ -69,6 +74,9 @@ private:
     void startPeek(HWND targetHwnd);   // DWM peek lite
     void stopPeek();                    // 取消 peek
 
+    /** @brief 检查窗口是否在当前虚拟桌面（Windows 10+），Windows 7/8 返回 true */
+    bool isWindowOnCurrentDesktop(HWND hwnd);
+
     SysHelper    *m_sysHelper = nullptr;
     WindowCache  *m_windowCache = nullptr;
     QTimer       *m_previewTimer;
@@ -77,6 +85,9 @@ private:
     DockItem     *m_previewItem = nullptr;
     HWND          m_peekTarget = nullptr;  // 当前 peek 目标窗口
     QTimer       *m_peekTimer = nullptr;   // peek 防抖定时器
+#ifdef Q_OS_WIN
+    IVirtualDesktopManager *m_virtualDesktopManager = nullptr;  // 虚拟桌面管理器（Windows 10+）
+#endif
 };
 
 #endif // WINDOWPREVIEWPANEL_H

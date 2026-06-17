@@ -8,6 +8,7 @@
  */
 #include "core/WindowCache.h"
 #include "core/AppIdHelper.h"
+#include "core/SysHelper.h"
 
 #include <algorithm>
 #include <QFileInfo>
@@ -286,7 +287,8 @@ WindowList WindowCache::getWindowsForPreview(const QString &wmClass)
             return !w.isToolWindow
                 && !w.title.trimmed().isEmpty()
                 && (w.isVisible || w.isMinimized)
-                && IsWindow(w.hwnd);
+                && IsWindow(w.hwnd)
+                && !SysHelper::isWindowCloaked(w.hwnd);  // 排除 Virtual Desktop 隐藏的窗口
         });
     return result;
 }
@@ -308,6 +310,14 @@ HWND WindowCache::getLastActiveHwnd(const QString &wmClass)
         }
     }
     return best;
+}
+
+QString WindowCache::getAppIdForPid(DWORD pid)
+{
+    QReadLocker locker(&m_lock);
+    auto it = m_pidToExeName.find(pid);
+    if (it == m_pidToExeName.end()) return {};
+    return it.value();
 }
 
 // ─── 动作接口 ────────────────────────────────────────────

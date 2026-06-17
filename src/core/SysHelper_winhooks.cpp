@@ -83,6 +83,12 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
             QMetaObject::invokeMethod(g_sysHelperForHook, [pid]() {
                 emit g_sysHelperForHook->windowEventOccurred(pid);
             }, Qt::QueuedConnection);
+            // 窗口变为可见时，额外触发通知信号（用于 DockItem 绿色光点）
+            if (event == EVENT_OBJECT_SHOW) {
+                QMetaObject::invokeMethod(g_sysHelperForHook, [pid]() {
+                    emit g_sysHelperForHook->windowShowOccurred(pid);
+                }, Qt::QueuedConnection);
+            }
         }
         break;
     }
@@ -178,7 +184,7 @@ bool SysHelper::getForegroundWindowState()
     if (!GetMonitorInfo(hMonitor, &mi)) return false;
 
     RECT windowRect;
-    if (!GetWindowRect(hwnd, &windowRect)) return false;
+    if (!getExtendedFrameBounds(hwnd, windowRect)) return false;
 
     int winW = windowRect.right - windowRect.left;
     int winH = windowRect.bottom - windowRect.top;
@@ -195,6 +201,7 @@ struct MonitorScanContext {
     bool found;
     int screenW;
     int screenH;
+    SysHelper *helper;  // 用于调用 getExtendedFrameBounds
 };
 
 static bool isSystemUiWindow(HWND hwnd)
@@ -232,7 +239,7 @@ static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
     }
 
     RECT winRect;
-    if (!GetWindowRect(hwnd, &winRect)) return TRUE;
+    if (!ctx->helper->getExtendedFrameBounds(hwnd, winRect)) return TRUE;
     int winW = winRect.right - winRect.left;
     int winH = winRect.bottom - winRect.top;
     if (abs(winW - ctx->screenW) <= 10 && abs(winH - ctx->screenH) <= 10) {
@@ -274,7 +281,7 @@ bool SysHelper::hasMaximizedOrFullscreenWindowOnMonitor(int monitorIndex)
     int screenW = mi.rcMonitor.right - mi.rcMonitor.left;
     int screenH = mi.rcMonitor.bottom - mi.rcMonitor.top;
 
-    MonitorScanContext ctx{hMonitor, false, screenW, screenH};
+    MonitorScanContext ctx{hMonitor, false, screenW, screenH, this};
     EnumWindows(EnumMaximizedWindowsProc, reinterpret_cast<LPARAM>(&ctx));
 
     return ctx.found;

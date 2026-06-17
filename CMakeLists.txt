@@ -15,6 +15,7 @@ set(DOCK_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper_winhooks.cpp
     ${CMAKE_SOURCE_DIR}/src/core/SysHelper_dwm.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/SysHelper_dwm_state.cpp
     ${CMAKE_SOURCE_DIR}/src/core/WindowCache.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ClickStateMachine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/IconProvider.cpp
@@ -45,6 +46,9 @@ add_executable(dock_wmac WIN32
     src/main.cpp
     src/core/Application.cpp
     src/ui/DockWindow.cpp
+    src/ui/DockWindow_position.cpp
+    src/ui/DockWindow_input.cpp
+    src/ui/DockWindow_menu.cpp
     src/ui/DockWindow_theme.cpp
     src/ui/DockWindow_transition.cpp
     src/ui/DockWindow_itemmanager.cpp
@@ -111,3 +115,4 @@ if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+

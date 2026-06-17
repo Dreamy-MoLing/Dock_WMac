@@ -77,6 +77,29 @@ public:
     /** @brief 恢复原生任务栏显示 */
     void restoreNativeTaskbar();
 
+    /**
+     * @brief 获取窗口的扩展帧边界（物理像素，DPI 感知）
+     * @param hwnd 目标窗口句柄
+     * @param outRect 输出矩形（物理像素）
+     * @return true 如果 DwmGetWindowAttribute 成功，false 时回退到 GetWindowRect
+     */
+    bool getExtendedFrameBounds(HWND hwnd, RECT &outRect);
+
+    /**
+     * @brief 检测窗口是否被 Cloaked（Virtual Desktop 隐藏等）
+     * @param hwnd 目标窗口句柄
+     * @return true 如果窗口被 cloaked（Windows 8+），Windows 7 始终返回 false
+     */
+    static bool isWindowCloaked(HWND hwnd);
+
+    /**
+     * @brief 获取窗口的显示亲和性（截图保护状态）
+     * @param hwnd 目标窗口句柄
+     * @param outAffinity 输出亲和性值（WDA_NONE=0, WDA_MONITOR=1, WDA_EXCLUDEFROMCAPTURE=0x11）
+     * @return true 如果 API 成功，false 时 outAffinity 设为 WDA_NONE
+     */
+    static bool getWindowDisplayAffinity(HWND hwnd, DWORD &outAffinity);
+
     /** @brief 解析 .lnk 快捷方式文件，返回目标路径 */
     static QString resolveShortcut(const QString &lnkPath);
 
@@ -96,6 +119,9 @@ signals:
     /** @brief 窗口事件发生（CREATE/DESTROY/SHOW/HIDE）
      *  @param pid 窗口所属进程 ID */
     void windowEventOccurred(DWORD pid);
+
+    /** @brief 窗口从隐藏变为可见（EVENT_OBJECT_SHOW），用于触发 DockItem 绿色光点 */
+    void windowShowOccurred(DWORD pid);
 
 private:
     /** @brief 全屏状态防抖定时器（避免高频事件触发重复扫描） */

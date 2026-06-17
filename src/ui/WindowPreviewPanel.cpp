@@ -47,11 +47,26 @@ WindowPreviewPanel::WindowPreviewPanel(QObject *parent)
 
     m_peekTimer->setSingleShot(true);
     m_peekTimer->setInterval(300);
+
+#ifdef Q_OS_WIN
+    // 按需初始化 IVirtualDesktopManager（Windows 10+，失败时保持 nullptr）
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE) {
+        CoCreateInstance(CLSID_VirtualDesktopManager, nullptr, CLSCTX_INPROC_SERVER,
+                         IID_PPV_ARGS(&m_virtualDesktopManager));
+    }
+#endif
 }
 
 WindowPreviewPanel::~WindowPreviewPanel()
 {
     clearContent();
+#ifdef Q_OS_WIN
+    if (m_virtualDesktopManager) {
+        m_virtualDesktopManager->Release();
+        m_virtualDesktopManager = nullptr;
+    }
+#endif
 }
 
 void WindowPreviewPanel::setSysHelper(SysHelper *helper)
@@ -144,6 +159,16 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     if (windows.isEmpty())
         return;
 
+    // 过滤非当前虚拟桌面的窗口
+    windows.erase(
+        std::remove_if(windows.begin(), windows.end(),
+            [this](const CachedWindowInfo &w) {
+                return !isWindowOnCurrentDesktop(w.hwnd);
+            }),
+        windows.end());
+    if (windows.isEmpty())
+        return;
+
     int maxPreviews = qMin(windows.size(), 6);
     bool singleWindow = (windows.size() == 1);
 
@@ -232,9 +257,6 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
         int tx = padding + i * (thumbW + spacing);
         int ty = padding;
 
-        HTHUMBNAIL thumbId = nullptr;
-        HRESULT hr = DwmRegisterThumbnail(popupHwnd, wi.hwnd, &thumbId);
-
         QVariantMap entry;
         entry["srcHwnd"] = static_cast<qulonglong>(reinterpret_cast<quintptr>(wi.hwnd));
         entry["x"] = tx;
@@ -242,31 +264,45 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
         entry["w"] = thumbW;
         entry["h"] = thumbH;
 
-        if (SUCCEEDED(hr)) {
-            DWM_THUMBNAIL_PROPERTIES props = {};
-            props.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE
-                          | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
-            props.fVisible = TRUE;
-            props.opacity = 255;
-            props.fSourceClientAreaOnly = TRUE;
-            // DWM rcDestination 使用物理像素，Qt 坐标为逻辑像素 → 乘以 DPI 缩放
-            props.rcDestination = {
-                static_cast<LONG>(tx * dpiScale),
-                static_cast<LONG>(ty * dpiScale),
-                static_cast<LONG>((tx + thumbW) * dpiScale),
-                static_cast<LONG>((ty + thumbH) * dpiScale)
-            };
+        // 检查截图保护：如果窗口不允许捕获，跳过缩略图注册
+        DWORD affinity = 0;
+        bool isProtected = m_sysHelper->getWindowDisplayAffinity(wi.hwnd, affinity)
+                        && affinity != 0;  // WDA_NONE = 0
 
-            RECT srcRect;
-            if (GetClientRect(wi.hwnd, &srcRect)) {
-                props.rcSource = srcRect;
+        HTHUMBNAIL thumbId = nullptr;
+        bool thumbnailOk = false;
+
+        if (!isProtected) {
+            HRESULT hr = DwmRegisterThumbnail(popupHwnd, wi.hwnd, &thumbId);
+            if (SUCCEEDED(hr)) {
+                DWM_THUMBNAIL_PROPERTIES props = {};
+                props.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE
+                              | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
+                props.fVisible = TRUE;
+                props.opacity = 255;
+                props.fSourceClientAreaOnly = TRUE;
+                props.rcDestination = {
+                    static_cast<LONG>(tx * dpiScale),
+                    static_cast<LONG>(ty * dpiScale),
+                    static_cast<LONG>((tx + thumbW) * dpiScale),
+                    static_cast<LONG>((ty + thumbH) * dpiScale)
+                };
+
+                RECT srcRect;
+                if (GetClientRect(wi.hwnd, &srcRect)) {
+                    props.rcSource = srcRect;
+                }
+                DwmUpdateThumbnailProperties(thumbId, &props);
+                thumbnailOk = true;
+                anyDwmSucceeded = true;
             }
-            DwmUpdateThumbnailProperties(thumbId, &props);
+        }
+
+        if (thumbnailOk) {
             entry["thumbId"] = static_cast<qulonglong>(reinterpret_cast<quintptr>(thumbId));
-            anyDwmSucceeded = true;
         } else {
             entry["thumbId"] = static_cast<qulonglong>(0);
-            // 回退：在 popup 上画应用图标（IconProvider Jumbo 管道）
+            // 回退：在 popup 上画应用图标（截图保护或 DWM 失败时）
             QPixmap thumb(thumbW, thumbH);
             thumb.fill(QColor(50, 50, 50));
             QPixmap iconPix = IconProvider::loadIcon(item->execPath(), item->displayName());
@@ -302,9 +338,9 @@ void WindowPreviewPanel::startPeek(HWND targetHwnd)
 
     // 检查前台是否全屏，如是则跳过 peek
     HWND foregroundHwnd = GetForegroundWindow();
-    if (foregroundHwnd) {
+    if (foregroundHwnd && m_sysHelper) {
         RECT fgRect;
-        if (GetWindowRect(foregroundHwnd, &fgRect)) {
+        if (m_sysHelper->getExtendedFrameBounds(foregroundHwnd, fgRect)) {
             int fgW = fgRect.right - fgRect.left;
             int fgH = fgRect.bottom - fgRect.top;
             int screenW = GetSystemMetrics(SM_CXSCREEN);
@@ -322,6 +358,26 @@ void WindowPreviewPanel::stopPeek()
 {
     m_peekTarget = nullptr;
     // 不还原 Z-order（子方案 B）
+}
+
+// ─── 虚拟桌面检测 ───────────────────────────────────────
+
+bool WindowPreviewPanel::isWindowOnCurrentDesktop(HWND hwnd)
+{
+    if (!hwnd) return true;
+
+#ifdef Q_OS_WIN
+    if (m_virtualDesktopManager) {
+        BOOL onCurrent = FALSE;
+        HRESULT hr = m_virtualDesktopManager->IsWindowOnCurrentVirtualDesktop(hwnd, &onCurrent);
+        if (SUCCEEDED(hr)) {
+            return onCurrent != FALSE;
+        }
+    }
+#endif
+
+    // Fallback: 无法检测时视为在当前桌面（不过滤）
+    return true;
 }
 
 // ─── 事件过滤 ───────────────────────────────────────────
