@@ -35,7 +35,7 @@ tasks:
     desc: Build the CPack ZIP package.
     deps: [test]
     cmds:
-      - cpack --config {{.BUILD_DIR}}/CPackConfig.cmake -G ZIP -C {{.BUILD_TYPE}}
+      - cpack --config {{.BUILD_DIR}}/CPackConfig.cmake -B {{.BUILD_DIR}} -G ZIP -C {{.BUILD_TYPE}}
 
   ci:
     desc: Run the same build/test/package flow used by GitHub Actions.
