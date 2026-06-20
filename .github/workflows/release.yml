@@ -9,6 +9,7 @@ on:
 
 env:
   BUILD_TYPE: Release
+  QT_VERSION: '6.8.3'
 
 jobs:
   build:
@@ -21,7 +22,7 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: ${{ env.QT_VERSION }}
           arch: win64_msvc2022_64
 
       - name: Install Task
@@ -40,6 +41,23 @@ jobs:
           esac
           echo "VS_INSTALL_PATH=$VS_PATH" >> "$GITHUB_ENV"
           echo "CMAKE_GENERATOR=Visual Studio ${VS_MAJOR} ${VS_YEAR}" >> "$GITHUB_ENV"
+
+      - name: Verify build environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Command cmake | Out-Null
+          Get-Command task | Out-Null
+          if (-not $env:QT_ROOT_DIR -or -not (Test-Path -LiteralPath $env:QT_ROOT_DIR)) {
+            throw "QT_ROOT_DIR is missing or invalid: '$env:QT_ROOT_DIR'"
+          }
+          if (-not $env:VS_INSTALL_PATH -or -not (Test-Path -LiteralPath $env:VS_INSTALL_PATH)) {
+            throw "VS_INSTALL_PATH is missing or invalid: '$env:VS_INSTALL_PATH'"
+          }
+          if (-not $env:CMAKE_GENERATOR) {
+            throw 'CMAKE_GENERATOR is missing'
+          }
+          & (Join-Path $env:QT_ROOT_DIR 'bin/qmake.exe') -query QT_VERSION
 
       - name: Build, test, and package
         run: task ci

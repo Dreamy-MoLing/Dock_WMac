@@ -1,6 +1,9 @@
 # Dock_WMac
 
-> macOS 风格应用停靠栏 — 替代 Windows 原生任务栏，安装即忘的桌面插件。
+> 原生、便携、低干扰的 Windows 应用 Dock。
+
+Dock_WMac 提供 macOS 风格的应用启动和窗口切换体验。它不是完整的 Windows
+任务栏或 Shell 替代品：目前不提供开始菜单、通知区域、时钟和快速设置。
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/Dreamy-MoLing/Dock_WMac)
@@ -33,9 +36,9 @@
 
 ### 设计
 
-- **低资源占用** — Win32 事件驱动 + `QReadWriteLock` 线程安全缓存
-- **静默运行** — 无弹窗、无通知、无打扰，开机自启
-- **便携模式** — 所有数据（配置、日志、固定项）存于程序目录 `./data/`，无需安装、无需管理员权限
+- **原生窗口集成** — Win32 事件 + DWM 预览，窗口缓存使用 `QReadWriteLock`
+- **低干扰运行** — 无广告、无默认遥测；开机自启由用户主动开启
+- **便携优先** — 数据优先写入程序目录 `./data/`；目录不可写时自动回退到用户本地应用数据目录
 
 ---
 
@@ -66,9 +69,13 @@ Dock_WMac/
     └── dock.log            ← 运行日志
 ```
 
+如果程序所在目录不可写，数据回退到 `%LOCALAPPDATA%\Dock_WMac\data\`。
+“隐藏原生任务栏”是默认关闭的实验选项，必须从 Dock 背景右键菜单主动开启。
+
 ### 卸载
 
-**删除整个文件夹即可。** 如设置了开机自启，先右键菜单关闭该选项再删除。
+先在右键菜单关闭开机自启并退出，然后删除程序目录。若曾使用数据目录回退，
+可按需再删除 `%LOCALAPPDATA%\Dock_WMac\data\`。
 
 ---
 
@@ -79,43 +86,52 @@ Dock_WMac/
 | 组件 | 要求 |
 |------|------|
 | 操作系统 | Windows 10 / 11 |
-| 编译器 | Visual Studio 2026（MSVC v143） |
-| Qt | 6.11.1（MSVC 2022 64-bit） |
+| 编译器 | Visual Studio 2022 或 2026（MSVC） |
+| Qt | 6.8.3（MSVC 2022 64-bit） |
 | CMake | 3.20+ |
+| Task | go-task 3.x |
 
 ### 快速构建
 
-```bash
-cmake --preset default
-cmake --build build --config Release
-# 产物: build\WMacDock.exe
+```powershell
+$env:CMAKE_GENERATOR = "Visual Studio 17 2022"
+$env:VS_INSTALL_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Community"
+$env:QT_ROOT_DIR = "C:\Qt\6.8.3\msvc2022_64"
+
+task configure
+task build
+# 产物: build\Release\WMacDock.exe
 ```
 
-CMakePresets.json 已配置好 VS 生成器和 Qt 路径，无需额外设置环境变量。
+也可以复制 `CMakeUserPresets.json.example` 为不入库的 `CMakeUserPresets.json`，
+按本机路径修改后执行 `cmake --preset local`。仓库不再保存个人机器路径。
 
 ### 运行测试
 
-```bash
-cmake --preset default -DBUILD_TESTS=ON
+```powershell
+cmake --preset default -G "$env:CMAKE_GENERATOR" -DBUILD_TESTS=ON
 cmake --build build --config Release
-cd build && ctest -C Release --output-on-failure
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-8 套测试，89 个用例：
+12 个测试可执行文件，包含 Win32/DWM 实际窗口集成检查。测试构建会禁止修改
+HKCU 开机项和隐藏系统任务栏：
 
 ```
-test_config              test_process_monitor     test_window_cache
-test_dock_manager        test_sys_helper          test_click_state_machine
-test_pinned_items_reader test_application
+test_config              test_process_monitor       test_window_cache
+test_dock_manager        test_sys_helper            test_click_state_machine
+test_pinned_items_reader test_application           test_dwm_state
+test_window_cloaked      test_display_affinity      test_windows_integration
 ```
 
 ### 部署便携包
 
 ```bash
-cmake --build build --config Release
-windeployqt --no-translations --no-opengl-sw --compiler-runtime --dir deploy build\WMacDock.exe
-# deploy\ 即完整便携包，压缩分发给用户
+task package
+# 产物: build\Dock_WMac_0.2.4_x64.zip
 ```
+
+CPack 会调用 `windeployqt` 并加入 MSVC 运行库；不要只分发裸 exe。
 
 ### 项目结构
 
@@ -176,6 +192,9 @@ Dock_WMac/
 - **System 层** — SysHelper：WinEvent 窗口钩子、`WH_KEYBOARD_LL` 键盘钩子、DWM 模糊、全屏检测、主题检测（注册表）、任务栏控制、开机自启
 
 > 当前开发与接手说明见仓库内 [AGENTS.md](./AGENTS.md)。历史规划和诊断文档已归档到 `docs/archive/`，以 README、AGENTS 和当前源码为准。
+
+真实用户验证方法、继续/转向/归档阈值和 Windows 人工验收矩阵见
+[VALIDATION.md](./VALIDATION.md)。项目默认不收集遥测。
 
 ---
 

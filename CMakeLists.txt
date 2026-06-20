@@ -83,13 +83,16 @@ endif()
 # exe 安装到根目录（扁平结构）
 install(TARGETS dock_wmac RUNTIME DESTINATION .)
 
+# 由 CMake 根据实际 MSVC 工具链收集运行库，避免 windeployqt 依赖 VCINSTALLDIR。
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+include(InstallRequiredSystemLibraries)
+
 # windeployqt 直接部署到安装目录（exe 已在上一步安装到位）
 if(WINDEPLOYQT_EXECUTABLE)
     install(CODE "
         execute_process(
             COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
                 --no-translations
-                --compiler-runtime
                 \"\${CMAKE_INSTALL_PREFIX}/WMacDock.exe\"
             RESULT_VARIABLE deploy_result
         )

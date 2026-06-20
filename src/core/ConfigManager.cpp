@@ -53,6 +53,7 @@ void ConfigManager::load()
         m_config["opacity"] = 0.95;
         m_config["blurEnabled"] = true;
         m_config["startWithSystem"] = false;
+        m_config["hideNativeTaskbar"] = false;
         m_config["cornerRadius"] = 16;
         m_config["animationDuration"] = 300;
         m_config["showDelay"] = 0;

@@ -53,6 +53,7 @@ config.json
 .settings/
 *.code-workspace
 CMakeLists.txt.user*
+CMakeUserPresets.json
 
 # ===== OS 文件 =====
 .DS_Store
@@ -62,6 +63,7 @@ ehthumbs.db
 
 # ===== Claude Code =====
 .claude/
+.mimocode/
 graphify-out/
 .superpowers/
 
@@ -90,11 +92,14 @@ graphify-out/
 *.pid
 .hermes/
 
-# ===== 内部文档与规划文件（不上传 GitHub）=====
-CLAUDE.md
-V5_REVIEW_PLAN.md
-plan.md
-plan_legacy.md
+# ===== Markdown 文档白名单 =====
+# 默认忽略智能体计划、临时分析和其他非权威 Markdown。
+*.md
+!README.md
+!AGENTS.md
+!VALIDATION.md
+
+# ===== 内部文档与规划目录（不上传 GitHub）=====
 openspec/
 docs/
 .superpower/

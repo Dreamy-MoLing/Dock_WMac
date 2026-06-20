@@ -68,7 +68,9 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
             QFile::remove(backupPath);
             QFile::rename(filePath, backupPath);
             s_logFile.setFileName(filePath);
-            s_logFile.open(QIODevice::Append | QIODevice::Text);
+            if (!s_logFile.open(QIODevice::Append | QIODevice::Text)) {
+                fprintf(stderr, "Dock_WMac: failed to reopen log file after rotation\n");
+            }
         }
         s_logFile.write(line);
         if (++s_unflushed >= kFlushInterval) {
@@ -103,7 +105,10 @@ void Logger::init()
 
     QString path = logFilePath();
     s_logFile.setFileName(path);
-    s_logFile.open(QIODevice::Append | QIODevice::Text);
+    if (!s_logFile.open(QIODevice::Append | QIODevice::Text)) {
+        fprintf(stderr, "Dock_WMac: failed to open log file: %s\n",
+                path.toUtf8().constData());
+    }
 
     qInstallMessageHandler(messageHandler);
 

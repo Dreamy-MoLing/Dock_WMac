@@ -77,6 +77,7 @@ TEST_F(ConfigManagerTest, DefaultValues)
     EXPECT_DOUBLE_EQ(config->get("opacity").toDouble(), 0.95);
     EXPECT_EQ(config->get("blurEnabled").toBool(), true);
     EXPECT_EQ(config->get("startWithSystem").toBool(), false);
+    EXPECT_EQ(config->get("hideNativeTaskbar").toBool(), false);
     EXPECT_EQ(config->get("maxItems").toInt(), 16);
     EXPECT_EQ(config->get("cornerRadius").toInt(), 16);
     EXPECT_EQ(config->get("animationDuration").toInt(), 300);

@@ -9,13 +9,12 @@
     {
       "name": "default",
       "displayName": "Windows MSVC x64",
-      "description": "Native Windows build with MSVC and Qt6",
-      "generator": "Visual Studio 18 2026",
+      "description": "Native Windows build; generator, Visual Studio and Qt paths are supplied by environment",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/18/Insiders",
-        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_GENERATOR_INSTANCE": "$env{VS_INSTALL_PATH}",
+        "CMAKE_PREFIX_PATH": "$env{QT_ROOT_DIR}"
       }
     },
     {
@@ -32,11 +31,9 @@
       "name": "ci",
       "displayName": "CI (Windows MSVC x64)",
       "description": "CI build — VS 和 Qt 路径通过环境变量注入。生成器由 workflow YAML 动态传入（-G flag）",
-      "architecture": "x64",
+      "inherits": "default",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_GENERATOR_INSTANCE": "$env{VS_INSTALL_PATH}",
-        "CMAKE_PREFIX_PATH": "$env{QT_ROOT_DIR}",
         "BUILD_TESTS": "ON"
       }
     }

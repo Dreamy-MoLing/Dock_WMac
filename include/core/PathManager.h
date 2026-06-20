@@ -4,6 +4,8 @@
 #include <QString>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
+#include <QStandardPaths>
 
 /**
  * @file PathManager.h
@@ -17,7 +19,21 @@ namespace PathManager {
 
 inline QString dataDir()
 {
-    return QCoreApplication::applicationDirPath() + QStringLiteral("/data");
+    const QString overrideDir = qEnvironmentVariable("DOCK_WMAC_DATA_DIR");
+    if (!overrideDir.isEmpty()) {
+        return QDir::cleanPath(overrideDir);
+    }
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString portableDir = appDir + QStringLiteral("/data");
+    const QFileInfo portableInfo(portableDir);
+    if ((portableInfo.exists() && portableInfo.isDir() && portableInfo.isWritable())
+        || (!portableInfo.exists() && QFileInfo(appDir).isWritable())) {
+        return portableDir;
+    }
+
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+        + QStringLiteral("/data");
 }
 
 inline QString configFile()

@@ -95,34 +95,14 @@ TEST_F(SysHelperTest, AutoStartStateCheck)
 }
 
 // ============================================================================
-// 6. SetAutoStartRoundtrip
+// 6. AutoStartMutationDisabledInTests
 // ============================================================================
 
-TEST_F(SysHelperTest, SetAutoStartRoundtrip)
+TEST_F(SysHelperTest, AutoStartMutationDisabledInTests)
 {
-    // 保存当前状态
-    bool originalState = false;
-    EXPECT_NO_FATAL_FAILURE({
-        originalState = sysHelper->isAutoStartEnabled();
-    });
-
-    // 切换到相反状态
-    EXPECT_NO_FATAL_FAILURE({
-        bool toggleResult = sysHelper->setAutoStart(!originalState);
-        (void)toggleResult;
-    });
-
-    // 验证状态已改变（注册表操作在受限环境下可能失败，只要不崩溃即可）
-    EXPECT_NO_FATAL_FAILURE({
-        bool newState = sysHelper->isAutoStartEnabled();
-        (void)newState;
-    });
-
-    // 恢复原始状态
-    EXPECT_NO_FATAL_FAILURE({
-        bool restoreResult = sysHelper->setAutoStart(originalState);
-        (void)restoreResult;
-    });
+    EXPECT_FALSE(sysHelper->isAutoStartEnabled());
+    EXPECT_FALSE(sysHelper->setAutoStart(true));
+    EXPECT_FALSE(sysHelper->setAutoStart(false));
 }
 
 // ============================================================================
@@ -157,12 +137,12 @@ TEST_F(SysHelperTest, KeyboardHookInstallUninstall)
 }
 
 // ============================================================================
-// 9. TaskbarHideRestore
+// 9. TaskbarMutationDisabledInTests
 // ============================================================================
 
-TEST_F(SysHelperTest, TaskbarHideRestore)
+TEST_F(SysHelperTest, TaskbarMutationDisabledInTests)
 {
-    // hideNativeTaskbar() 和 restoreNativeTaskbar() 在任何环境下安全调用
+    // DOCK_WMAC_TESTING makes both calls no-ops, protecting developer and CI shells.
     EXPECT_NO_FATAL_FAILURE({
         sysHelper->hideNativeTaskbar();
     });

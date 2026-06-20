@@ -25,7 +25,7 @@ task ci          # CI path; requires CMAKE_GENERATOR, VS_INSTALL_PATH, QT_ROOT_D
 Direct fallback:
 
 ```bash
-cmake --preset default -DBUILD_TESTS=ON
+cmake --preset default -G "$env:CMAKE_GENERATOR" -DBUILD_TESTS=ON
 cmake --build build --config Release
 cd build && ctest -C Release --output-on-failure
 ```
@@ -58,9 +58,12 @@ Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so
 ## Key Gotchas
 
 - Binary name: `WMacDock.exe`; CMake target: `dock_wmac`.
-- Portable mode: runtime data lives in `./data/` beside the executable.
+- Portable mode prefers `./data/` beside the executable and falls back to the
+  user's local app-data directory when the executable directory is not writable.
 - Single-instance key: `Dock_WMac_Instance`.
-- Default preset hardcodes local Visual Studio and Qt paths; CI uses the `ci` preset with env var overrides.
+- Tracked presets contain no personal machine paths. Local and CI builds supply
+  `CMAKE_GENERATOR`, `VS_INSTALL_PATH`, and `QT_ROOT_DIR`; Qt baseline is 6.8.3.
+- Native taskbar hiding is experimental, defaults off, and requires explicit user opt-in.
 - Branch name is `master`.
 - `resources/app.ico` must remain tracked despite image ignore rules.
 - Do not treat archived Markdown as current requirements without checking source and tests.

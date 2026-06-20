@@ -33,6 +33,8 @@ add_library(dock_core_objects OBJECT
 )
 target_include_directories(dock_core_objects PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi)
+# Tests must never mutate HKCU startup state or hide the runner's taskbar.
+target_compile_definitions(dock_core_objects PRIVATE DOCK_WMAC_TESTING)
 
 # 链接库
 set(TEST_LIBS GTest::gtest_main Qt6::Widgets Qt6::Test)
@@ -82,13 +84,19 @@ add_executable(test_display_affinity test_display_affinity.cpp)
 target_link_libraries(test_display_affinity dock_core_objects ${TEST_LIBS})
 add_test(NAME test_display_affinity COMMAND test_display_affinity)
 
+add_executable(test_windows_integration test_windows_integration.cpp)
+target_link_libraries(test_windows_integration dock_core_objects GTest::gtest Qt6::Widgets Qt6::Test)
+add_test(NAME test_windows_integration COMMAND test_windows_integration)
+set_tests_properties(test_windows_integration PROPERTIES LABELS "integration;windows")
+
 # 确保测试运行时能找到 Qt DLL
 foreach(test_name
     test_config test_dock_manager test_process_monitor test_sys_helper
     test_pinned_items_reader test_application test_window_cache test_click_state_machine
-    test_dwm_state test_window_cloaked test_display_affinity
+    test_dwm_state test_window_cloaked test_display_affinity test_windows_integration
 )
     set_tests_properties(${test_name} PROPERTIES
-        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT_BIN_DIR}"
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${QT_BIN_DIR};DOCK_WMAC_DATA_DIR=set:${CMAKE_CURRENT_BINARY_DIR}/test-data/${test_name}"
     )
 endforeach()

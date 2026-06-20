@@ -110,6 +110,8 @@ int Application::run()
     m_dockWindow->setProcessMonitor(m_processMonitor);
     m_processMonitor->start();
 
+    // 上次异常退出可能遗留隐藏状态；每次启动先恢复，再按用户设置决定是否隐藏。
+    m_sysHelper->restoreNativeTaskbar();
     m_dockWindow->show();
     m_sysHelper->installWindowHook();
 
@@ -121,8 +123,11 @@ int Application::run()
             });
         });
 
-    // 隐藏原生任务栏（Windows only）
-    m_sysHelper->hideNativeTaskbar();
+    // 隐藏原生任务栏属于实验性显式选项。Dock 未成功显示时绝不隐藏。
+    if (m_config->get(QStringLiteral("hideNativeTaskbar"), false).toBool()
+        && m_dockWindow->isVisible() && m_dockWindow->winId() != 0) {
+        m_sysHelper->hideNativeTaskbar();
+    }
 
     // 注册信号处理，确保异常退出时恢复任务栏
     s_sysHelperForSignal = m_sysHelper;
@@ -134,9 +139,9 @@ int Application::run()
     QTimer::singleShot(100, m_dockWindow, &DockWindow::requestUpdatePosition);
 
     // 开机自启
-    if (m_config->get(QStringLiteral("startWithSystem"), false).toBool()) {
-        m_sysHelper->setAutoStart(true);
-    }
+    // 每次启动同步当前路径，修复便携目录移动后残留的旧 Run 命令。
+    m_sysHelper->setAutoStart(
+        m_config->get(QStringLiteral("startWithSystem"), false).toBool());
 
     int exitCode = app.exec();
 

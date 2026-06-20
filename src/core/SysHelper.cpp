@@ -22,6 +22,7 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QCoreApplication>
+#include <QDir>
 #include <vector>
 
 #pragma comment(lib, "shell32.lib")
@@ -50,6 +51,10 @@ SysHelper::SysHelper(QObject *parent)
 
 bool SysHelper::setAutoStart(bool enabled)
 {
+#ifdef DOCK_WMAC_TESTING
+    Q_UNUSED(enabled);
+    return false;
+#else
     HKEY hKey;
     LONG result = RegOpenKeyEx(
         HKEY_CURRENT_USER,
@@ -60,22 +65,27 @@ bool SysHelper::setAutoStart(bool enabled)
     if (!enabled) {
         result = RegDeleteValue(hKey, L"Dock_WMac");
         RegCloseKey(hKey);
-        return result == ERROR_SUCCESS;
+        return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
     }
 
-    QString execPath = QCoreApplication::applicationFilePath();
-    std::wstring wExecPath = execPath.toStdWString();
+    const QString command = QStringLiteral("\"%1\"")
+        .arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));
+    const std::wstring wCommand = command.toStdWString();
 
     result = RegSetValueEx(
         hKey, L"Dock_WMac", 0, REG_SZ,
-        reinterpret_cast<const BYTE *>(wExecPath.c_str()),
-        (wExecPath.size() + 1) * sizeof(wchar_t));
+        reinterpret_cast<const BYTE *>(wCommand.c_str()),
+        static_cast<DWORD>((wCommand.size() + 1) * sizeof(wchar_t)));
     RegCloseKey(hKey);
     return result == ERROR_SUCCESS;
+#endif
 }
 
 bool SysHelper::isAutoStartEnabled() const
 {
+#ifdef DOCK_WMAC_TESTING
+    return false;
+#else
     HKEY hKey;
     LONG result = RegOpenKeyEx(
         HKEY_CURRENT_USER,
@@ -83,9 +93,25 @@ bool SysHelper::isAutoStartEnabled() const
         0, KEY_QUERY_VALUE, &hKey);
     if (result != ERROR_SUCCESS) return false;
 
-    result = RegQueryValueEx(hKey, L"Dock_WMac", nullptr, nullptr, nullptr, nullptr);
+    DWORD type = 0;
+    DWORD size = 0;
+    result = RegQueryValueEx(hKey, L"Dock_WMac", nullptr, &type, nullptr, &size);
+    if (result != ERROR_SUCCESS || type != REG_SZ || size < sizeof(wchar_t)) {
+        RegCloseKey(hKey);
+        return false;
+    }
+
+    std::vector<wchar_t> value(size / sizeof(wchar_t), L'\0');
+    result = RegQueryValueEx(hKey, L"Dock_WMac", nullptr, &type,
+                             reinterpret_cast<LPBYTE>(value.data()), &size);
     RegCloseKey(hKey);
-    return result == ERROR_SUCCESS;
+    if (result != ERROR_SUCCESS) return false;
+
+    const QString actual = QString::fromWCharArray(value.data()).trimmed();
+    const QString expected = QStringLiteral("\"%1\"")
+        .arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));
+    return actual.compare(expected, Qt::CaseInsensitive) == 0;
+#endif
 }
 
 // ─── 主题检测 ──────────────────────────────────────────────
@@ -151,6 +177,9 @@ static HWND g_taskbarHandle = nullptr;
 
 void SysHelper::hideNativeTaskbar()
 {
+#ifdef DOCK_WMAC_TESTING
+    return;
+#else
     HWND hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
     if (hTaskbar) {
         g_taskbarHandle = hTaskbar;
@@ -160,10 +189,14 @@ void SysHelper::hideNativeTaskbar()
     if (hSecondary) {
         ShowWindow(hSecondary, SW_HIDE);
     }
+#endif
 }
 
 void SysHelper::restoreNativeTaskbar()
 {
+#ifdef DOCK_WMAC_TESTING
+    return;
+#else
     HWND hTaskbar = g_taskbarHandle;
     if (!hTaskbar) {
         hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
@@ -178,6 +211,7 @@ void SysHelper::restoreNativeTaskbar()
         SetWindowPos(hSecondary, HWND_TOP, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     }
+#endif
 }
 
 QString SysHelper::resolveShortcut(const QString &lnkPath)
