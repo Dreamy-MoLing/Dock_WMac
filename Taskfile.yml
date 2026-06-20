@@ -28,29 +28,25 @@ tasks:
   test:
     desc: Run unit tests.
     cmds:
-      - cmake --build {{.BUILD_DIR}} --config {{.BUILD_TYPE}}
-      - cmd: ctest -C {{.BUILD_TYPE}} --output-on-failure
-        dir: '{{.BUILD_DIR}}'
+      - cmake --build {{.BUILD_DIR}} --config {{.BUILD_TYPE}} --parallel
+      - ctest --test-dir {{.BUILD_DIR}} -C {{.BUILD_TYPE}} --output-on-failure
 
   package:
     desc: Build the CPack ZIP package.
     deps: [test]
     cmds:
-      - cmd: cpack -G ZIP -C {{.BUILD_TYPE}}
-        dir: '{{.BUILD_DIR}}'
+      - cpack --config {{.BUILD_DIR}}/CPackConfig.cmake -G ZIP -C {{.BUILD_TYPE}}
 
   ci:
     desc: Run the same build/test/package flow used by GitHub Actions.
     cmds:
       - task: configure-ci
-      - task: test
       - task: package
 
   local-ci:
     desc: Run the full local configure/build/test/package flow.
     cmds:
       - task: configure
-      - task: test
       - task: package
 
   clean-build:
