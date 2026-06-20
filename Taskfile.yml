@@ -9,27 +9,27 @@ tasks:
     desc: Configure the MSVC/Qt build. Requires CMAKE_GENERATOR, VS_INSTALL_PATH, and QT_ROOT_DIR.
     cmds:
       - task: preflight
-      - powershell -NoProfile -Command "cmake --preset default -G \"$env:CMAKE_GENERATOR\""
+      - powershell -NoProfile -Command "cmake --preset default -G \"$$env:CMAKE_GENERATOR\""
 
   preflight:
     desc: Validate the shared local/CI build contract.
     cmds:
       - >-
-        powershell -NoProfile -Command "$ErrorActionPreference='Stop';
-        foreach ($name in 'CMAKE_GENERATOR','VS_INSTALL_PATH','QT_ROOT_DIR') {
-        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-        throw 'Missing required environment variable: ' + $name } };
-        if (-not (Test-Path -LiteralPath $env:VS_INSTALL_PATH)) {
-        throw 'Invalid VS_INSTALL_PATH: ' + $env:VS_INSTALL_PATH };
-        if (-not (Test-Path -LiteralPath $env:QT_ROOT_DIR)) {
-        throw 'Invalid QT_ROOT_DIR: ' + $env:QT_ROOT_DIR };
+        powershell -NoProfile -Command "$$ErrorActionPreference='Stop';
+        foreach ($$name in 'CMAKE_GENERATOR','VS_INSTALL_PATH','QT_ROOT_DIR') {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($$name))) {
+        throw 'Missing required environment variable: ' + $$name } };
+        if (-not (Test-Path -LiteralPath $$env:VS_INSTALL_PATH)) {
+        throw 'Invalid VS_INSTALL_PATH: ' + $$env:VS_INSTALL_PATH };
+        if (-not (Test-Path -LiteralPath $$env:QT_ROOT_DIR)) {
+        throw 'Invalid QT_ROOT_DIR: ' + $$env:QT_ROOT_DIR };
         Get-Command cmake | Out-Null"
 
   configure-ci:
     desc: Configure the CI build. Requires CMAKE_GENERATOR, VS_INSTALL_PATH, and QT_ROOT_DIR.
     cmds:
       - task: preflight
-      - powershell -NoProfile -Command "cmake --preset ci -G \"$env:CMAKE_GENERATOR\""
+      - powershell -NoProfile -Command "cmake --preset ci -G \"$$env:CMAKE_GENERATOR\""
 
   build:
     desc: Build the application.
