@@ -4,6 +4,7 @@
  */
 #include "core/ClickStateMachine.h"
 #include "core/WindowCache.h"
+#include "core/SysHelper.h"
 
 #include <QDir>
 #include <windows.h>
@@ -101,8 +102,7 @@ void ClickStateMachine::handleDoubleClick(const QString &execPath)
 void ClickStateMachine::launchApp(const QString &execPath)
 {
     if (execPath.isEmpty()) return;
-    QString nativePath = QDir::toNativeSeparators(execPath);
-    QProcess::startDetached(nativePath, QStringList());
+    SysHelper::launchPath(execPath);
 }
 
 void ClickStateMachine::showHiddenWindow(const QString &wmClass)

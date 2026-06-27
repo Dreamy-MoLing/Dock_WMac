@@ -18,6 +18,8 @@ void DockWindow::onItemAdded(const DockItemData &data)
 
     DockItem *item = new DockItem(data.appId, data.iconPath, data.displayName, this);
     item->setExecPath(data.execPath);
+    item->setTargetPath(data.targetPath);
+    item->setAppUserModelId(data.appUserModelId);
     item->setRunning(data.isRunning);
     item->setBadgeCount(data.badgeCount);
 
@@ -93,7 +95,12 @@ void DockWindow::updateWindowCounts()
         DockItem *item = it.value();
         if (!item->isRunning()) continue;
 
-        QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
+        DockItemData data;
+        data.appId = item->appId();
+        data.execPath = item->execPath();
+        data.targetPath = item->targetPath();
+        data.appUserModelId = item->appUserModelId();
+        QString wmClass = AppIdHelper::primaryIdentityKey(data);
 
         int count = m_windowCache->getWindowCount(wmClass);
         if (count > 0) {

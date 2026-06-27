@@ -100,9 +100,9 @@ TEST_F(PinnedItemsReaderTest, DataIntegrity)
         EXPECT_FALSE(item.execPath.isEmpty())
             << "execPath 为空，appId=" << item.appId.toStdString();
 
-        // execPath 应以 .exe 结尾（大小写不敏感）
-        EXPECT_TRUE(item.execPath.toLower().endsWith(".exe"))
-            << "execPath 不是 .exe 文件: " << item.execPath.toStdString();
+        // execPath 是可启动目标。系统任务栏读取保留 .lnk，目标 exe/shell 信息放在 targetPath/appUserModelId。
+        EXPECT_TRUE(item.execPath.toLower().endsWith(".lnk"))
+            << "execPath 应保留任务栏 .lnk 启动目标: " << item.execPath.toStdString();
 
         // isRunning 初始化为 false
         EXPECT_FALSE(item.isRunning)

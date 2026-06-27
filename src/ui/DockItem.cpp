@@ -8,6 +8,7 @@
 
 #include "ui/DockItem.h"
 #include "core/IconProvider.h"
+#include "core/SysHelper.h"
 #include <QTimer>
 #include <QPainter>
 #include <QMouseEvent>
@@ -336,9 +337,7 @@ void DockItem::dropEvent(QDropEvent *event)
 
     if (filePaths.isEmpty()) return;
 
-    // 用 QDir::toNativeSeparators 处理路径分隔符；不分割空格
-    QString nativePath = QDir::toNativeSeparators(m_execPath);
-    QProcess::startDetached(nativePath, filePaths);
+    SysHelper::launchPath(m_execPath, filePaths);
     event->acceptProposedAction();
 }
 
@@ -349,8 +348,7 @@ void DockItem::contextMenuEvent(QContextMenuEvent *event)
     QAction *launchAction = menu.addAction("启动");
     connect(launchAction, &QAction::triggered, this, [this]() {
         if (!m_execPath.isEmpty()) {
-            QString nativePath = QDir::toNativeSeparators(m_execPath);
-            QProcess::startDetached(nativePath, QStringList());
+            SysHelper::launchPath(m_execPath);
         }
     });
 

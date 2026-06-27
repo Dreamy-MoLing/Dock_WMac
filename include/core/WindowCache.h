@@ -28,6 +28,7 @@ struct CachedWindowInfo
     QString title;
     DWORD  pid = 0;
     QString exeName;            // 可执行文件名 basename（无 .exe 后缀，小写）
+    QString appUserModelId;     // Windows AppUserModelID（可为空）
     bool   isVisible = false;   // IsWindowVisible && !IsIconic
     bool   isMinimized = false; // IsIconic
     bool   isForeground = false;// GetForegroundWindow() == hwnd

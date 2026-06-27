@@ -17,6 +17,7 @@
 #include <QSignalSpy>
 #include <QTest>
 #include "core/ProcessMonitor.h"
+#include "core/AppIdHelper.h"
 #include "test_helpers.h"
 
 // ============================================================================
@@ -282,4 +283,22 @@ TEST(ProcessNameMatchingContract, AppIdToProcessNameMapping)
 
     // 多层命名空间
     EXPECT_EQ(normalizeProcessName("com.microsoft.VisualStudio"), "visualstudio");
+}
+
+TEST(AppIdentityKeys, IncludesShortcutTargetAppUserModelIdAndFallbacks)
+{
+    DockItemData item;
+    item.appId = "Chrome PWA";
+    item.execPath = "C:/Users/me/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/My App.lnk";
+    item.targetPath = "C:/Program Files/Google/Chrome/Application/chrome.exe";
+    item.appUserModelId = "Chrome.UserData.Profile.PWA";
+
+    const QStringList keys = AppIdHelper::identityKeys(item);
+
+    ASSERT_FALSE(keys.isEmpty());
+    EXPECT_EQ(keys.first(), "chrome");
+    EXPECT_TRUE(keys.contains("chrome.userdata.profile.pwa"));
+    EXPECT_TRUE(keys.contains("chrome pwa"));
+    EXPECT_TRUE(keys.contains("my app"));
+    EXPECT_TRUE(keys.contains("pwa"));
 }

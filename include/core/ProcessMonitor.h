@@ -57,7 +57,7 @@ private:
 
     // 监控的应用集合与状态缓存
     QSet<QString> m_registeredApps;        // appId 集合
-    QMap<QString, QString> m_registeredExecPaths;  // appId → execPath
+    QMap<QString, DockItemData> m_registeredItems;  // appId -> metadata for identity matching
     QMap<QString, bool> m_runningCache;     // appId → isRunning
 
     // 已检测到的运行中应用（用于清理）

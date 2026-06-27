@@ -23,6 +23,7 @@
 #include <QFileInfo>
 #include <QCoreApplication>
 #include <QDir>
+#include <QProcess>
 #include <vector>
 
 #pragma comment(lib, "shell32.lib")
@@ -32,6 +33,7 @@
 
 HHOOK g_keyboardHook = nullptr;
 SysHelper *g_sysHelperForHook = nullptr;
+bool g_nativeTaskbarHidden = false;
 
 // ─── 构造函数 ──────────────────────────────────────────────
 
@@ -173,21 +175,37 @@ QPoint SysHelper::cursorPos() const
 
 // ─── 原生任务栏管理 ─────────────────────────────────────────
 
-static HWND g_taskbarHandle = nullptr;
+#ifndef DOCK_WMAC_TESTING
+static bool isTaskbarClass(HWND hwnd)
+{
+    wchar_t className[256] = {};
+    if (!GetClassNameW(hwnd, className, 255)) return false;
+    return wcscmp(className, L"Shell_TrayWnd") == 0
+        || wcscmp(className, L"Shell_SecondaryTrayWnd") == 0;
+}
+
+static std::vector<HWND> enumerateTaskbars()
+{
+    std::vector<HWND> taskbars;
+    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
+        auto *items = reinterpret_cast<std::vector<HWND> *>(lParam);
+        if (isTaskbarClass(hwnd))
+            items->push_back(hwnd);
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&taskbars));
+    return taskbars;
+}
+#endif
 
 void SysHelper::hideNativeTaskbar()
 {
 #ifdef DOCK_WMAC_TESTING
     return;
 #else
-    HWND hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
-    if (hTaskbar) {
-        g_taskbarHandle = hTaskbar;
-        ShowWindow(hTaskbar, SW_HIDE);
-    }
-    HWND hSecondary = FindWindow(L"Shell_SecondaryTrayWnd", nullptr);
-    if (hSecondary) {
-        ShowWindow(hSecondary, SW_HIDE);
+    g_nativeTaskbarHidden = true;
+    for (HWND hwnd : enumerateTaskbars()) {
+        if (IsWindow(hwnd))
+            ShowWindow(hwnd, SW_HIDE);
     }
 #endif
 }
@@ -197,36 +215,30 @@ void SysHelper::restoreNativeTaskbar()
 #ifdef DOCK_WMAC_TESTING
     return;
 #else
-    HWND hTaskbar = g_taskbarHandle;
-    if (!hTaskbar) {
-        hTaskbar = FindWindow(L"Shell_TrayWnd", nullptr);
-    }
-    if (hTaskbar) {
-        SetWindowPos(hTaskbar, HWND_TOP, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-        g_taskbarHandle = nullptr;
-    }
-    HWND hSecondary = FindWindow(L"Shell_SecondaryTrayWnd", nullptr);
-    if (hSecondary) {
-        SetWindowPos(hSecondary, HWND_TOP, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    g_nativeTaskbarHidden = false;
+    for (HWND hwnd : enumerateTaskbars()) {
+        if (IsWindow(hwnd)) {
+            ShowWindow(hwnd, SW_SHOW);
+            SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        }
     }
 #endif
 }
-
 QString SysHelper::resolveShortcut(const QString &lnkPath)
 {
     if (!QFileInfo::exists(lnkPath)) return {};
 
 #ifdef Q_OS_WIN
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return {};
+    HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool didInitCom = SUCCEEDED(initHr);
+    if (FAILED(initHr) && initHr != RPC_E_CHANGED_MODE) return {};
 
     IShellLink *psl = nullptr;
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_IShellLink, reinterpret_cast<void **>(&psl));
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_IShellLink, reinterpret_cast<void **>(&psl));
     if (FAILED(hr)) {
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        if (didInitCom) CoUninitialize();
         return {};
     }
 
@@ -234,19 +246,17 @@ QString SysHelper::resolveShortcut(const QString &lnkPath)
     hr = psl->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&ppf));
     if (FAILED(hr)) {
         psl->Release();
-        if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+        if (didInitCom) CoUninitialize();
         return {};
     }
 
-    WCHAR wszPath[MAX_PATH];
-    lnkPath.toWCharArray(wszPath);
-    wszPath[lnkPath.length()] = 0;
-    hr = ppf->Load(wszPath, STGM_READ);
+    const std::wstring path = QDir::toNativeSeparators(lnkPath).toStdWString();
+    hr = ppf->Load(path.c_str(), STGM_READ);
 
     QString execPath;
     if (SUCCEEDED(hr)) {
         WIN32_FIND_DATA wfd;
-        WCHAR szPath[MAX_PATH];
+        WCHAR szPath[MAX_PATH] = {};
         hr = psl->GetPath(szPath, MAX_PATH, &wfd, SLGP_RAWPATH);
         if (SUCCEEDED(hr)) {
             execPath = QString::fromWCharArray(szPath);
@@ -255,10 +265,29 @@ QString SysHelper::resolveShortcut(const QString &lnkPath)
 
     ppf->Release();
     psl->Release();
-    if (hr != RPC_E_CHANGED_MODE) CoUninitialize();
+    if (didInitCom) CoUninitialize();
     return execPath;
 #else
     Q_UNUSED(lnkPath);
     return {};
+#endif
+}
+
+bool SysHelper::launchPath(const QString &path, const QStringList &arguments)
+{
+    if (path.trimmed().isEmpty()) return false;
+#ifdef Q_OS_WIN
+    const std::wstring nativePath = QDir::toNativeSeparators(path).toStdWString();
+    const std::wstring params = arguments.join(QLatin1Char(' ')).toStdWString();
+    HINSTANCE result = ShellExecuteW(
+        nullptr,
+        L"open",
+        nativePath.c_str(),
+        params.empty() ? nullptr : params.c_str(),
+        nullptr,
+        SW_SHOWNORMAL);
+    return reinterpret_cast<INT_PTR>(result) > 32;
+#else
+    return QProcess::startDetached(path, arguments);
 #endif
 }

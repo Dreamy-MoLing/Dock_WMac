@@ -22,11 +22,13 @@
 #include <QDebug>
 #include <QTimer>
 #include <QMetaObject>
+#include <utility>
 
 // ─── 全局钩子句柄 ──────────────────────────────────────────
 
 extern HHOOK g_keyboardHook;
 extern SysHelper *g_sysHelperForHook;
+extern bool g_nativeTaskbarHidden;
 
 // ─── 键盘钩子回调 ──────────────────────────────────────────
 
@@ -46,6 +48,13 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
 
+static bool isShellTaskbarWindow(HWND hwnd)
+{
+    wchar_t className[256] = {};
+    if (!GetClassNameW(hwnd, className, 255)) return false;
+    return wcscmp(className, L"Shell_TrayWnd") == 0
+        || wcscmp(className, L"Shell_SecondaryTrayWnd") == 0;
+}
 // ─── 窗口事件钩子回调 ─────────────────────────────────────
 
 static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
@@ -60,6 +69,16 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
 
     if (idObject != OBJID_WINDOW || hwnd == nullptr) return;
     if (!g_sysHelperForHook) return;
+
+    if (g_nativeTaskbarHidden
+        && (event == EVENT_OBJECT_CREATE || event == EVENT_OBJECT_SHOW)
+        && isShellTaskbarWindow(hwnd)) {
+        SysHelper *helper = g_sysHelperForHook;
+        QMetaObject::invokeMethod(helper, [helper]() {
+            if (g_nativeTaskbarHidden)
+                helper->hideNativeTaskbar();
+        }, Qt::QueuedConnection);
+    }
 
     switch (event) {
     case EVENT_SYSTEM_FOREGROUND:
@@ -101,13 +120,11 @@ static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event,
 
 SysHelper::~SysHelper()
 {
+    uninstallWindowHook();
     if (g_sysHelperForHook == this) {
         g_sysHelperForHook = nullptr;
     }
-    if (g_keyboardHook) {
-        UnhookWindowsHookEx(g_keyboardHook);
-        g_keyboardHook = nullptr;
-    }
+    uninstallKeyboardHook();
 }
 
 // ─── 钩子安装/卸载 ─────────────────────────────────────────
@@ -115,17 +132,23 @@ SysHelper::~SysHelper()
 bool SysHelper::installWindowHook()
 {
     g_sysHelperForHook = this;
+    if (!m_windowHooks.isEmpty()) return true;
 
-    HWINEVENTHOOK hook = SetWinEventHook(
+    HWINEVENTHOOK foregroundHook = SetWinEventHook(
         EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MAXIMIZESTART,
         nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
-    if (!hook) return false;
+    if (!foregroundHook) return false;
+    m_windowHooks.append(foregroundHook);
 
-    hook = SetWinEventHook(
+    HWINEVENTHOOK objectHook = SetWinEventHook(
         EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE,
         nullptr, WinEventProc, 0, 0,
         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-    if (!hook) return false;
+    if (!objectHook) {
+        uninstallWindowHook();
+        return false;
+    }
+    m_windowHooks.append(objectHook);
 
     QTimer::singleShot(500, this, [this]() {
         bool maximized = getForegroundWindowState();
@@ -135,6 +158,15 @@ bool SysHelper::installWindowHook()
     });
 
     return true;
+}
+
+void SysHelper::uninstallWindowHook()
+{
+    for (HWINEVENTHOOK hook : std::as_const(m_windowHooks)) {
+        if (hook)
+            UnhookWinEvent(hook);
+    }
+    m_windowHooks.clear();
 }
 
 bool SysHelper::installKeyboardHook()
@@ -162,7 +194,6 @@ void SysHelper::uninstallKeyboardHook()
         qInfo() << "键盘钩子已卸载";
     }
 }
-
 // ─── 前台窗口状态 ──────────────────────────────────────────
 
 bool SysHelper::getForegroundWindowState()

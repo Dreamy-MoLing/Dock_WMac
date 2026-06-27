@@ -74,7 +74,7 @@ void OverflowPanel::showPopup(DockItem *anchorItem, QWidget * /*dockParent*/)
         );
         connect(btn, &QPushButton::clicked, this, [this, data]() {
             if (m_windowCache) {
-                QString wmClass = AppIdHelper::deriveWmClass(data.execPath, data.appId);
+                QString wmClass = AppIdHelper::primaryIdentityKey(data);
                 m_windowCache->activateWindow(wmClass);
             }
             hidePopup();

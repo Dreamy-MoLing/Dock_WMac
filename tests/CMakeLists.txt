@@ -32,7 +32,7 @@ add_library(dock_core_objects OBJECT
     ${DOCK_CORE_HEADERS}
 )
 target_include_directories(dock_core_objects PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi)
+target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi shell32 ole32 uuid propsys comctl32)
 # Tests must never mutate HKCU startup state or hide the runner's taskbar.
 target_compile_definitions(dock_core_objects PRIVATE DOCK_WMAC_TESTING)
 

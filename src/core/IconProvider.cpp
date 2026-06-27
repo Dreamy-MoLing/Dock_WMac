@@ -14,6 +14,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <initguid.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>

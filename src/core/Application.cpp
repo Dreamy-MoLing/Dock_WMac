@@ -18,6 +18,7 @@
 #include <QTimer>
 #include <csignal>
 
+#include "core/AppIdHelper.h"
 #include "core/ConfigManager.h"
 #include "core/DockManager.h"
 #include "core/Logger.h"
@@ -183,9 +184,10 @@ void Application::loadPinnedItems()
     // 1. 从系统任务栏读取 .lnk（初始集）
     PinnedItemsReader reader;
     QList<DockItemData> pinnedItems = reader.getAllPinnedItems();
-    QSet<QString> systemExecPaths;  // 系统任务栏中的 execPath 集合
+    QSet<QString> systemKeys;
     for (const auto &item : pinnedItems) {
-        systemExecPaths.insert(item.execPath.toLower());
+        for (const QString &key : AppIdHelper::identityKeys(item))
+            systemKeys.insert(key);
     }
     qInfo() << "从系统任务栏读取" << pinnedItems.size() << "个固定项";
 
@@ -205,15 +207,22 @@ void Application::loadPinnedItems()
                     QString execPath = obj["execPath"].toString();
                     if (execPath.isEmpty()) continue;
 
-                    // 去重：已在系统任务栏中的跳过
-                    if (systemExecPaths.contains(execPath.toLower())) continue;
-
                     DockItemData item;
                     item.appId       = obj["appId"].toString();
                     item.displayName = obj["displayName"].toString();
                     item.iconPath    = obj["iconPath"].toString();
                     item.execPath    = execPath;
+                    item.targetPath  = obj["targetPath"].toString();
+                    item.arguments   = obj["arguments"].toString();
+                    item.appUserModelId = obj["appUserModelId"].toString();
                     item.isRunning   = false;
+
+                    bool existsInSystem = false;
+                    for (const QString &key : AppIdHelper::identityKeys(item)) {
+                        if (systemKeys.contains(key)) { existsInSystem = true; break; }
+                    }
+                    if (existsInSystem) continue;
+
                     pinnedItems.append(item);
                     ++mergedCount;
                 }
@@ -230,24 +239,30 @@ void Application::connectPersistence()
     // 固定项变更时保存到 data/pinned.json
     connect(m_dockManager, &DockManager::pinnedItemsChanged,
         this, [this](const QList<DockItemData> &items) {
-            // 读取系统任务栏 execPath 集合，用于过滤
-            QSet<QString> systemExecPaths;
+            QSet<QString> systemKeys;
             PinnedItemsReader reader;
             const auto systemItems = reader.getAllPinnedItems();
             for (const auto &sysItem : systemItems) {
-                systemExecPaths.insert(sysItem.execPath.toLower());
+                for (const QString &key : AppIdHelper::identityKeys(sysItem))
+                    systemKeys.insert(key);
             }
 
             QJsonArray arr;
             for (const auto &item : items) {
-                // 只保存非系统任务栏中的项（Dock 专用固定项）
-                if (systemExecPaths.contains(item.execPath.toLower())) continue;
+                bool existsInSystem = false;
+                for (const QString &key : AppIdHelper::identityKeys(item)) {
+                    if (systemKeys.contains(key)) { existsInSystem = true; break; }
+                }
+                if (existsInSystem) continue;
 
                 QJsonObject obj;
                 obj["appId"]       = item.appId;
                 obj["displayName"] = item.displayName;
                 obj["iconPath"]    = item.iconPath;
                 obj["execPath"]    = item.execPath;
+                obj["targetPath"]  = item.targetPath;
+                obj["arguments"]   = item.arguments;
+                obj["appUserModelId"] = item.appUserModelId;
                 arr.append(obj);
             }
 

@@ -36,6 +36,10 @@ public:
     QString displayName() const { return m_displayName; }
     QString execPath() const { return m_execPath; }
     void setExecPath(const QString &path) { m_execPath = path; }
+    QString targetPath() const { return m_targetPath; }
+    void setTargetPath(const QString &path) { m_targetPath = path; }
+    QString appUserModelId() const { return m_appUserModelId; }
+    void setAppUserModelId(const QString &id) { m_appUserModelId = id; }
 
     /** @brief 视觉缩放比例（1.0 = 原始大小，动画驱动） */
     qreal visualScale() const { return m_visualScale; }
@@ -72,6 +76,8 @@ private:
     QString m_appId;
     QString m_displayName;
     QString m_execPath;
+    QString m_targetPath;
+    QString m_appUserModelId;
     QPixmap m_icon;
     bool    m_isRunning;
     int     m_badgeCount;

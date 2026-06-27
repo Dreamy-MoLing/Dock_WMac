@@ -15,9 +15,27 @@
 #include <QDebug>
 #include <QReadLocker>
 #include <QWriteLocker>
+#include <shobjidl.h>
+#include <propkey.h>
+#include <propvarutil.h>
 
 #pragma comment(lib, "user32.lib")
 
+static QString windowAppUserModelId(HWND hwnd)
+{
+    IPropertyStore *store = nullptr;
+    HRESULT hr = SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(&store));
+    if (FAILED(hr) || !store) return {};
+
+    PROPVARIANT value;
+    PropVariantInit(&value);
+    QString appId;
+    if (SUCCEEDED(store->GetValue(PKEY_AppUserModel_ID, &value)) && value.vt == VT_LPWSTR && value.pwszVal)
+        appId = QString::fromWCharArray(value.pwszVal).toLower();
+    PropVariantClear(&value);
+    store->Release();
+    return appId;
+}
 // ─── 构造 ────────────────────────────────────────────────
 
 WindowCache::WindowCache(QObject *parent)
@@ -80,6 +98,7 @@ void WindowCache::refresh()
         info.title = QString::fromWCharArray(rw.title);
         info.pid = rw.pid;
         info.exeName = exeName;
+        info.appUserModelId = windowAppUserModelId(rw.hwnd);
 
         LONG exStyle = GetWindowLong(rw.hwnd, GWL_EXSTYLE);
         info.isToolWindow = (exStyle & WS_EX_TOOLWINDOW) != 0;
@@ -92,6 +111,8 @@ void WindowCache::refresh()
         }
 
         addWindowToCache(info, exeName);
+        if (!info.appUserModelId.isEmpty())
+            addWindowToCache(info, info.appUserModelId);
     }
 
     locker.unlock();
@@ -153,6 +174,7 @@ void WindowCache::refreshForPid(DWORD pid)
         wchar_t title[256] = {0};
         GetWindowTextW(hwnd, title, 255);
         info.title = QString::fromWCharArray(title);
+        info.appUserModelId = windowAppUserModelId(hwnd);
 
         LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         info.isToolWindow = (exStyle & WS_EX_TOOLWINDOW) != 0;
@@ -167,6 +189,8 @@ void WindowCache::refreshForPid(DWORD pid)
     QWriteLocker locker(&m_lock);
     for (const auto &w : ctx.wins) {
         addWindowToCache(w, exeName);
+        if (!w.appUserModelId.isEmpty())
+            addWindowToCache(w, w.appUserModelId);
     }
     locker.unlock();
     emit cacheUpdated();
@@ -199,6 +223,8 @@ void WindowCache::scanForClass(const QString &wmClass)
             if (exe == ctx->target) matched = TRUE;
         }
         CloseHandle(hProcess);
+        const QString appId = windowAppUserModelId(hwnd);
+        if (!matched && !appId.isEmpty() && appId == ctx->target) matched = TRUE;
         if (!matched) return TRUE;
 
         CachedWindowInfo info;
@@ -207,6 +233,7 @@ void WindowCache::scanForClass(const QString &wmClass)
         wchar_t title[256] = {0};
         GetWindowTextW(hwnd, title, 255);
         info.title = QString::fromWCharArray(title);
+        info.appUserModelId = windowAppUserModelId(hwnd);
 
         LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         info.isToolWindow = (exStyle & WS_EX_TOOLWINDOW) != 0;

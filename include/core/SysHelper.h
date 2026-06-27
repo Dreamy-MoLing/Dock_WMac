@@ -5,6 +5,7 @@
 #include <QList>
 #include <QWidget>  // for WId
 #include <QTimer>
+#include <QStringList>
 #include "Types.h"
 
 #ifdef Q_OS_WIN
@@ -27,6 +28,9 @@ public:
 
     /** @brief 注册全局窗口钩子，监听前台窗口状态变化 */
     bool installWindowHook();
+
+    /** @brief 移除全局窗口钩子 */
+    void uninstallWindowHook();
 
     /** @brief 注册低级键盘钩子，捕获 Win 键（仅 Hidden 状态启用） */
     bool installKeyboardHook();
@@ -103,6 +107,9 @@ public:
     /** @brief 解析 .lnk 快捷方式文件，返回目标路径 */
     static QString resolveShortcut(const QString &lnkPath);
 
+    /** @brief 使用 Windows Shell 启动 .exe/.lnk/shell 目标 */
+    static bool launchPath(const QString &path, const QStringList &arguments = {});
+
 signals:
     /** @brief 前台窗口状态变化 signal */
     void foregroundWindowChanged(bool isMaximizedOrFullscreen);
@@ -126,6 +133,9 @@ signals:
 private:
     /** @brief 全屏状态防抖定时器（避免高频事件触发重复扫描） */
     QTimer *m_fullscreenDebounceTimer = nullptr;
+#ifdef Q_OS_WIN
+    QList<HWINEVENTHOOK> m_windowHooks;
+#endif
 };
 
 #endif // SYSHELPER_H

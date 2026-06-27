@@ -113,18 +113,18 @@ void ProcessMonitor::stop()
 void ProcessMonitor::registerApp(const QString &appId, const QString &execPath)
 {
     m_registeredApps.insert(appId);
-    if (!execPath.isEmpty()) {
-        m_registeredExecPaths[appId] = execPath;
-    }
+    DockItemData item;
+    item.appId = appId;
+    item.execPath = execPath;
+    item.targetPath = execPath;
+    m_registeredItems[appId] = item;
 }
 
 void ProcessMonitor::registerApps(const QList<DockItemData> &items)
 {
     for (const auto &item : items) {
         m_registeredApps.insert(item.appId);
-        if (!item.execPath.isEmpty()) {
-            m_registeredExecPaths[item.appId] = item.execPath;
-        }
+        m_registeredItems[item.appId] = item;
     }
 }
 
@@ -132,6 +132,7 @@ void ProcessMonitor::unregisterApp(const QString &appId)
 {
     m_registeredApps.remove(appId);
     m_runningCache.remove(appId);
+    m_registeredItems.remove(appId);
 }
 
 /**
@@ -171,58 +172,41 @@ void ProcessMonitor::onTick()
         return;
     }
 
-    // 每 4 次 tick 扫描一次新应用
     if (m_tickCount % 4 == 0) {
         scanTransientApps();
     }
     m_tickCount++;
 
-    // 获取当前运行中的进程名
     QSet<QString> runningNames = getRunningProcessNames();
 
-    // 检测已注册应用的运行状态
     for (const auto &appId : m_registeredApps) {
-        QString processName = AppIdHelper::deriveWmClass(
-            m_registeredExecPaths.value(appId), appId);
-        bool isRunning = runningNames.contains(processName);
-
-        // 如果 appId 推导名未匹配，尝试用可执行文件 basename
-        // 解决 appId="Visual Studio Code" execPath="Code.exe" 这类不匹配
-        if (!isRunning && m_registeredExecPaths.contains(appId)) {
-            QFileInfo fi(m_registeredExecPaths[appId]);
-            QString exeBaseName = fi.baseName().toLower();
-            if (!exeBaseName.isEmpty() && exeBaseName != processName) {
-                isRunning = runningNames.contains(exeBaseName);
+        const DockItemData item = m_registeredItems.value(appId);
+        const QStringList keys = AppIdHelper::identityKeys(item);
+        bool isRunning = false;
+        for (const QString &key : keys) {
+            if (runningNames.contains(key)) {
+                isRunning = true;
+                break;
             }
         }
 
         bool wasRunning = m_runningCache.value(appId, false);
-
         if (isRunning != wasRunning) {
             m_runningCache[appId] = isRunning;
             emit appRunningStateChanged(appId, isRunning);
         }
     }
 }
-
 void ProcessMonitor::scanTransientApps()
 {
     // 策略：只添加有顶层可见窗口的应用程序
     // 这比维护一个系统进程列表更可靠
     QSet<DWORD> pidsWithWindows = getPidsWithWindows();
 
-    // 构建已注册应用的进程名集合（用于匹配）
-    // 同时收集已注册应用的 exe 路径，用于更精确的匹配
-    QSet<QString> registeredProcessNames;
-    QSet<QString> registeredExePaths;
+    QSet<QString> registeredKeys;
     for (const auto &appId : m_registeredApps) {
-        registeredProcessNames.insert(
-            AppIdHelper::deriveWmClass(m_registeredExecPaths.value(appId), appId));
-        // 如果有 execPath，也添加到匹配集合
-        if (m_registeredExecPaths.contains(appId)) {
-            QFileInfo fi(m_registeredExecPaths[appId]);
-            registeredExePaths.insert(fi.baseName().toLower());
-        }
+        for (const QString &key : AppIdHelper::identityKeys(m_registeredItems.value(appId)))
+            registeredKeys.insert(key);
     }
 
     // 遍历有窗口的进程，添加新应用
@@ -236,8 +220,7 @@ void ProcessMonitor::scanTransientApps()
         currentRunning.insert(procName);
 
         // 跳过已注册的（固定项或已有临时项）
-        if (registeredProcessNames.contains(procName)) continue;
-        if (registeredExePaths.contains(procName)) continue;
+        if (registeredKeys.contains(procName)) continue;
         if (m_detectedRunningApps.contains(procName)) continue;
 
         // 获取进程路径（用于图标）
@@ -262,8 +245,7 @@ void ProcessMonitor::scanTransientApps()
                 continue;
             }
             // 跳过没有用户界面的系统进程
-            if (lower.contains("\\windowsapps\\") ||       // UWP 运行时容器
-                lower.contains("\\windows.old\\") ||
+            if (lower.contains("\\windows.old\\") ||
                 lower.endsWith("svchost.exe") ||
                 lower.endsWith("dllhost.exe") ||
                 lower.endsWith("conhost.exe") ||

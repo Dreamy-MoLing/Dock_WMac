@@ -1,24 +1,23 @@
 /**
  * @file PinnedItemsReader.cpp
  * @brief 任务栏固定项读取器实现
- *
- * 从 Windows 任务栏 .lnk 文件目录读取固定项，
- * 解析快捷方式目标路径并提取应用图标。
  */
 
 #include "core/PinnedItemsReader.h"
+#include "core/AppIdHelper.h"
 #include "core/SysHelper.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
-#include <QPixmap>
-#include <QImage>
 #include <QSet>
-#include <QDebug>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <shlobj.h>
+#include <shobjidl.h>
+#include <propkey.h>
+#include <propvarutil.h>
 #endif
 
 PinnedItemsReader::PinnedItemsReader(QObject *parent)
@@ -34,17 +33,85 @@ QList<DockItemData> PinnedItemsReader::getAllPinnedItems()
     return deduplicated;
 }
 
+namespace {
+struct ShortcutInfo {
+    QString targetPath;
+    QString arguments;
+    QString appUserModelId;
+    bool loaded = false;
+};
+
+#ifdef Q_OS_WIN
+ShortcutInfo readShortcutInfo(const QString &lnkPath)
+{
+    ShortcutInfo info;
+    if (!QFileInfo::exists(lnkPath)) return info;
+
+    HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool didInitCom = SUCCEEDED(initHr);
+    if (FAILED(initHr) && initHr != RPC_E_CHANGED_MODE) return info;
+
+    IShellLinkW *link = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_IShellLinkW, reinterpret_cast<void **>(&link));
+    if (FAILED(hr)) {
+        if (didInitCom) CoUninitialize();
+        return info;
+    }
+
+    IPersistFile *persist = nullptr;
+    hr = link->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&persist));
+    if (SUCCEEDED(hr)) {
+        const std::wstring nativePath = QDir::toNativeSeparators(lnkPath).toStdWString();
+        hr = persist->Load(nativePath.c_str(), STGM_READ);
+        info.loaded = SUCCEEDED(hr);
+        persist->Release();
+    }
+
+    if (info.loaded) {
+        WIN32_FIND_DATAW wfd = {};
+        WCHAR pathBuf[MAX_PATH] = {};
+        if (SUCCEEDED(link->GetPath(pathBuf, MAX_PATH, &wfd, SLGP_RAWPATH)))
+            info.targetPath = QString::fromWCharArray(pathBuf);
+
+        WCHAR argBuf[INFOTIPSIZE] = {};
+        if (SUCCEEDED(link->GetArguments(argBuf, INFOTIPSIZE)))
+            info.arguments = QString::fromWCharArray(argBuf);
+
+        IPropertyStore *store = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_IPropertyStore, reinterpret_cast<void **>(&store)))) {
+            PROPVARIANT value;
+            PropVariantInit(&value);
+            if (SUCCEEDED(store->GetValue(PKEY_AppUserModel_ID, &value)) && value.vt == VT_LPWSTR && value.pwszVal) {
+                info.appUserModelId = QString::fromWCharArray(value.pwszVal);
+            }
+            PropVariantClear(&value);
+            store->Release();
+        }
+    }
+
+    link->Release();
+    if (didInitCom) CoUninitialize();
+    return info;
+}
+#else
+ShortcutInfo readShortcutInfo(const QString &lnkPath)
+{
+    Q_UNUSED(lnkPath);
+    return {};
+}
+#endif
+} // namespace
+
 QList<DockItemData> PinnedItemsReader::readFromLnkFiles()
 {
     QList<DockItemData> items;
 
-    // Windows 10/11 任务栏固定项路径
     QString taskbarPath = QDir::homePath()
         + "/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/";
     QDir dir(taskbarPath);
 
     if (!dir.exists()) {
-        // 回退: Windows 7 风格路径
         taskbarPath = QDir::homePath()
             + "/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/";
         dir.setPath(taskbarPath);
@@ -57,27 +124,25 @@ QList<DockItemData> PinnedItemsReader::readFromLnkFiles()
 
     const auto entries = dir.entryInfoList({"*.lnk"}, QDir::Files, QDir::Name);
     for (const QFileInfo &fi : entries) {
-        QString execPath = resolveShortcut(fi.absoluteFilePath());
-        if (execPath.isEmpty()) {
-            qWarning() << "无法解析快捷方式:" << fi.absoluteFilePath();
-            continue;
-        }
-
-        // 过滤无效快捷方式（非 .exe 文件）
-        if (!execPath.toLower().endsWith(".exe")) {
-            qDebug() << "跳过非应用程序快捷方式:" << fi.absoluteFilePath();
-            continue;
-        }
+        const QString lnkPath = fi.absoluteFilePath();
+        const ShortcutInfo shortcut = readShortcutInfo(lnkPath);
 
         DockItemData item;
-        item.appId = fi.completeBaseName();
+        item.appUserModelId = shortcut.appUserModelId;
+        item.appId = shortcut.appUserModelId.isEmpty() ? fi.completeBaseName() : shortcut.appUserModelId;
         item.displayName = fi.completeBaseName();
-        item.execPath = execPath;
-        item.iconPath = execPath;  // 图标由 IconProvider 在渲染时统一提取
+        item.execPath = lnkPath;
+        item.targetPath = shortcut.targetPath;
+        item.arguments = shortcut.arguments;
+        item.iconPath = shortcut.targetPath.isEmpty() ? lnkPath : shortcut.targetPath;
         item.isRunning = false;
         item.badgeCount = 0;
         items.append(item);
-        qDebug() << "固定项:" << item.appId << "execPath:" << execPath << "iconPath:" << item.iconPath;
+
+        qDebug() << "固定项:" << item.appId
+                 << "launch:" << item.execPath
+                 << "target:" << item.targetPath
+                 << "aumid:" << item.appUserModelId;
     }
 
     return items;
@@ -85,17 +150,30 @@ QList<DockItemData> PinnedItemsReader::readFromLnkFiles()
 
 QList<DockItemData> PinnedItemsReader::deduplicateItems(const QList<DockItemData> &items)
 {
-    QSet<QString> seenPaths;
+    QSet<QString> seen;
     QList<DockItemData> deduplicated;
 
     for (const auto &item : items) {
-        QString key = item.execPath.toLower();
-        if (!seenPaths.contains(key)) {
-            seenPaths.insert(key);
-            deduplicated.append(item);
-        } else {
-            qDebug() << "去重: 跳过重复项" << item.appId << "(" << item.execPath << ")";
+        QStringList keys = AppIdHelper::identityKeys(item);
+        if (keys.isEmpty())
+            keys.append(item.execPath.toLower());
+
+        bool duplicate = false;
+        for (const QString &key : keys) {
+            if (seen.contains(key)) {
+                duplicate = true;
+                break;
+            }
         }
+
+        if (duplicate) {
+            qDebug() << "去重: 跳过重复项" << item.appId << "(" << item.execPath << ")";
+            continue;
+        }
+
+        for (const QString &key : keys)
+            seen.insert(key);
+        deduplicated.append(item);
     }
 
     return deduplicated;
@@ -105,4 +183,3 @@ QString PinnedItemsReader::resolveShortcut(const QString &lnkPath)
 {
     return SysHelper::resolveShortcut(lnkPath);
 }
-

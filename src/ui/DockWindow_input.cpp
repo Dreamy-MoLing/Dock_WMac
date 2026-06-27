@@ -9,6 +9,8 @@
 #include "core/AppIdHelper.h"
 #include "core/ClickStateMachine.h"
 #include "core/DockManager.h"
+#include "core/SysHelper.h"
+#include "core/Types.h"
 #include "ui/WindowPreviewPanel.h"
 
 #include <QDir>
@@ -94,8 +96,7 @@ bool DockWindow::eventFilter(QObject *obj, QEvent *event)
 void DockWindow::launchApp(DockItem *item)
 {
     if (!item || item->execPath().isEmpty()) return;
-    QString nativePath = QDir::toNativeSeparators(item->execPath());
-    QProcess::startDetached(nativePath, QStringList());
+    SysHelper::launchPath(item->execPath());
 }
 
 void DockWindow::handleSingleClick(DockItem *item)
@@ -105,7 +106,12 @@ void DockWindow::handleSingleClick(DockItem *item)
         return;
     }
 
-    QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
+    DockItemData data;
+    data.appId = item->appId();
+    data.execPath = item->execPath();
+    data.targetPath = item->targetPath();
+    data.appUserModelId = item->appUserModelId();
+    QString wmClass = AppIdHelper::primaryIdentityKey(data);
     bool isRunning = item->isRunning();
 
     m_clickStateMachine->handleClick(wmClass, item->execPath(), isRunning);

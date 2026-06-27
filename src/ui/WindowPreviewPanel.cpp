@@ -14,6 +14,7 @@
 #include "core/SysHelper.h"
 #include "core/WindowCache.h"
 #include "core/AppIdHelper.h"
+#include "core/Types.h"
 
 #include <QVBoxLayout>
 #include <QLabel>
@@ -151,7 +152,12 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
 {
     if (!item || !m_sysHelper || !m_windowCache) return;
 
-    QString wmClass = AppIdHelper::deriveWmClass(item->execPath(), item->appId());
+    DockItemData data;
+    data.appId = item->appId();
+    data.execPath = item->execPath();
+    data.targetPath = item->targetPath();
+    data.appUserModelId = item->appUserModelId();
+    QString wmClass = AppIdHelper::primaryIdentityKey(data);
     if (wmClass.isEmpty()) return;
 
     // 从 WindowCache 获取窗口列表（不再自 EnumWindows）
