@@ -24,6 +24,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QDebug>
+#include <QSet>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -157,11 +158,23 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     data.execPath = item->execPath();
     data.targetPath = item->targetPath();
     data.appUserModelId = item->appUserModelId();
-    QString wmClass = AppIdHelper::primaryIdentityKey(data);
-    if (wmClass.isEmpty()) return;
+    const QStringList identityKeys = AppIdHelper::identityKeys(data);
+    if (identityKeys.isEmpty()) return;
 
-    // 从 WindowCache 获取窗口列表（不再自 EnumWindows）
-    WindowList windows = m_windowCache->getWindowsForPreview(wmClass.toLower());
+    // 从 WindowCache 获取窗口列表（不再自 EnumWindows），并合并多个身份 key 的结果。
+    WindowList windows;
+    QSet<quintptr> seenWindows;
+    for (const QString &key : identityKeys) {
+        m_windowCache->scanForClass(key);
+        const WindowList keyWindows = m_windowCache->getWindowsForPreview(key);
+        for (const CachedWindowInfo &window : keyWindows) {
+            const quintptr hwndValue = reinterpret_cast<quintptr>(window.hwnd);
+            if (seenWindows.contains(hwndValue))
+                continue;
+            seenWindows.insert(hwndValue);
+            windows.append(window);
+        }
+    }
     if (windows.isEmpty())
         return;
 

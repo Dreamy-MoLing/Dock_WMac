@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QProcess>
 
 class WindowCache;
@@ -57,11 +58,15 @@ public:
     /** @brief 判定 + 执行（便捷方法，供 DockWindow 调用） */
     void handleClick(const QString &wmClass, const QString &execPath, bool isRunning);
 
+    /** @brief 使用多个身份 key 判定 + 执行，优先匹配已有窗口的 key */
+    void handleClick(const QStringList &identityKeys, const QString &execPath, bool isRunning);
+
     /** @brief 双击：始终启动新实例 */
     void handleDoubleClick(const QString &execPath);
 
 private:
     State determineState(const QString &wmClass, bool isRunning);
+    QString selectIdentityKey(const QStringList &identityKeys) const;
     void launchApp(const QString &execPath);
     void showHiddenWindow(const QString &wmClass);
     void restoreLastActive(const QString &wmClass);

@@ -4,10 +4,21 @@
  *
  * 测试状态判定逻辑（不依赖真实窗口，通过 mock 行为验证）。
  */
-#include <gtest/gtest.h>
-#include <vector>
 #include "core/ClickStateMachine.h"
 #include "core/WindowCache.h"
+
+#include <gtest/gtest.h>
+#include <QFileInfo>
+#include <vector>
+
+#ifdef Q_OS_WIN
+static QString currentExeKey()
+{
+    wchar_t path[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    return QFileInfo(QString::fromWCharArray(path)).baseName().toLower();
+}
+#endif
 
 class ClickStateMachineTest : public ::testing::Test {
 protected:
@@ -97,4 +108,40 @@ TEST_F(ClickStateMachineTest, ActionEnumValues)
                 << "动作枚举值冲突: action[" << i << "] == action[" << j << "]";
         }
     }
+}
+
+
+TEST_F(ClickStateMachineTest, ShowHiddenWindowUsesActivationQueryForHiddenUntitledWindow)
+{
+#ifdef Q_OS_WIN
+    const wchar_t className[] = L"DockWMacActivationClickTestWindow";
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = DefWindowProcW;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = className;
+    RegisterClassW(&wc);
+
+    HWND hwnd = CreateWindowExW(
+        0, className, L"", WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 100, 100,
+        nullptr, nullptr, wc.hInstance, nullptr);
+    ASSERT_NE(hwnd, nullptr);
+    ASSERT_FALSE(IsWindowVisible(hwnd));
+
+    const QString key = currentExeKey();
+    cache->scanForClass(key);
+
+    EXPECT_EQ(machine->evaluate(key, "C:/test.exe", true),
+              ClickStateMachine::Action::ShowHiddenWindow);
+    EXPECT_NO_FATAL_FAILURE({
+        machine->execute(ClickStateMachine::Action::ShowHiddenWindow,
+                         key, "C:/test.exe");
+    });
+    EXPECT_TRUE(IsWindowVisible(hwnd));
+
+    DestroyWindow(hwnd);
+    UnregisterClassW(className, wc.hInstance);
+#else
+    GTEST_SKIP() << "Windows-specific activation filtering test";
+#endif
 }

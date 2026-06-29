@@ -206,6 +206,7 @@ void DockWindow::setWindowCache(WindowCache *cache)
     });
     connect(m_windowPreview, &WindowPreviewPanel::previewHidden, this, [this]() {
         m_hoveredIndex = -1;
+        m_previewItem = nullptr;
         m_animation->unlockFishEye(m_items);
         if (m_dockManager)
             m_dockManager->setPreviewActive(false);

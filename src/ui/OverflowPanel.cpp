@@ -74,8 +74,12 @@ void OverflowPanel::showPopup(DockItem *anchorItem, QWidget * /*dockParent*/)
         );
         connect(btn, &QPushButton::clicked, this, [this, data]() {
             if (m_windowCache) {
-                QString wmClass = AppIdHelper::primaryIdentityKey(data);
-                m_windowCache->activateWindow(wmClass);
+                const QStringList identityKeys = AppIdHelper::identityKeys(data);
+                for (const QString &key : identityKeys) {
+                    m_windowCache->scanForClass(key);
+                    if (m_windowCache->activateWindow(key))
+                        break;
+                }
             }
             hidePopup();
         });

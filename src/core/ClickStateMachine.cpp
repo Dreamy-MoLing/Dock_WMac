@@ -7,6 +7,7 @@
 #include "core/SysHelper.h"
 
 #include <QDir>
+#include <QSet>
 #include <windows.h>
 
 ClickStateMachine::ClickStateMachine(WindowCache *cache, QObject *parent)
@@ -86,10 +87,65 @@ void ClickStateMachine::execute(Action action, const QString &wmClass, const QSt
 
 void ClickStateMachine::handleClick(const QString &wmClass, const QString &execPath, bool isRunning)
 {
-    // 点击前做按需同步扫描
-    m_cache->scanForClass(wmClass);
-    Action action = evaluate(wmClass, execPath, isRunning);
-    execute(action, wmClass, execPath);
+    handleClick(QStringList{wmClass}, execPath, isRunning);
+}
+
+void ClickStateMachine::handleClick(const QStringList &identityKeys, const QString &execPath, bool isRunning)
+{
+    QStringList keys;
+    QSet<QString> seen;
+    for (const QString &key : identityKeys) {
+        const QString normalized = key.trimmed().toLower();
+        if (normalized.isEmpty() || seen.contains(normalized))
+            continue;
+        seen.insert(normalized);
+        keys.append(normalized);
+    }
+
+    if (keys.isEmpty()) {
+        if (!isRunning)
+            launchApp(execPath);
+        return;
+    }
+
+    // 点击前对每个候选身份 key 做按需同步扫描。
+    for (const QString &key : keys) {
+        m_cache->scanForClass(key);
+    }
+
+    QString selectedKey = selectIdentityKey(keys);
+
+    // 进程已运行但各身份 key 均无可交互窗口时，不贸然启动新实例；
+    // 先做一次全量刷新后重试，仍无窗口则执行 None（保守 no-op）。
+    if (selectedKey.isEmpty() && isRunning) {
+        m_cache->refresh();
+        for (const QString &key : keys) {
+            m_cache->scanForClass(key);
+        }
+        selectedKey = selectIdentityKey(keys);
+        if (selectedKey.isEmpty()) {
+            execute(Action::None, QString(), execPath);
+            return;
+        }
+    }
+
+    if (selectedKey.isEmpty())
+        selectedKey = keys.first();
+
+    Action action = evaluate(selectedKey, execPath, isRunning);
+    execute(action, selectedKey, execPath);
+}
+
+QString ClickStateMachine::selectIdentityKey(const QStringList &identityKeys) const
+{
+    for (const QString &key : identityKeys) {
+        if (m_cache->hasVisibleWindows(key) || m_cache->hasMinimizedWindows(key)
+            || m_cache->hasHiddenWindows(key)
+            || !m_cache->getWindowsForPreview(key).isEmpty()) {
+            return key;
+        }
+    }
+    return {};
 }
 
 void ClickStateMachine::handleDoubleClick(const QString &execPath)
@@ -107,8 +163,8 @@ void ClickStateMachine::launchApp(const QString &execPath)
 
 void ClickStateMachine::showHiddenWindow(const QString &wmClass)
 {
-    // 获取所有窗口（包括隐藏的），排除 toolwindow
-    WindowList allWindows = m_cache->getWindowsForPreview(wmClass);
+    // 获取点击激活语义下的所有窗口（包括隐藏/无标题窗口），排除 toolwindow
+    WindowList allWindows = m_cache->getWindowsForActivation(wmClass);
 
     // 查找不可见的窗口（包括最小化的）
     HWND target = nullptr;

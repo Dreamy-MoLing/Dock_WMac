@@ -4,10 +4,22 @@
  *
  * 测试查询接口确定性行为（不依赖真实 EnumWindows，手动注入缓存数据）。
  */
-#include <gtest/gtest.h>
-#include <QTest>
-#include <QSignalSpy>
 #include "core/WindowCache.h"
+
+#include <gtest/gtest.h>
+#include <QFileInfo>
+#include <QSignalSpy>
+
+#include <algorithm>
+
+#ifdef Q_OS_WIN
+static QString currentExeKey()
+{
+    wchar_t path[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    return QFileInfo(QString::fromWCharArray(path)).baseName().toLower();
+}
+#endif
 
 class WindowCacheTest : public ::testing::Test {
 protected:
@@ -89,4 +101,38 @@ TEST_F(WindowCacheTest, SignalValid)
 {
     QSignalSpy spy(cache, &WindowCache::cacheUpdated);
     EXPECT_TRUE(spy.isValid());
+}
+
+TEST_F(WindowCacheTest, ActivationQueryIncludesHiddenUntitledWindowExcludedFromPreview)
+{
+#ifdef Q_OS_WIN
+    const wchar_t className[] = L"DockWMacActivationCacheTestWindow";
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = DefWindowProcW;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = className;
+    RegisterClassW(&wc);
+
+    HWND hwnd = CreateWindowExW(
+        0, className, L"", WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 100, 100,
+        nullptr, nullptr, wc.hInstance, nullptr);
+    ASSERT_NE(hwnd, nullptr);
+
+    const QString key = currentExeKey();
+    cache->scanForClass(key);
+
+    const WindowList previewWindows = cache->getWindowsForPreview(key);
+    EXPECT_FALSE(std::any_of(previewWindows.begin(), previewWindows.end(),
+        [hwnd](const CachedWindowInfo &w) { return w.hwnd == hwnd; }));
+
+    const WindowList activationWindows = cache->getWindowsForActivation(key);
+    EXPECT_TRUE(std::any_of(activationWindows.begin(), activationWindows.end(),
+        [hwnd](const CachedWindowInfo &w) { return w.hwnd == hwnd; }));
+
+    DestroyWindow(hwnd);
+    UnregisterClassW(className, wc.hInstance);
+#else
+    GTEST_SKIP() << "Windows-specific activation filtering test";
+#endif
 }

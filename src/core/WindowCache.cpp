@@ -110,9 +110,7 @@ void WindowCache::refresh()
             info.lastActiveTime = GetTickCount();
         }
 
-        addWindowToCache(info, exeName);
-        if (!info.appUserModelId.isEmpty())
-            addWindowToCache(info, info.appUserModelId);
+        upsertWindowIndexes(info);
     }
 
     locker.unlock();
@@ -121,7 +119,46 @@ void WindowCache::refresh()
 
 void WindowCache::addWindowToCache(const CachedWindowInfo &info, const QString &wmClass)
 {
-    m_windowsByClass[wmClass].append(info);
+    const QString key = wmClass.toLower();
+    if (key.isEmpty()) return;
+
+    auto &windows = m_windowsByClass[key];
+    windows.erase(
+        std::remove_if(windows.begin(), windows.end(),
+            [info](const CachedWindowInfo &w) { return w.hwnd == info.hwnd; }),
+        windows.end());
+    windows.append(info);
+}
+
+void WindowCache::removeWindowFromAllIndexes(HWND hwnd, DWORD pid)
+{
+    for (auto it = m_windowsByClass.begin(); it != m_windowsByClass.end(); ) {
+        it.value().erase(
+            std::remove_if(it.value().begin(), it.value().end(),
+                [hwnd, pid](const CachedWindowInfo &w) {
+                    return (hwnd && w.hwnd == hwnd) || (!hwnd && pid != 0 && w.pid == pid);
+                }),
+            it.value().end());
+
+        if (it.value().isEmpty())
+            it = m_windowsByClass.erase(it);
+        else
+            ++it;
+    }
+}
+
+void WindowCache::upsertWindowIndexes(const CachedWindowInfo &info, const QString &extraClass)
+{
+    removeWindowFromAllIndexes(info.hwnd, info.pid);
+
+    if (!info.exeName.isEmpty()) {
+        m_pidToExeName[info.pid] = info.exeName;
+        addWindowToCache(info, info.exeName);
+    }
+    if (!info.appUserModelId.isEmpty())
+        addWindowToCache(info, info.appUserModelId);
+    if (!extraClass.isEmpty())
+        addWindowToCache(info, extraClass);
 }
 
 // ─── 增量刷新（WinEvent 触发）───
@@ -159,8 +196,8 @@ void WindowCache::refreshForPid(DWORD pid)
     }
 
     // 重新枚举此 PID 的窗口
-    struct PidCtx { DWORD pid; QList<CachedWindowInfo> wins; };
-    PidCtx ctx{pid, {}};
+    struct PidCtx { DWORD pid; QString exeName; QList<CachedWindowInfo> wins; };
+    PidCtx ctx{pid, exeName, {}};
 
     EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
         auto *ctx = reinterpret_cast<PidCtx *>(lParam);
@@ -174,6 +211,7 @@ void WindowCache::refreshForPid(DWORD pid)
         wchar_t title[256] = {0};
         GetWindowTextW(hwnd, title, 255);
         info.title = QString::fromWCharArray(title);
+        info.exeName = ctx->exeName;
         info.appUserModelId = windowAppUserModelId(hwnd);
 
         LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
@@ -188,9 +226,7 @@ void WindowCache::refreshForPid(DWORD pid)
 
     QWriteLocker locker(&m_lock);
     for (const auto &w : ctx.wins) {
-        addWindowToCache(w, exeName);
-        if (!w.appUserModelId.isEmpty())
-            addWindowToCache(w, w.appUserModelId);
+        upsertWindowIndexes(w);
     }
     locker.unlock();
     emit cacheUpdated();
@@ -217,10 +253,11 @@ void WindowCache::scanForClass(const QString &wmClass)
 
         wchar_t pathBuf[MAX_PATH] = {0};
         DWORD bufSize = MAX_PATH;
+        QString exeName;
         BOOL matched = FALSE;
         if (QueryFullProcessImageNameW(hProcess, 0, pathBuf, &bufSize)) {
-            QString exe = QFileInfo(QString::fromWCharArray(pathBuf)).baseName().toLower();
-            if (exe == ctx->target) matched = TRUE;
+            exeName = QFileInfo(QString::fromWCharArray(pathBuf)).baseName().toLower();
+            if (exeName == ctx->target) matched = TRUE;
         }
         CloseHandle(hProcess);
         const QString appId = windowAppUserModelId(hwnd);
@@ -233,7 +270,8 @@ void WindowCache::scanForClass(const QString &wmClass)
         wchar_t title[256] = {0};
         GetWindowTextW(hwnd, title, 255);
         info.title = QString::fromWCharArray(title);
-        info.appUserModelId = windowAppUserModelId(hwnd);
+        info.exeName = exeName;
+        info.appUserModelId = appId;
 
         LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         info.isToolWindow = (exStyle & WS_EX_TOOLWINDOW) != 0;
@@ -245,12 +283,12 @@ void WindowCache::scanForClass(const QString &wmClass)
         return TRUE;
     }, reinterpret_cast<LPARAM>(&ctx));
 
-    // 扫描结果合并到缓存
+    // 扫描结果合并到缓存。先清除触发扫描 key 的旧条目，再按 HWND/PID
+    // 移除其它 key 下的同一窗口旧状态，最后重建 exe/AppUserModelID/触发 key 索引。
     QWriteLocker locker(&m_lock);
-    // 先清除该类旧条目
     m_windowsByClass.remove(lowerClass);
     for (const auto &w : ctx.wins) {
-        addWindowToCache(w, lowerClass);
+        upsertWindowIndexes(w, lowerClass);
     }
     locker.unlock();
     emit cacheUpdated();
@@ -320,20 +358,30 @@ WindowList WindowCache::getWindowsForPreview(const QString &wmClass)
     return result;
 }
 
-HWND WindowCache::getLastActiveHwnd(const QString &wmClass)
+WindowList WindowCache::getWindowsForActivation(const QString &wmClass)
 {
     QReadLocker locker(&m_lock);
     auto it = m_windowsByClass.find(wmClass.toLower());
-    if (it == m_windowsByClass.end()) return nullptr;
+    if (it == m_windowsByClass.end()) return {};
+
+    WindowList result;
+    std::copy_if(it->begin(), it->end(), std::back_inserter(result),
+        [](const CachedWindowInfo &w) {
+            return !w.isToolWindow && IsWindow(w.hwnd);
+        });
+    return result;
+}
+
+HWND WindowCache::getLastActiveHwnd(const QString &wmClass)
+{
+    const WindowList windows = getWindowsForActivation(wmClass);
 
     HWND best = nullptr;
     DWORD bestTime = 0;
-    for (const auto &w : *it) {
-        if (!w.isToolWindow && IsWindow(w.hwnd)) {
-            if (!best || w.lastActiveTime > bestTime) {
-                best = w.hwnd;
-                bestTime = w.lastActiveTime;
-            }
+    for (const auto &w : windows) {
+        if (!best || w.lastActiveTime > bestTime) {
+            best = w.hwnd;
+            bestTime = w.lastActiveTime;
         }
     }
     return best;

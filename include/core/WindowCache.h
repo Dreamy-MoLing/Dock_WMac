@@ -51,6 +51,13 @@ public:
     bool isForegroundApp(const QString &wmClass);
     int getWindowCount(const QString &wmClass);
     WindowList getWindowsForPreview(const QString &wmClass);
+    /**
+     * @brief 返回点击激活语义使用的窗口集合。
+     *
+     * 与预览列表不同，此接口只校验窗口句柄仍有效并排除工具窗口；
+     * 不要求标题非空，也不要求可见/最小化，避免隐藏窗口在点击激活时被误过滤。
+     */
+    WindowList getWindowsForActivation(const QString &wmClass);
     HWND getLastActiveHwnd(const QString &wmClass);
 
     /** @brief 通过 PID 查找对应的 exe basename（用于信号→DockItem 映射） */
@@ -79,6 +86,8 @@ signals:
 
 private:
     void addWindowToCache(const CachedWindowInfo &info, const QString &wmClass);
+    void removeWindowFromAllIndexes(HWND hwnd, DWORD pid);
+    void upsertWindowIndexes(const CachedWindowInfo &info, const QString &extraClass = {});
 
     QHash<QString, WindowList> m_windowsByClass; // wmClass → 窗口列表
     QHash<DWORD, QString>      m_pidToExeName;   // PID → exe basename

@@ -111,10 +111,10 @@ void DockWindow::handleSingleClick(DockItem *item)
     data.execPath = item->execPath();
     data.targetPath = item->targetPath();
     data.appUserModelId = item->appUserModelId();
-    QString wmClass = AppIdHelper::primaryIdentityKey(data);
+    const QStringList identityKeys = AppIdHelper::identityKeys(data);
     bool isRunning = item->isRunning();
 
-    m_clickStateMachine->handleClick(wmClass, item->execPath(), isRunning);
+    m_clickStateMachine->handleClick(identityKeys, item->execPath(), isRunning);
 
     QTimer::singleShot(1000, item, [item]() {
         item->triggerInteractionIndicator();
