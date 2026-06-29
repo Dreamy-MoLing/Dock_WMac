@@ -88,6 +88,7 @@ int Application::run()
 
     m_dockManager = new DockManager(this);
     m_dockManager->setMaxItems(m_config->get(QStringLiteral("maxItems"), 16).toInt());
+    m_dockManager->setAutoHideEnabled(m_config->get(QStringLiteral("autoHide"), true).toBool());
 
     // UI 层初始化
     m_dockWindow = new DockWindow();

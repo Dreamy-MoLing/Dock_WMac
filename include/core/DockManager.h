@@ -52,6 +52,9 @@ public:
     void setMonitorIndex(int index);
     int monitorIndex() const { return m_monitorIndex; }
 
+    void setAutoHideEnabled(bool enabled);
+    bool autoHideEnabled() const { return m_autoHideEnabled; }
+
     /** @brief 初始化：关联 SysHelper 并连接信号，加载固定项列表 */
     void initialize(SysHelper *sysHelper);
 
@@ -138,6 +141,7 @@ private:
 
     // 预览激活标志（阻止预览期间 Dock 被全屏检测隐藏）
     bool m_previewActive = false;
+    bool m_autoHideEnabled = true;
 };
 
 #endif // DOCKMANAGER_H

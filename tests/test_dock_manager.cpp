@@ -179,6 +179,27 @@ TEST_F(DockManagerTest, ConstructorTimersConfigured)
     EXPECT_EQ(manager->winKeyCooldownTimer()->interval(), 1500);
 }
 
+TEST_F(DockManagerTest, AutoHideEnabledByDefault)
+{
+    EXPECT_TRUE(manager->autoHideEnabled());
+}
+
+TEST_F(DockManagerTest, DisablingAutoHideRestoresDockAndStopsHideDelay)
+{
+    manager->enterHiddenState();
+    manager->hideDelayTimer()->start();
+    ASSERT_TRUE(manager->hideDelayTimer()->isActive());
+
+    QSignalSpy spy(manager, &DockManager::stateChanged);
+    manager->setAutoHideEnabled(false);
+
+    EXPECT_FALSE(manager->autoHideEnabled());
+    EXPECT_FALSE(manager->hideDelayTimer()->isActive());
+    EXPECT_EQ(manager->currentState(), DockState::Docked);
+    EXPECT_EQ(spy.count(), 1);
+    EXPECT_EQ(spy.at(0).at(0).value<DockState>(), DockState::Docked);
+}
+
 // 12. enterDockedState 停止所有定时器
 TEST_F(DockManagerTest, EnterDockedStateStopsAllTimers)
 {

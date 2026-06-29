@@ -20,8 +20,10 @@
 
 #include <windows.h>
 #include <QDebug>
+#include <QFileInfo>
 #include <QTimer>
 #include <QMetaObject>
+#include <QString>
 #include <utility>
 
 // ─── 全局钩子句柄 ──────────────────────────────────────────
@@ -235,14 +237,62 @@ struct MonitorScanContext {
     SysHelper *helper;  // 用于调用 getExtendedFrameBounds
 };
 
-static bool isSystemUiWindow(HWND hwnd)
+static QString windowClassName(HWND hwnd)
 {
     wchar_t className[256] = {};
-    if (!GetClassNameW(hwnd, className, 255)) return false;
+    if (!GetClassNameW(hwnd, className, 255)) return {};
+    return QString::fromWCharArray(className);
+}
 
-    if (wcscmp(className, L"Windows.UI.Core.CoreWindow") == 0) return true;
-    if (wcscmp(className, L"MultitaskingViewFrame") == 0) return true;
-    if (wcscmp(className, L"XamlExplorerHostIslandWindow") == 0) return true;
+static QString windowTitle(HWND hwnd)
+{
+    wchar_t title[256] = {};
+    if (!GetWindowTextW(hwnd, title, 255)) return {};
+    return QString::fromWCharArray(title);
+}
+
+static QString processBaseName(HWND hwnd)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0) return {};
+
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return {};
+
+    wchar_t path[MAX_PATH] = {};
+    DWORD size = MAX_PATH;
+    const bool ok = QueryFullProcessImageNameW(process, 0, path, &size);
+    CloseHandle(process);
+    if (!ok) return {};
+
+    return QFileInfo(QString::fromWCharArray(path)).baseName();
+}
+
+static bool isIgnoredFullscreenCandidate(HWND hwnd)
+{
+    const QString cls = windowClassName(hwnd);
+    if (cls.isEmpty()) return false;
+
+    if (cls == QStringLiteral("Progman")
+        || cls == QStringLiteral("WorkerW")
+        || cls == QStringLiteral("Shell_TrayWnd")
+        || cls == QStringLiteral("Shell_SecondaryTrayWnd")
+        || cls == QStringLiteral("Windows.UI.Core.CoreWindow")
+        || cls == QStringLiteral("MultitaskingViewFrame")
+        || cls == QStringLiteral("XamlExplorerHostIslandWindow")
+        || cls == QStringLiteral("CEF-OSC-WIDGET")) {
+        return true;
+    }
+
+    if (cls == QStringLiteral("ApplicationFrameWindow")) {
+        const QString title = windowTitle(hwnd);
+        const QString process = processBaseName(hwnd);
+        if (title.contains(QStringLiteral("Realtek Audio Console"), Qt::CaseInsensitive)
+            || process.compare(QStringLiteral("RtkUWP"), Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
 
     return false;
 }
@@ -257,14 +307,19 @@ static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
     LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
     if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
 
-    if (isSystemUiWindow(hwnd)) return TRUE;
-
     HMONITOR winMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
     if (winMonitor != ctx->hMonitor) return TRUE;
 
     WINDOWPLACEMENT wp;
     wp.length = sizeof(WINDOWPLACEMENT);
     if (GetWindowPlacement(hwnd, &wp) && wp.showCmd == SW_SHOWMAXIMIZED) {
+        if (isIgnoredFullscreenCandidate(hwnd)) {
+            qDebug() << "忽略全屏候选: maximized" << windowClassName(hwnd)
+                     << windowTitle(hwnd) << processBaseName(hwnd);
+            return TRUE;
+        }
+        qDebug() << "接受全屏候选: maximized" << windowClassName(hwnd)
+                 << windowTitle(hwnd) << processBaseName(hwnd);
         ctx->found = true;
         return FALSE;
     }
@@ -274,6 +329,13 @@ static BOOL CALLBACK EnumMaximizedWindowsProc(HWND hwnd, LPARAM lParam)
     int winW = winRect.right - winRect.left;
     int winH = winRect.bottom - winRect.top;
     if (abs(winW - ctx->screenW) <= 10 && abs(winH - ctx->screenH) <= 10) {
+        if (isIgnoredFullscreenCandidate(hwnd)) {
+            qDebug() << "忽略全屏候选: fullscreen" << windowClassName(hwnd)
+                     << windowTitle(hwnd) << processBaseName(hwnd);
+            return TRUE;
+        }
+        qDebug() << "接受全屏候选: fullscreen" << windowClassName(hwnd)
+                 << windowTitle(hwnd) << processBaseName(hwnd);
         ctx->found = true;
         return FALSE;
     }

@@ -298,6 +298,14 @@ void DockManager::onFullscreenStateChanged(bool anyMaximizedOnAnyScreen)
 {
     if (!m_sysHelper) return;
 
+    if (!m_autoHideEnabled) {
+        m_hideDelayTimer->stop();
+        if (m_currentState == DockState::Hidden) {
+            enterDockedState();
+        }
+        return;
+    }
+
     // 预览面板激活期间阻止隐藏
     if (m_previewActive) {
         m_hideDelayTimer->stop();
@@ -334,6 +342,7 @@ void DockManager::onFullscreenStateChanged(bool anyMaximizedOnAnyScreen)
 void DockManager::onHideDelayTimeout()
 {
     if (!m_sysHelper) return;
+    if (!m_autoHideEnabled) return;
 
     // 延迟到期后重新确认全屏仍然存在
     bool anyMaxOnDockScreen = m_sysHelper->hasMaximizedOrFullscreenWindowOnMonitor(m_monitorIndex);
@@ -359,6 +368,7 @@ void DockManager::onWinKeyPressed()
 void DockManager::onWinKeyCooldownTimeout()
 {
     qInfo() << "Win 键冷却结束，恢复正常全屏检测";
+    if (!m_autoHideEnabled) return;
     if (m_sysHelper && m_currentState == DockState::Docked) {
         bool anyMax = m_sysHelper->hasMaximizedOrFullscreenWindowOnMonitor(m_monitorIndex);
         if (anyMax) {
@@ -371,6 +381,18 @@ void DockManager::onWinKeyCooldownTimeout()
 void DockManager::setPreviewActive(bool active)
 {
     m_previewActive = active;
+}
+
+void DockManager::setAutoHideEnabled(bool enabled)
+{
+    if (m_autoHideEnabled == enabled) return;
+    m_autoHideEnabled = enabled;
+    if (!enabled) {
+        m_hideDelayTimer->stop();
+        if (m_currentState == DockState::Hidden) {
+            enterDockedState();
+        }
+    }
 }
 
 

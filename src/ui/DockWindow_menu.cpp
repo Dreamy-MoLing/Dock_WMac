@@ -16,6 +16,7 @@
 #include <QUrl>
 
 #include "core/ConfigManager.h"
+#include "core/DockManager.h"
 #include "core/SysHelper.h"
 
 void DockWindow::contextMenuEvent(QContextMenuEvent *event)
@@ -62,6 +63,18 @@ void DockWindow::contextMenuEvent(QContextMenuEvent *event)
         }
 
         m_config->set(QStringLiteral("hideNativeTaskbar"), enabled);
+        QTimer::singleShot(100, this, &DockWindow::requestUpdatePosition);
+    });
+
+    QAction *persistentDockAction = menu.addAction("实验性-常驻Dock栏");
+    persistentDockAction->setCheckable(true);
+    persistentDockAction->setChecked(
+        m_config && !m_config->get(QStringLiteral("autoHide"), true).toBool());
+    persistentDockAction->setEnabled(m_config && m_dockManager);
+    connect(persistentDockAction, &QAction::triggered, this, [this](bool enabled) {
+        if (!m_config || !m_dockManager) return;
+        m_config->set(QStringLiteral("autoHide"), !enabled);
+        m_dockManager->setAutoHideEnabled(!enabled);
         QTimer::singleShot(100, this, &DockWindow::requestUpdatePosition);
     });
 
