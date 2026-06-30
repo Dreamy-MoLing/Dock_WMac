@@ -12,16 +12,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
-#include <QTimer>
 
 ConfigManager::ConfigManager(QObject *parent)
     : QObject(parent)
     , m_iconCache(kCacheLimit)
-    , m_saveTimer(new QTimer(this))
 {
-    m_saveTimer->setSingleShot(true);
-    m_saveTimer->setInterval(500);
-    connect(m_saveTimer, &QTimer::timeout, this, &ConfigManager::save);
 }
 
 ConfigManager::~ConfigManager()
@@ -58,7 +53,8 @@ void ConfigManager::load()
         m_config["animationDuration"] = 300;
         m_config["showDelay"] = 0;
         m_config["maxItems"] = 16;
-        m_config["externalLyricsEnabled"] = true;
+        m_config["musicPanelEnabled"] = false;
+        m_config["externalLyricsEnabled"] = false;
         save();
         return;
     }
@@ -120,16 +116,15 @@ QVariant ConfigManager::get(const QString &key, const QVariant &defaultValue) co
 
 void ConfigManager::set(const QString &key, const QVariant &value)
 {
-    m_config[key] = QJsonValue::fromVariant(value);
+    const QJsonValue jsonValue = QJsonValue::fromVariant(value);
+    if (m_config.value(key) == jsonValue)
+        return;
+    m_config[key] = jsonValue;
     save();
-    m_saveTimer->start();
 }
 
 void ConfigManager::flush()
 {
-    if (m_saveTimer->isActive()) {
-        m_saveTimer->stop();
-    }
 }
 
 QString ConfigManager::resolveIcon(const QString &appId) const

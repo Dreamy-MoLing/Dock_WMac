@@ -71,6 +71,8 @@ Dock_WMac/
 
 如果程序所在目录不可写，数据回退到 `%LOCALAPPDATA%\Dock_WMac\data\`。
 “隐藏原生任务栏”是默认关闭的实验选项，必须从 Dock 背景右键菜单主动开启。
+音乐伴随面板代码已接入源码，但仍是默认关闭的实验功能：
+`config.json` 中 `musicPanelEnabled=false` 时不会创建 GSMTC/WASAPI 服务或音乐面板。
 
 ### 卸载
 
@@ -114,7 +116,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-12 个测试可执行文件，包含 Win32/DWM 实际窗口集成检查。测试构建会禁止修改
+15 个测试可执行文件，包含 Win32/DWM 实际窗口集成检查和默认关闭的音乐模块测试。测试构建会禁止修改
 HKCU 开机项和隐藏系统任务栏：
 
 ```
@@ -122,6 +124,7 @@ test_config              test_process_monitor       test_window_cache
 test_dock_manager        test_sys_helper            test_click_state_machine
 test_pinned_items_reader test_application           test_dwm_state
 test_window_cloaked      test_display_affinity      test_windows_integration
+test_lrc_parser          test_audio_level           test_now_playing_panel
 ```
 
 ### 部署便携包
@@ -139,13 +142,15 @@ CPack 会调用 `windeployqt` 并加入 MSVC 运行库；不要只分发裸 exe�
 Dock_WMac/
 ├── include/
 │   ├── core/              # 核心逻辑头（13 文件，含 PathManager.h）
+│   ├── music/             # 实验音乐伴随面板（默认关闭）
 │   └── ui/                # UI 组件头（4 文件）
 ├── src/
 │   ├── core/              # 核心实现（11 文件）
+│   ├── music/             # GSMTC/WASAPI、歌词解析、音乐面板实现
 │   ├── ui/                # UI 实现（4 文件）
 │   └── main.cpp           # 入口
 ├── resources/             # .qrc 资源 + app.rc 图标
-├── tests/                 # Google Test 单元测试（8 套，89 个用例）
+├── tests/                 # Google Test 单元测试（15 个测试可执行文件）
 ├── .github/workflows/     # CI/CD
 ├── CMakePresets.json      # CMake 预设
 └── CMakeLists.txt         # CMake 构建定义
@@ -157,10 +162,13 @@ Dock_WMac/
 |------|------|
 | Qt6::Widgets | UI 框架 |
 | Qt6::Svg | SVG 图标渲染 |
+| Qt6::Concurrent | 音乐会话后台刷新 |
+| Qt6::Network | 可选外部歌词请求（默认关闭） |
 | dwmapi | DWM 模糊 + 缩略图 |
 | shell32 | COM Shell（图标、`.lnk` 解析） |
 | shlwapi | 注册表操作 |
 | user32 | Win32 窗口 API、钩子 |
+| windowsapp | MSVC WinRT/GSMTC 音乐会话支持 |
 | Google Test v1.14.0 | 单元测试（FetchContent 自动下载） |
 
 ---

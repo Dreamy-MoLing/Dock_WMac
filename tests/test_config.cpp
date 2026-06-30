@@ -82,6 +82,8 @@ TEST_F(ConfigManagerTest, DefaultValues)
     EXPECT_EQ(config->get("cornerRadius").toInt(), 16);
     EXPECT_EQ(config->get("animationDuration").toInt(), 300);
     EXPECT_EQ(config->get("showDelay").toInt(), 0);
+    EXPECT_EQ(config->get("musicPanelEnabled").toBool(), false);
+    EXPECT_EQ(config->get("externalLyricsEnabled").toBool(), false);
 }
 
 // ============================================================================

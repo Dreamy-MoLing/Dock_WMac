@@ -116,28 +116,30 @@ int Application::run()
     m_dockWindow->setProcessMonitor(m_processMonitor);
     m_processMonitor->start();
 
-    m_musicService = new music::MusicSessionService(this);
-    m_musicService->setExternalLyricsEnabled(
-        m_config->get(QStringLiteral("externalLyricsEnabled"), true).toBool());
-    m_nowPlayingPanel = new music::NowPlayingPanel(m_dockWindow);
-    m_nowPlayingPanel->setIconBaseSize(m_dockWindow->rightAccessoryIconBaseSize());
-    m_dockWindow->setRightAccessoryPanel(m_nowPlayingPanel);
-    connect(m_dockWindow, &DockWindow::rightAccessoryIconBaseSizeChanged,
-        m_nowPlayingPanel, &music::NowPlayingPanel::setIconBaseSize);
-    connect(m_nowPlayingPanel, &music::NowPlayingPanel::layoutChanged,
-        this, [this]() {
-            m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
-        });
-    m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
-    connect(m_musicService, &music::MusicSessionService::snapshotChanged,
-        m_nowPlayingPanel, &music::NowPlayingPanel::setSnapshot);
-    connect(m_nowPlayingPanel, &music::NowPlayingPanel::togglePlayPauseRequested,
-        m_musicService, &music::MusicSessionService::togglePlayPause);
-    connect(m_nowPlayingPanel, &music::NowPlayingPanel::previousRequested,
-        m_musicService, &music::MusicSessionService::previous);
-    connect(m_nowPlayingPanel, &music::NowPlayingPanel::nextRequested,
-        m_musicService, &music::MusicSessionService::next);
-    m_musicService->start();
+    if (m_config->get(QStringLiteral("musicPanelEnabled"), false).toBool()) {
+        m_musicService = new music::MusicSessionService(this);
+        m_musicService->setExternalLyricsEnabled(
+            m_config->get(QStringLiteral("externalLyricsEnabled"), false).toBool());
+        m_nowPlayingPanel = new music::NowPlayingPanel(m_dockWindow);
+        m_nowPlayingPanel->setIconBaseSize(m_dockWindow->rightAccessoryIconBaseSize());
+        m_dockWindow->setRightAccessoryPanel(m_nowPlayingPanel);
+        connect(m_dockWindow, &DockWindow::rightAccessoryIconBaseSizeChanged,
+            m_nowPlayingPanel, &music::NowPlayingPanel::setIconBaseSize);
+        connect(m_nowPlayingPanel, &music::NowPlayingPanel::layoutChanged,
+            this, [this]() {
+                m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
+            });
+        m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
+        connect(m_musicService, &music::MusicSessionService::snapshotChanged,
+            m_nowPlayingPanel, &music::NowPlayingPanel::setSnapshot);
+        connect(m_nowPlayingPanel, &music::NowPlayingPanel::togglePlayPauseRequested,
+            m_musicService, &music::MusicSessionService::togglePlayPause);
+        connect(m_nowPlayingPanel, &music::NowPlayingPanel::previousRequested,
+            m_musicService, &music::MusicSessionService::previous);
+        connect(m_nowPlayingPanel, &music::NowPlayingPanel::nextRequested,
+            m_musicService, &music::MusicSessionService::next);
+        m_musicService->start();
+    }
 
     // 上次异常退出可能遗留隐藏状态；每次启动先恢复，再按用户设置决定是否隐藏。
     m_sysHelper->restoreNativeTaskbar();

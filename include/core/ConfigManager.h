@@ -27,13 +27,13 @@ public:
     /** @brief 保存当前配置到文件 */
     void save();
 
-    /** @brief 立即刷写脏数据到磁盘（debounce 调度后调用） */
+    /** @brief 兼容旧调用；当前 set() 已同步保存，无待刷写队列 */
     void flush();
 
     /** @brief 读取指定键的配置值 */
     QVariant get(const QString &key, const QVariant &defaultValue = QVariant()) const;
 
-    /** @brief 设置配置值并保存（debounce 500ms 合并写盘） */
+    /** @brief 设置配置值并同步保存；值未变化时不写盘 */
     void set(const QString &key, const QVariant &value);
 
     /** @brief 获取应用对应的高清图标路径（优先映射表，其次缓存） */
@@ -55,7 +55,6 @@ public:
 private:
     QJsonObject m_config;
     QCache<QString, QPixmap> m_iconCache;
-    QTimer *m_saveTimer = nullptr;
     static const int kCacheLimit = 128;
 };
 

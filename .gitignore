@@ -101,10 +101,12 @@ graphify-out/
 !README.md
 !AGENTS.md
 !VALIDATION.md
+!docs/PROJECT_BRIEF.md
 
 # ===== 内部文档与规划目录（不上传 GitHub）=====
 openspec/
 docs/*
+!docs/PROJECT_BRIEF.md
 !docs/music-player/
 !docs/music-player/DEVELOPMENT.md
 !docs/archive/

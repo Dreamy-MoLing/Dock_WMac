@@ -6,7 +6,8 @@ Windows-only macOS-style dock written in Qt6 + C++17. The product goal is to pre
 
 - `README.md` is user-facing usage/build documentation.
 - `AGENTS.md` is the current engineering handoff document.
-- `docs/music-player/DEVELOPMENT.md` is the source of truth for the planned music player feature until it ships.
+- `docs/PROJECT_BRIEF.md` is product/direction context for scope and prioritization decisions.
+- `docs/music-player/DEVELOPMENT.md` is the source of truth for the experimental music player feature until it is accepted for release.
 - `docs/archive/` contains historical or agent-generated plans and may be stale.
 - `.claude/`, `.mimocode/`, and `graphify-out/` are external agent/plugin outputs, not authoritative source code.
 
@@ -58,7 +59,7 @@ Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so
 
 ## Music Player Feature
 
-The music player is a new Windows-only GSMTC companion panel, separate from the existing Dock implementation. Keep future music code under `include/music/`, `src/music/`, and `tests/music/`, split by `core`, `system`, `ui`, and `lyrics` as described in `docs/music-player/DEVELOPMENT.md`.
+The music player is an experimental Windows-only GSMTC companion panel. Code exists under `include/music/`, `src/music/`, and `tests/music/`, but it must stay optional and default off via `musicPanelEnabled=false` so Dock startup, launching, switching, previews, and taskbar behavior do not depend on it.
 
 Do not put GSMTC/session logic into `SysHelper`, and do not put Now Playing state into `DockManager`. Archived ChatGPT research under `docs/archive/music-player-research/` is background only; the development guide is current.
 
@@ -71,6 +72,7 @@ Do not put GSMTC/session logic into `SysHelper`, and do not put Now Playing stat
 - Tracked presets contain no personal machine paths. Local and CI builds supply
   `CMAKE_GENERATOR`, `VS_INSTALL_PATH`, and `QT_ROOT_DIR`; Qt baseline is 6.8.3.
 - Native taskbar hiding is experimental, defaults off, and requires explicit user opt-in.
+- Music panel is experimental, defaults off, and must not start GSMTC/WASAPI or external lyrics requests unless explicitly enabled.
 - Branch name is `master`.
 - Use `codex` for experimental music-player development, review, and acceptance; merge to `master` only after validation for release.
 - `resources/app.ico` must remain tracked despite image ignore rules.

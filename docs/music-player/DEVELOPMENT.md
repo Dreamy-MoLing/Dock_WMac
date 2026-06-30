@@ -1,16 +1,17 @@
 # Dock_WMac Music Player Development Guide
 
-> Status: planned new feature. This document is the source of truth for music
-> player development until code lands and README is updated.
+> Status: experimental feature code has landed, but it is default off and not
+> accepted for release. This document is the source of truth for music player
+> follow-up work until the feature is accepted.
 
 ## 1. Product Scope
 
 The music player is a **Windows-only Dock companion panel**, not a new
 cross-platform player and not a macOS Music.app integration.
 
-V1 should add a compact Now Playing surface that belongs to Dock_WMac but stays
-separate from the existing Dock feature code. The panel should follow the
-current Windows media session, with Windows Apple Music as the first target.
+V1 is a compact Now Playing surface that belongs to Dock_WMac but stays
+separate from the existing Dock feature code. The panel follows the current
+Windows media session, with Windows Apple Music as the first target.
 
 ### Goals
 
@@ -19,8 +20,7 @@ current Windows media session, with Windows Apple Music as the first target.
 - Display title, artist, album, artwork, playback state, position, and duration.
 - Provide previous, play/pause, and next controls when the session supports them.
 - Keep the existing Dock launch/window-management behavior independent.
-- Keep the user-facing README unchanged until the feature is implemented and
-  accepted.
+- Keep the feature default off until manual acceptance is complete.
 
 ### Non-goals
 
@@ -53,9 +53,18 @@ Implementation must verify the exact capability/packaging requirement for this
 Win32 Qt application before merging runtime GSMTC code. If a packaged build
 requires `globalMediaControl`, document it next to the packaging change.
 
+Runtime wiring:
+
+- `musicPanelEnabled=false` is the default and means `Application` must not
+  create `MusicSessionService` or `NowPlayingPanel`.
+- `externalLyricsEnabled=false` is the default. External lyrics requests must
+  remain opt-in.
+- Dock startup, app launch/switch, previews, auto-hide, and taskbar behavior
+  must keep working when the music panel is disabled.
+
 ## 3. Repository Layout
 
-Music code should be stored separately from the existing Dock implementation:
+Music code is stored separately from the existing Dock implementation:
 
 ```text
 include/music/
@@ -89,7 +98,7 @@ owns Dock visibility and taskbar-style behavior.
 
 The panel is a right-side slide-out Now Playing surface attached to the Dock.
 
-Default layout:
+Current target layout:
 
 ```text
 screen right edge
@@ -153,14 +162,14 @@ show metadata, progress, and controls.
 
 - `codex` is the experimental implementation, review, and acceptance branch.
 - `master` is the release branch.
-- New music-player work starts on `codex`.
+- Music-player work is reviewed on `codex`.
 - After implementation, review, tests, and user acceptance pass, merge the
   accepted result into `master` and publish a new release.
 - Keep only `codex`, `master`, `origin/codex`, and `origin/master` as active
   branches unless a short-lived feature branch is explicitly needed.
 
-Before music implementation starts, ensure `codex` contains the latest
-`master` release fixes.
+Before any release merge, ensure `codex` contains the latest `master` release
+fixes.
 
 ## 7. Acceptance Criteria
 
@@ -181,11 +190,12 @@ The feature is not accepted until these scenarios pass:
 
 ## 8. Test Plan
 
-Documentation-only changes do not require a build. Runtime implementation must
-add the smallest useful tests:
+Documentation-only changes do not require a build. Runtime changes must keep
+the smallest useful tests current:
 
 - `tests/music/test_lrc_parser.cpp` for LRC parsing edge cases.
-- `tests/music/test_lyrics_matcher.cpp` for title/artist/duration matching.
+- `tests/music/test_audio_level.cpp` for audio level smoothing.
+- `tests/music/test_now_playing_panel.cpp` for panel state and control signals.
 - A core state test for no-session, active-session, incomplete-metadata, and
   unsupported-control snapshots.
 
