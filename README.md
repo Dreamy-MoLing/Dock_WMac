@@ -7,7 +7,7 @@ Dock_WMac 提供 macOS 风格的应用启动和窗口切换体验。它不是完
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/Dreamy-MoLing/Dock_WMac)
-[![Version](https://img.shields.io/badge/version-0.2.5a-brightgreen)](https://github.com/Dreamy-MoLing/Dock_WMac/releases)
+[![Version](https://img.shields.io/badge/version-0.2.5b-brightgreen)](https://github.com/Dreamy-MoLing/Dock_WMac/releases)
 
 ---
 
@@ -128,7 +128,7 @@ test_window_cloaked      test_display_affinity      test_windows_integration
 
 ```bash
 task package
-# 产物: build\Dock_WMac_0.2.5a_x64.zip
+# 产物: build\Dock_WMac_0.2.5b_x64.zip
 ```
 
 CPack 会调用 `windeployqt` 并加入 MSVC 运行库；不要只分发裸 exe。

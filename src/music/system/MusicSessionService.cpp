@@ -478,7 +478,7 @@ void MusicSessionService::refreshLyricsIfNeeded(const NowPlayingSnapshot &snapsh
     url.setQuery(query);
 
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Dock_WMac/0.2.5"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Dock_WMac/0.2.5b"));
     QNetworkReply *reply = m_d->lyricsNetwork->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, key, durationMs = snapshot.durationMs]() {
         reply->deleteLater();

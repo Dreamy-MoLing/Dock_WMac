@@ -137,7 +137,7 @@ endif()
 
 # ---- 打包 (CPack) ----
 set(CPACK_PACKAGE_NAME "Dock_WMac")
-set(CPACK_PACKAGE_VERSION "0.2.5a")
+set(CPACK_PACKAGE_VERSION "0.2.5b")
 set(CPACK_PACKAGE_VENDOR "Dreamy_Moling")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Windows macOS-style dock")
 set(CPACK_GENERATOR "ZIP")
