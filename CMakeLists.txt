@@ -4,7 +4,7 @@ project(Dock_WMac VERSION 0.2.5 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Svg Concurrent Network)
 qt_standard_project_setup()
 
 # 核心源文件（与 tests/ 共享，新增文件只需在这里加一次）
@@ -42,6 +42,26 @@ set(DOCK_CORE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ui/OverflowPanel.h
 )
 
+set(MUSIC_CORE_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/music/lyrics/LrcParser.cpp
+)
+
+set(MUSIC_CORE_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/music/core/NowPlayingSnapshot.h
+    ${CMAKE_SOURCE_DIR}/include/music/lyrics/LrcParser.h
+    ${CMAKE_SOURCE_DIR}/include/music/system/AudioLevelSmoothing.h
+)
+
+set(MUSIC_APP_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/music/system/MusicSessionService.cpp
+    ${CMAKE_SOURCE_DIR}/src/music/ui/NowPlayingPanel.cpp
+)
+
+set(MUSIC_APP_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/music/system/MusicSessionService.h
+    ${CMAKE_SOURCE_DIR}/include/music/ui/NowPlayingPanel.h
+)
+
 add_executable(dock_wmac WIN32
     src/main.cpp
     src/core/Application.cpp
@@ -60,12 +80,25 @@ add_executable(dock_wmac WIN32
     include/ui/DockAnimation.h
     ${DOCK_CORE_SOURCES}
     ${DOCK_CORE_HEADERS}
+    ${MUSIC_CORE_SOURCES}
+    ${MUSIC_CORE_HEADERS}
+    ${MUSIC_APP_SOURCES}
+    ${MUSIC_APP_HEADERS}
     resources/resources.qrc
     resources/app.rc
 )
 
 target_include_directories(dock_wmac PRIVATE include)
-target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg dwmapi shlwapi shell32 ole32 uuid propsys comctl32)
+target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg Qt6::Concurrent Qt6::Network dwmapi shlwapi shell32 ole32 uuid propsys comctl32)
+if(MSVC)
+    target_compile_definitions(dock_wmac PRIVATE
+        DOCK_WMAC_HAS_WINRT_GSMTC
+        DOCK_WMAC_HAS_WASAPI
+        NOMINMAX
+        _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
+    )
+    target_link_libraries(dock_wmac windowsapp)
+endif()
 
 # 输出文件名为 WMacDock.exe（内部 target 名保持 dock_wmac 不变）
 set_target_properties(dock_wmac PROPERTIES

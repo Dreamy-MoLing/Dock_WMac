@@ -30,6 +30,8 @@
 #include "core/SysHelper.h"
 #include "core/WindowCache.h"
 #include "core/Types.h"
+#include "music/system/MusicSessionService.h"
+#include "music/ui/NowPlayingPanel.h"
 #include "ui/DockWindow.h"
 
 // ─── 信号处理：异常退出时恢复原生任务栏 ────────────────────
@@ -58,6 +60,8 @@ Application::~Application()
 {
     // run() 已在 QApplication 退出前清理，此处做安全兜底
     delete m_processMonitor;
+    delete m_nowPlayingPanel;
+    delete m_musicService;
     delete m_dockWindow;
     delete m_dockManager;
     delete m_windowCache;
@@ -112,6 +116,29 @@ int Application::run()
     m_dockWindow->setProcessMonitor(m_processMonitor);
     m_processMonitor->start();
 
+    m_musicService = new music::MusicSessionService(this);
+    m_musicService->setExternalLyricsEnabled(
+        m_config->get(QStringLiteral("externalLyricsEnabled"), true).toBool());
+    m_nowPlayingPanel = new music::NowPlayingPanel(m_dockWindow);
+    m_nowPlayingPanel->setIconBaseSize(m_dockWindow->rightAccessoryIconBaseSize());
+    m_dockWindow->setRightAccessoryPanel(m_nowPlayingPanel);
+    connect(m_dockWindow, &DockWindow::rightAccessoryIconBaseSizeChanged,
+        m_nowPlayingPanel, &music::NowPlayingPanel::setIconBaseSize);
+    connect(m_nowPlayingPanel, &music::NowPlayingPanel::layoutChanged,
+        this, [this]() {
+            m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
+        });
+    m_dockWindow->setRightAccessoryPanelActive(m_nowPlayingPanel->isPanelActive());
+    connect(m_musicService, &music::MusicSessionService::snapshotChanged,
+        m_nowPlayingPanel, &music::NowPlayingPanel::setSnapshot);
+    connect(m_nowPlayingPanel, &music::NowPlayingPanel::togglePlayPauseRequested,
+        m_musicService, &music::MusicSessionService::togglePlayPause);
+    connect(m_nowPlayingPanel, &music::NowPlayingPanel::previousRequested,
+        m_musicService, &music::MusicSessionService::previous);
+    connect(m_nowPlayingPanel, &music::NowPlayingPanel::nextRequested,
+        m_musicService, &music::MusicSessionService::next);
+    m_musicService->start();
+
     // 上次异常退出可能遗留隐藏状态；每次启动先恢复，再按用户设置决定是否隐藏。
     m_sysHelper->restoreNativeTaskbar();
     m_dockWindow->show();
@@ -152,6 +179,8 @@ int Application::run()
 
     // ─── 清理：在 QApplication 销毁前删除所有 QObject 子对象 ───
     delete m_processMonitor;    m_processMonitor = nullptr;
+    delete m_nowPlayingPanel;   m_nowPlayingPanel = nullptr;
+    delete m_musicService;      m_musicService = nullptr;
     delete m_dockWindow;    m_dockWindow = nullptr;
     delete m_dockManager;   m_dockManager = nullptr;
     delete m_windowCache;   m_windowCache = nullptr;

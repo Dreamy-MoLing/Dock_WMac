@@ -58,6 +58,7 @@ void ConfigManager::load()
         m_config["animationDuration"] = 300;
         m_config["showDelay"] = 0;
         m_config["maxItems"] = 16;
+        m_config["externalLyricsEnabled"] = true;
         save();
         return;
     }

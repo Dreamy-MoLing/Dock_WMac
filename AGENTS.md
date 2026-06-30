@@ -6,6 +6,7 @@ Windows-only macOS-style dock written in Qt6 + C++17. The product goal is to pre
 
 - `README.md` is user-facing usage/build documentation.
 - `AGENTS.md` is the current engineering handoff document.
+- `docs/music-player/DEVELOPMENT.md` is the source of truth for the planned music player feature until it ships.
 - `docs/archive/` contains historical or agent-generated plans and may be stale.
 - `.claude/`, `.mimocode/`, and `graphify-out/` are external agent/plugin outputs, not authoritative source code.
 
@@ -55,6 +56,12 @@ Keep new code on the correct side of the boundary. UI collects events and render
 
 Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so UI order and `pinned.json` persistence stay aligned.
 
+## Music Player Feature
+
+The music player is a new Windows-only GSMTC companion panel, separate from the existing Dock implementation. Keep future music code under `include/music/`, `src/music/`, and `tests/music/`, split by `core`, `system`, `ui`, and `lyrics` as described in `docs/music-player/DEVELOPMENT.md`.
+
+Do not put GSMTC/session logic into `SysHelper`, and do not put Now Playing state into `DockManager`. Archived ChatGPT research under `docs/archive/music-player-research/` is background only; the development guide is current.
+
 ## Key Gotchas
 
 - Binary name: `WMacDock.exe`; CMake target: `dock_wmac`.
@@ -65,6 +72,7 @@ Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so
   `CMAKE_GENERATOR`, `VS_INSTALL_PATH`, and `QT_ROOT_DIR`; Qt baseline is 6.8.3.
 - Native taskbar hiding is experimental, defaults off, and requires explicit user opt-in.
 - Branch name is `master`.
+- Use `codex` for experimental music-player development, review, and acceptance; merge to `master` only after validation for release.
 - `resources/app.ico` must remain tracked despite image ignore rules.
 - Do not treat archived Markdown as current requirements without checking source and tests.
 

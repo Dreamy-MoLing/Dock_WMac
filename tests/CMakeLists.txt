@@ -36,6 +36,13 @@ target_link_libraries(dock_core_objects PUBLIC Qt6::Widgets dwmapi shell32 ole32
 # Tests must never mutate HKCU startup state or hide the runner's taskbar.
 target_compile_definitions(dock_core_objects PRIVATE DOCK_WMAC_TESTING)
 
+add_library(music_core_objects OBJECT
+    ${MUSIC_CORE_SOURCES}
+    ${MUSIC_CORE_HEADERS}
+)
+target_include_directories(music_core_objects PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(music_core_objects PUBLIC Qt6::Core)
+
 # 链接库
 set(TEST_LIBS GTest::gtest_main Qt6::Widgets Qt6::Test)
 
@@ -89,11 +96,29 @@ target_link_libraries(test_windows_integration dock_core_objects GTest::gtest Qt
 add_test(NAME test_windows_integration COMMAND test_windows_integration)
 set_tests_properties(test_windows_integration PROPERTIES LABELS "integration;windows")
 
+add_executable(test_lrc_parser music/test_lrc_parser.cpp)
+target_link_libraries(test_lrc_parser music_core_objects ${TEST_LIBS})
+add_test(NAME test_lrc_parser COMMAND test_lrc_parser)
+
+add_executable(test_audio_level music/test_audio_level.cpp)
+target_link_libraries(test_audio_level music_core_objects ${TEST_LIBS})
+add_test(NAME test_audio_level COMMAND test_audio_level)
+
+add_executable(test_now_playing_panel
+    music/test_now_playing_panel.cpp
+    ${CMAKE_SOURCE_DIR}/include/music/ui/NowPlayingPanel.h
+    ${CMAKE_SOURCE_DIR}/src/music/ui/NowPlayingPanel.cpp
+)
+target_include_directories(test_now_playing_panel PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(test_now_playing_panel ${TEST_LIBS})
+add_test(NAME test_now_playing_panel COMMAND test_now_playing_panel)
+
 # 确保测试运行时能找到 Qt DLL
 foreach(test_name
     test_config test_dock_manager test_process_monitor test_sys_helper
     test_pinned_items_reader test_application test_window_cache test_click_state_machine
     test_dwm_state test_window_cloaked test_display_affinity test_windows_integration
+    test_lrc_parser test_audio_level test_now_playing_panel
 )
     set_tests_properties(${test_name} PROPERTIES
         ENVIRONMENT_MODIFICATION

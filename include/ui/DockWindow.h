@@ -38,6 +38,7 @@ public:
 
     qreal fadeOpacity() const { return m_fadeOpacity; }
     void setFadeOpacity(qreal opacity);
+    int rightAccessoryIconBaseSize() const;
 
     /** @brief 关联 DockManager，连接信号 */
     void setDockManager(DockManager *manager);
@@ -54,6 +55,10 @@ public:
     /** @brief 设置 WindowCache + ClickStateMachine（窗口枚举/点击状态机） */
     void setWindowCache(WindowCache *cache);
 
+    /** @brief 设置右侧通用扩展面板 */
+    void setRightAccessoryPanel(QWidget *panel);
+    void setRightAccessoryPanelActive(bool active);
+
     /** @brief 设置目标显示器编号（从 0 开始，-1 为鼠标当前所在屏幕） */
     void setMonitor(int index);
 
@@ -68,6 +73,9 @@ public:
 
     /** @brief 获取当前图标数量 */
     int itemCount() const { return m_items.size(); }
+
+signals:
+    void rightAccessoryIconBaseSizeChanged(int size);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -97,6 +105,8 @@ public slots:
     /** @brief 延迟重新定位 Dock（任务栏隐藏后可用区域变化时调用） */
     void requestUpdatePosition();
 
+    void relayoutItems();
+
     /** @brief ProcessMonitor 信号：应用运行状态变化 */
     void onAppRunningStateChanged(const QString &appId, bool isRunning);
 
@@ -112,12 +122,14 @@ private:
     void launchApp(DockItem *item);
     void handleSingleClick(DockItem *item);
     int  itemAtPos(int mouseX, int mouseY) const;
-    void relayoutItems();
+    void updateHoverStateAtGlobalPosition(const QPoint &globalPos);
+    void clearHoverState(bool delayedPreviewHide);
 
     // 毛玻璃 & 主题
     void initBlurEffect();
     void updateBlurRegion();
     void updateTheme();
+    bool hasActiveRightAccessoryPanel() const;
 
     // 抽屉图标管理
     void updateOverflowItem();
@@ -160,6 +172,9 @@ private:
 
     // 底部边缘唤起（Hidden 状态鼠标触碰屏幕底部边缘自动显示）
     QTimer *m_bottomEdgeTimer;
+
+    QWidget *m_rightAccessoryPanel = nullptr;
+    bool m_rightAccessoryPanelActive = false;
 
     QSize m_lastBlurSize;     // 上次模糊区域对应的窗口尺寸（避免无效 DWM 调用）
 

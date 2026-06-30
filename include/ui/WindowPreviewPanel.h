@@ -51,6 +51,9 @@ public:
     /** @brief 延迟隐藏预览面板（给鼠标移动到预览窗口的时间） */
     void startDelayedHide();
 
+    /** @brief 取消延迟隐藏（鼠标回到 Dock 或预览窗口） */
+    void cancelDelayedHide();
+
     /** @brief 检查面板是否正在显示 */
     bool isVisible() const;
 
@@ -71,6 +74,8 @@ private slots:
 private:
     void buildPreviewContent(DockItem *item);
     void clearContent();
+    bool isPreviewObject(QObject *obj) const;
+    bool cursorInsidePreview() const;
     void startPeek(HWND targetHwnd);   // DWM peek lite
     void stopPeek();                    // 取消 peek
 

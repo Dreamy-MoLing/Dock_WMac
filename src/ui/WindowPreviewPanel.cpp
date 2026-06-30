@@ -20,6 +20,7 @@
 #include <QLabel>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QCursor>
 #include "core/IconProvider.h"
 #include <QPainter>
 #include <QMouseEvent>
@@ -83,10 +84,9 @@ void WindowPreviewPanel::setWindowCache(WindowCache *cache)
 
 void WindowPreviewPanel::showPreview(DockItem *item)
 {
-    if (!item || item == m_previewItem) return;
-
-    // 取消离开定时器（鼠标回到了 Dock）
-    m_leaveTimer->stop();
+    if (!item) return;
+    cancelDelayedHide();
+    if (item == m_previewItem) return;
 
     hidePreview();
     m_previewItem = item;
@@ -111,6 +111,11 @@ void WindowPreviewPanel::startDelayedHide()
     }
 }
 
+void WindowPreviewPanel::cancelDelayedHide()
+{
+    m_leaveTimer->stop();
+}
+
 bool WindowPreviewPanel::isVisible() const
 {
     return m_previewPopup != nullptr;
@@ -124,6 +129,8 @@ void WindowPreviewPanel::onPreviewTimerTimeout()
 
 void WindowPreviewPanel::onLeaveTimerTimeout()
 {
+    if (cursorInsidePreview())
+        return;
     hidePreview();
 }
 
@@ -224,6 +231,7 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
             titleLabel->setAlignment(Qt::AlignCenter);
             titleLabel->setStyleSheet("background: transparent; color: white; font-size: 11px;");
             titleLabel->move(padding + i * (thumbW + spacing), padding + thumbH + 4);
+            titleLabel->installEventFilter(this);
         }
     }
 
@@ -349,6 +357,25 @@ void WindowPreviewPanel::buildPreviewContent(DockItem *item)
     m_previewPopup->setProperty("dwmThumbList", thumbList);
 }
 
+bool WindowPreviewPanel::isPreviewObject(QObject *obj) const
+{
+    if (!m_previewPopup || !obj)
+        return false;
+    if (obj == m_previewPopup)
+        return true;
+
+    QWidget *widget = qobject_cast<QWidget *>(obj);
+    return widget && m_previewPopup->isAncestorOf(widget);
+}
+
+bool WindowPreviewPanel::cursorInsidePreview() const
+{
+    if (!m_previewPopup || !m_previewPopup->isVisible())
+        return false;
+
+    return m_previewPopup->rect().contains(m_previewPopup->mapFromGlobal(QCursor::pos()));
+}
+
 // ─── DWM Peek Lite ───────────────────────────────────────
 
 void WindowPreviewPanel::startPeek(HWND targetHwnd)
@@ -404,16 +431,16 @@ bool WindowPreviewPanel::isWindowOnCurrentDesktop(HWND hwnd)
 bool WindowPreviewPanel::eventFilter(QObject *obj, QEvent *event)
 {
     // ── popup Leave/Enter（离开防抖）──
-    if (obj == m_previewPopup && event->type() == QEvent::Leave) {
-        m_leaveTimer->start();
+    if (isPreviewObject(obj) && event->type() == QEvent::Leave) {
+        startDelayedHide();
         stopPeek();
         m_peekTimer->stop();
-    } else if (obj == m_previewPopup && event->type() == QEvent::Enter) {
-        m_leaveTimer->stop();
+    } else if (isPreviewObject(obj) && event->type() == QEvent::Enter) {
+        cancelDelayedHide();
     }
 
     // ── DWM Peek：鼠标在缩略图区域移动 ──
-    if (event->type() == QEvent::MouseMove && m_previewPopup) {
+    if (event->type() == QEvent::MouseMove && obj == m_previewPopup && m_previewPopup) {
         QMouseEvent *me = static_cast<QMouseEvent *>(event);
         QVariant thumbListVar = m_previewPopup->property("dwmThumbList");
         if (thumbListVar.isValid()) {

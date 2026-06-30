@@ -1,5 +1,6 @@
 # ===== 构建产物 =====
 build/
+build-*/
 build-win/
 build-debug/
 cmake-build-*/
@@ -103,7 +104,13 @@ graphify-out/
 
 # ===== 内部文档与规划目录（不上传 GitHub）=====
 openspec/
-docs/
+docs/*
+!docs/music-player/
+!docs/music-player/DEVELOPMENT.md
+!docs/archive/
+docs/archive/*
+!docs/archive/music-player-research/
+!docs/archive/music-player-research/*.md
 .superpower/
 
 # ===== Clangd / LSP =====

@@ -18,13 +18,15 @@ void DockWindow::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    if (m_items.isEmpty()) return;
+    if (m_items.isEmpty() && !hasActiveRightAccessoryPanel()) return;
 
     int cornerRadius = m_config
         ? m_config->get(QStringLiteral("cornerRadius"), 16).toInt()
         : 16;
 
-    int baseSize = m_items[0]->baseSize();
+    int baseSize = m_items.isEmpty()
+        ? (m_config ? m_config->get(QStringLiteral("iconSize"), 48).toInt() : 48)
+        : m_items[0]->baseSize();
     int barH = kMarginTop + baseSize + kMarginBottom;
     int barTop = height() - barH;
     QRect barRect(0, barTop, width(), barH);

@@ -55,6 +55,7 @@ void DockWindow::updateDpiScale()
     qreal dpi = screen->logicalDotsPerInch();
     qreal scale = qBound(0.5, dpi / 96.0, 3.0);
     m_baseIconSize = static_cast<int>(48 * scale);
+    emit rightAccessoryIconBaseSizeChanged(m_baseIconSize);
 
     qInfo() << "DPI:" << dpi << "scale:" << scale << "iconSize:" << m_baseIconSize;
 }

@@ -14,6 +14,7 @@
 #include "ui/WindowPreviewPanel.h"
 
 #include <QDir>
+#include <QCursor>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QEnterEvent>
@@ -31,10 +32,9 @@ void DockWindow::enterEvent(QEnterEvent *event)
 void DockWindow::leaveEvent(QEvent *event)
 {
     Q_UNUSED(event);
-    m_animation->resetFishEye(m_items);
-    if (!m_animation->isFishEyeLocked())
-        m_hoveredIndex = -1;
-    m_windowPreview->startDelayedHide();
+    if (rect().contains(mapFromGlobal(QCursor::pos())))
+        return;
+    clearHoverState(true);
 }
 
 int DockWindow::itemAtPos(int mouseX, int mouseY) const
@@ -51,46 +51,73 @@ int DockWindow::itemAtPos(int mouseX, int mouseY) const
 
 void DockWindow::mouseMoveEvent(QMouseEvent *event)
 {
-    if (m_items.isEmpty()) return;
-
-    int index = itemAtPos(event->pos().x(), event->pos().y());
-    if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
-        m_hoveredIndex = index;
-        if (index >= 0)
-            m_animation->applyFishEye(index, m_items);
-        else
-            m_animation->resetFishEye(m_items);
-    }
+    updateHoverStateAtGlobalPosition(event->globalPosition().toPoint());
 }
 
 bool DockWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::MouseMove && obj->isWidgetType()) {
+    if (obj->isWidgetType()) {
         QWidget *w = static_cast<QWidget *>(obj);
-        if (w->parent() == this && !m_items.isEmpty()) {
-            QMouseEvent *me = static_cast<QMouseEvent *>(event);
-            QPoint posInDock = mapFromGlobal(me->globalPosition().toPoint());
-            int index = itemAtPos(posInDock.x(), posInDock.y());
-            if (index != m_hoveredIndex && !m_animation->isFishEyeLocked()) {
-                m_hoveredIndex = index;
-                if (index >= 0)
-                    m_animation->applyFishEye(index, m_items);
-                else
-                    m_animation->resetFishEye(m_items);
+        if (w->parent() == this && !m_items.isEmpty()
+            && (event->type() == QEvent::MouseMove
+                || event->type() == QEvent::Enter
+                || event->type() == QEvent::Leave)) {
+            QPoint globalPos = QCursor::pos();
+            if (event->type() == QEvent::MouseMove) {
+                QMouseEvent *me = static_cast<QMouseEvent *>(event);
+                globalPos = me->globalPosition().toPoint();
             }
-
-            if (index >= 0) {
-                DockItem *hoveredItem = m_items[index];
-                if (hoveredItem != m_previewItem) {
-                    m_windowPreview->hidePreview();
-                    m_previewItem = hoveredItem;
-                    m_windowPreview->showPreview(hoveredItem);
-                }
-            }
+            updateHoverStateAtGlobalPosition(globalPos);
         }
     }
 
     return QWidget::eventFilter(obj, event);
+}
+
+void DockWindow::updateHoverStateAtGlobalPosition(const QPoint &globalPos)
+{
+    if (m_items.isEmpty()) return;
+
+    const QPoint posInDock = mapFromGlobal(globalPos);
+    const int index = itemAtPos(posInDock.x(), posInDock.y());
+    DockItem *hoveredItem = index >= 0 ? m_items[index] : nullptr;
+
+    if (!hoveredItem) {
+        clearHoverState(true);
+        return;
+    }
+
+    m_windowPreview->cancelDelayedHide();
+
+    if (hoveredItem != m_previewItem && (m_previewItem || m_windowPreview->isVisible())) {
+        m_windowPreview->hidePreview();
+    }
+
+    if (!m_animation->isFishEyeLocked() && index != m_hoveredIndex) {
+        m_hoveredIndex = index;
+        m_animation->applyFishEye(index, m_items);
+    }
+
+    if (hoveredItem != m_previewItem) {
+        m_previewItem = hoveredItem;
+        m_windowPreview->showPreview(hoveredItem);
+    }
+}
+
+void DockWindow::clearHoverState(bool delayedPreviewHide)
+{
+    if (!m_animation->isFishEyeLocked()) {
+        m_hoveredIndex = -1;
+        m_animation->resetFishEye(m_items);
+    }
+
+    if (!m_previewItem && !m_windowPreview->isVisible())
+        return;
+
+    if (delayedPreviewHide && m_windowPreview->isVisible())
+        m_windowPreview->startDelayedHide();
+    else
+        m_windowPreview->hidePreview();
 }
 
 void DockWindow::launchApp(DockItem *item)

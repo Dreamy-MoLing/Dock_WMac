@@ -179,7 +179,15 @@ void DockWindow::setConfigManager(ConfigManager *config)
     if (config) {
         qreal opacity = config->get(QStringLiteral("opacity"), 0.95).toReal();
         setWindowOpacity(qBound(0.1, opacity, 1.0));
+        emit rightAccessoryIconBaseSizeChanged(rightAccessoryIconBaseSize());
     }
+}
+
+int DockWindow::rightAccessoryIconBaseSize() const
+{
+    return m_config
+        ? qBound(24, m_config->get(QStringLiteral("iconSize"), m_baseIconSize).toInt(), 128)
+        : m_baseIconSize;
 }
 
 void DockWindow::setFadeOpacity(qreal opacity)
@@ -213,6 +221,34 @@ void DockWindow::setWindowCache(WindowCache *cache)
     });
 }
 
+void DockWindow::setRightAccessoryPanel(QWidget *panel)
+{
+    if (m_rightAccessoryPanel == panel)
+        return;
+
+    if (m_rightAccessoryPanel) {
+        m_rightAccessoryPanel->removeEventFilter(this);
+        m_rightAccessoryPanel->hide();
+    }
+
+    m_rightAccessoryPanel = panel;
+    m_rightAccessoryPanelActive = false;
+    if (!m_rightAccessoryPanel) {
+        relayoutItems();
+        return;
+    }
+
+    m_rightAccessoryPanel->setParent(this);
+    m_rightAccessoryPanel->installEventFilter(this);
+    relayoutItems();
+}
+
+void DockWindow::setRightAccessoryPanelActive(bool active)
+{
+    m_rightAccessoryPanelActive = active;
+    relayoutItems();
+}
+
 void DockWindow::setMonitor(int index)
 {
     m_monitorIndex = index;
@@ -230,18 +266,26 @@ void DockWindow::setMonitor(int index)
  */
 void DockWindow::relayoutItems()
 {
-    if (m_items.isEmpty()) return;
+    const bool accessoryActive = hasActiveRightAccessoryPanel();
+    if (m_items.isEmpty() && !accessoryActive) {
+        if (m_rightAccessoryPanel)
+            m_rightAccessoryPanel->hide();
+        return;
+    }
 
-    int baseSize = m_items[0]->baseSize();
+    int baseSize = m_items.isEmpty()
+        ? (m_config ? m_config->get(QStringLiteral("iconSize"), 48).toInt() : 48)
+        : m_items[0]->baseSize();
     qreal maxScale = m_config
         ? m_config->get(QStringLiteral("magnification"), 1.5).toReal()
         : 1.5;
     int maxItemW = static_cast<int>(baseSize * maxScale);
     int n = m_items.size();
+    const int accessoryW = accessoryActive ? m_rightAccessoryPanel->width() : 0;
 
     // ── 窗口高度固定，宽度随内容动态变化 ──
     int barH = kMarginTop + maxItemW + kMarginBottom;
-    m_fixedWindowH = barH;
+    m_fixedWindowH = qMax(barH, accessoryActive ? m_rightAccessoryPanel->height() + kMarginBottom : barH);
 
     // ── 计算当前实际内容宽度（含变量间隙）──
     int contentW = 0;
@@ -254,6 +298,11 @@ void DockWindow::relayoutItems()
             }
             contentW += gap;
         }
+    }
+    if (accessoryActive) {
+        if (contentW > 0)
+            contentW += kBaseSpacing;
+        contentW += accessoryW;
     }
 
     // ── 窗口宽度 = 内容宽度 + 两侧边距（无多余空白）──
@@ -281,7 +330,21 @@ void DockWindow::relayoutItems()
         }
     }
 
+    if (accessoryActive) {
+        if (n > 0)
+            x += kBaseSpacing;
+        m_rightAccessoryPanel->move(x, iconBottom - m_rightAccessoryPanel->height());
+        m_rightAccessoryPanel->show();
+    } else if (m_rightAccessoryPanel) {
+        m_rightAccessoryPanel->hide();
+    }
+
     update();  // 触发重绘背景
+}
+
+bool DockWindow::hasActiveRightAccessoryPanel() const
+{
+    return m_rightAccessoryPanel && m_rightAccessoryPanelActive;
 }
 
 // ─── 绘制 & 毛玻璃 & 主题 → DockWindow_theme.cpp ───────────

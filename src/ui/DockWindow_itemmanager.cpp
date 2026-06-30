@@ -12,6 +12,8 @@
 #include "core/AppIdHelper.h"
 #include "core/WindowCache.h"
 
+#include <QCursor>
+
 void DockWindow::onItemAdded(const DockItemData &data)
 {
     if (m_itemMap.contains(data.appId)) return;
@@ -47,6 +49,12 @@ void DockWindow::onItemAdded(const DockItemData &data)
         } else {
             m_dockManager->unpinItem(appId);
         }
+    });
+    connect(item, &DockItem::hoverEntered, this, [this](int) {
+        updateHoverStateAtGlobalPosition(QCursor::pos());
+    });
+    connect(item, &DockItem::hoverLeft, this, [this]() {
+        updateHoverStateAtGlobalPosition(QCursor::pos());
     });
 
     item->installEventFilter(this);

@@ -19,6 +19,10 @@ class WindowCache;
 class DockManager;
 class DockWindow;
 class ProcessMonitor;
+namespace music {
+class MusicSessionService;
+class NowPlayingPanel;
+}
 
 class Application : public QObject {
     Q_OBJECT
@@ -49,6 +53,8 @@ private:
     DockManager *m_dockManager = nullptr;
     DockWindow *m_dockWindow = nullptr;
     ProcessMonitor *m_processMonitor = nullptr;
+    music::MusicSessionService *m_musicService = nullptr;
+    music::NowPlayingPanel *m_nowPlayingPanel = nullptr;
 };
 
 #endif // APPLICATION_H
