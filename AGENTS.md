@@ -1,83 +1,109 @@
 # AGENTS.md
 
-Windows-only macOS-style dock written in Qt6 + C++17. The product goal is to preserve core Windows taskbar behavior while adding macOS-style Dock animation and interaction: fisheye magnification, auto-hide, DWM blur, window previews, pinned/running app management, and portable runtime data.
+This repository is a Windows-only Dock application. The active line is v2:
+C++20, C++/WinRT, WinUI 3, Windows App SDK Stable, MSVC, Visual Studio 2022,
+Windows 10 1809+, and Windows 11.
+
+The existing Qt6 Widgets + C++17 code is v1 historical reference only. Do not
+add new product features to the Qt architecture unless the user explicitly asks
+for v1 maintenance.
 
 ## Source of Truth
 
-- `README.md` is user-facing usage/build documentation.
-- `AGENTS.md` is the current engineering handoff document.
-- `docs/PROJECT_BRIEF.md` is product/direction context for scope and prioritization decisions.
-- `docs/music-player/DEVELOPMENT.md` is the source of truth for the experimental music player feature until it is accepted for release.
-- `docs/archive/` contains historical or agent-generated plans and may be stale.
-- `.claude/`, `.mimocode/`, and `graphify-out/` are external agent/plugin outputs, not authoritative source code.
+- `README.md` is the user-facing v2 overview and build entry.
+- `AGENTS.md` is the engineering handoff.
+- `docs/PRODUCT_SPEC.md` defines product scope and non-goals.
+- `docs/ARCHITECTURE.md` defines layer ownership and hard boundaries.
+- `docs/UX_SPEC.md` defines visible behavior.
+- `docs/TECH_STACK.md` defines the fixed technology stack.
+- `docs/MIGRATION.md` defines how v1 is used as reference.
+- `docs/ROADMAP.md` defines staged delivery.
+- `docs/VALIDATION.md` defines acceptance checks.
+- `docs/AI_WORKFLOW.md` defines future agent workflow.
+- `docs/archive/`, `.claude/`, `.mimocode/`, and `graphify-out/` are not
+  authoritative for v2.
 
-## Build & Test
+## Current Engineering Rule
 
-Use go-task for local and CI parity:
+First build a small, verifiable v2 foundation. Do not implement the full Dock,
+player, lyrics, or animation system during preparation work. Keep the first
+running result to an empty semi-transparent `DockWindow`.
 
-```bash
-task configure   # cmake --preset default
-task build       # build Release
-task test        # build + ctest
-task package     # test + CPack ZIP
-task local-ci    # configure + test + package
-task ci          # CI path; requires CMAKE_GENERATOR, VS_INSTALL_PATH, QT_ROOT_DIR
+Do not introduce Electron, Qt, WPF, Avalonia, or WebView as the main UI stack.
+
+## Build
+
+Open v2 in Visual Studio 2022:
+
+```powershell
+start Dock_WMac_v2.sln
 ```
 
-Direct fallback:
+Build from a Developer PowerShell:
 
-```bash
-cmake --preset default -G "$env:CMAKE_GENERATOR" -DBUILD_TESTS=ON
-cmake --build build --config Release
-cd build && ctest -C Release --output-on-failure
+```powershell
+msbuild Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64
 ```
 
-Qt DLLs are injected into test PATH via CMake `ENVIRONMENT_MODIFICATION`.
+This remains the Visual Studio 2022 / `v143` baseline. If the local machine only
+has Visual Studio Insiders / VS2026, use the installed MSBuild with the `v145`
+toolset override:
 
-## Architecture
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64 /p:PlatformToolset=v145
+```
 
-Three layers: **UI -> Core -> System**.
+The old CMake and go-task files are archived under `legacy/qt-v1/`. Root-level
+build work should use `Dock_WMac_v2.sln`.
 
-- UI: `DockWindow`, `DockItem`, `DockAnimation`, `WindowPreviewPanel`, `OverflowPanel`
-- Core: `Application`, `DockManager`, `ConfigManager`, `ProcessMonitor`, `WindowCache`, `ClickStateMachine`, `IconProvider`, `AppIdHelper`, `PinnedItemsReader`, `Logger`, `PathManager`
-- System: `SysHelper` wraps Win32/COM/DWM behavior
+## v2 Architecture
 
-Keep new code on the correct side of the boundary. UI collects events and renders. Core owns state and decisions. System owns direct Win32/COM/DWM calls. Existing direct Win32 calls in `ClickStateMachine`, `WindowCache`, and `WindowPreviewPanel` are known debt to be reduced, not copied.
+Layer ownership is fixed:
 
-## Module Boundaries
+- `app/`: lifecycle, single instance, launch arguments, config loading, main
+  window creation.
+- `ui/`: WinUI 3 XAML pages, Dock visuals, media panel, lyrics visual layer,
+  animation states.
+- `dock/`: Dock state machine, icon model, pinned item management, running app
+  mapping, click decisions, ordering, persistence.
+- `shell/`: Win32 window enumeration, DWM thumbnails, Shell Link parsing, icon
+  extraction, taskbar pinned item reading, native taskbar hide/restore.
+- `media/`: GSMTC session discovery, current session selection, playback
+  snapshots, media transport commands.
+- `lyrics/`: LRC parsing, lyric matching, local lyric index, cache, no-lyrics
+  fallback.
+- `platform/`: DPI, multi-monitor, system theme, high contrast, reduced motion,
+  window z-order policy.
+- `infra/`: logging, path management, JSON config, error handling, performance
+  sampling.
 
-`DockWindow.cpp` should stay a coordinator: construction, dependency injection, signal wiring, and shared layout. Put focused behavior in sibling implementation files:
+## Hard Boundaries
 
-- `DockWindow_position.cpp` for screen positioning, DPI, and native setting events
-- `DockWindow_input.cpp` for mouse, click, drag, and hit-test behavior
-- `DockWindow_menu.cpp` for Dock background context menu behavior
-- `DockWindow_itemmanager.cpp` for DockItem lifecycle and overflow item management
-- `DockWindow_theme.cpp` for painting, blur, and theme updates
-- `DockWindow_transition.cpp` for show/hide animations
+- UI must not call Win32, COM, DWM, or GSMTC directly.
+- `dock/` must not call WinRT or COM directly.
+- `media/` must not depend on Dock state.
+- `lyrics/` must never block the media panel.
+- `shell/` adapts system APIs and must not store product state.
+- Every system API call must sit behind an interface or adapter that can be
+  mocked or isolated in tests.
+- Apple Music means Apple Music for Windows through GSMTC only.
+- Lyrics must not depend on private Apple interfaces.
 
-Pinned item ordering must flow through `DockManager::reorderPinnedItems(...)` so UI order and `pinned.json` persistence stay aligned.
+## v1 Reference Policy
 
-## Music Player Feature
+Use v1 to understand behavior, edge cases, and tests. Do not copy Qt ownership
+boundaries into v2. v1 is archived under `legacy/qt-v1/` and documented by
+`legacy/qt-v1/FREEZE.md`.
 
-The music player is an experimental Windows-only GSMTC companion panel. Code exists under `include/music/`, `src/music/`, and `tests/music/`, but it must stay optional and default off via `musicPanelEnabled=false` so Dock startup, launching, switching, previews, and taskbar behavior do not depend on it.
+## Code Discovery
 
-Do not put GSMTC/session logic into `SysHelper`, and do not put Now Playing state into `DockManager`. Archived ChatGPT research under `docs/archive/music-player-research/` is background only; the development guide is current.
+Prefer codebase-memory-mcp for code discovery when available:
 
-## Key Gotchas
+1. `search_graph`
+2. `trace_path`
+3. `get_code_snippet`
+4. `query_graph`
+5. `get_architecture`
 
-- Binary name: `WMacDock.exe`; CMake target: `dock_wmac`.
-- Portable mode prefers `./data/` beside the executable and falls back to the
-  user's local app-data directory when the executable directory is not writable.
-- Single-instance key: `Dock_WMac_Instance`.
-- Tracked presets contain no personal machine paths. Local and CI builds supply
-  `CMAKE_GENERATOR`, `VS_INSTALL_PATH`, and `QT_ROOT_DIR`; Qt baseline is 6.8.3.
-- Native taskbar hiding is experimental, defaults off, and requires explicit user opt-in.
-- Music panel is experimental, defaults off, and must not start GSMTC/WASAPI or external lyrics requests unless explicitly enabled.
-- Branch name is `master`.
-- Use `codex` for experimental music-player development, review, and acceptance; merge to `master` only after validation for release.
-- `resources/app.ico` must remain tracked despite image ignore rules.
-- Do not treat archived Markdown as current requirements without checking source and tests.
-
-## CI/CD
-
-GitHub Actions installs Qt and go-task, detects the Visual Studio generator, then runs `task ci`. Packaging is CPack ZIP. Tag releases use `softprops/action-gh-release` with GitHub-generated release notes.
+Use text search for docs, configs, string literals, and cases where graph
+results are insufficient.

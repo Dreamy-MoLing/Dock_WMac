@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="app">
+      <UniqueIdentifier>{3D42C65B-7617-4E3E-AE27-2B05D366B6D7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui">
+      <UniqueIdentifier>{ED578109-454D-46E4-97E9-2A9FC4359A2E}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="app\App.xaml.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\DockWindow.xaml.h">
+      <Filter>ui</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\App.xaml.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\DockWindow.xaml.cpp">
+      <Filter>ui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="app\App.idl">
+      <Filter>app</Filter>
+    </Midl>
+    <Midl Include="ui\DockWindow.idl">
+      <Filter>ui</Filter>
+    </Midl>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\App.xaml">
+      <Filter>app</Filter>
+    </None>
+    <None Include="ui\DockWindow.xaml">
+      <Filter>ui</Filter>
+    </None>
+  </ItemGroup>
+</Project>

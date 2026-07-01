@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(Dock_WMac VERSION 0.2.5 LANGUAGES CXX)
 
+set(DOCK_WMAC_VERSION_BASE "${PROJECT_VERSION}")
+set(DOCK_WMAC_VERSION_SUFFIX "b")
+set(DOCK_WMAC_VERSION_STRING "${DOCK_WMAC_VERSION_BASE}${DOCK_WMAC_VERSION_SUFFIX}")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -90,6 +94,9 @@ add_executable(dock_wmac WIN32
 
 target_include_directories(dock_wmac PRIVATE include)
 target_link_libraries(dock_wmac Qt6::Widgets Qt6::Svg Qt6::Concurrent Qt6::Network dwmapi shlwapi shell32 ole32 uuid propsys comctl32)
+target_compile_definitions(dock_wmac PRIVATE
+    DOCK_WMAC_VERSION_STRING="${DOCK_WMAC_VERSION_STRING}"
+)
 if(MSVC)
     target_compile_definitions(dock_wmac PRIVATE
         DOCK_WMAC_HAS_WINRT_GSMTC
@@ -137,7 +144,7 @@ endif()
 
 # ---- 打包 (CPack) ----
 set(CPACK_PACKAGE_NAME "Dock_WMac")
-set(CPACK_PACKAGE_VERSION "0.2.5b")
+set(CPACK_PACKAGE_VERSION "${DOCK_WMAC_VERSION_STRING}")
 set(CPACK_PACKAGE_VENDOR "Dreamy_Moling")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Windows macOS-style dock")
 set(CPACK_GENERATOR "ZIP")

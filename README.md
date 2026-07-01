@@ -1,218 +1,129 @@
-# Dock_WMac
+# Dock_WMac v2
 
-> 原生、便携、低干扰的 Windows 应用 Dock。
+Dock_WMac v2 is a Windows-only desktop Dock project. The active rewrite targets
+C++20, C++/WinRT, WinUI 3, Windows App SDK Stable, MSVC, Visual Studio 2022,
+Windows 10 1809+, and Windows 11.
 
-Dock_WMac 提供 macOS 风格的应用启动和窗口切换体验。它不是完整的 Windows
-任务栏或 Shell 替代品：目前不提供开始菜单、通知区域、时钟和快速设置。
+The goal is not to replace Windows Shell. The product keeps the core Windows
+taskbar workflow while adding a centered floating Dock, icon magnification,
+auto-hide, app launch and window switching, DWM previews, a polished media
+panel, lyric display, and smooth audio-reactive visuals.
 
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/Dreamy-MoLing/Dock_WMac)
-[![Version](https://img.shields.io/badge/version-0.2.5b-brightgreen)](https://github.com/Dreamy-MoLing/Dock_WMac/releases)
+## Current Stage
 
----
+This repository is in v2 preparation.
 
-## 功能特性
+- v2 is the current product direction.
+- The existing Qt6 Widgets + C++17 implementation is v1 historical reference.
+- Do not continue feature work on the Qt architecture.
+- Do not introduce Electron, Qt, WPF, Avalonia, or WebView as the main UI stack.
+- Do not implement the full Dock, media player, lyrics, or animation system in
+  this preparation stage.
 
-### 核心体验
+## v2 Scope
 
-| 特性 | 说明 |
-|------|------|
-| 🧲 **鱼眼放大** | 鼠标悬停时图标等比放大，邻近图标连带缩放（`QPropertyAnimation`） |
-| 🙈 **自动隐藏** | 无操作时滑出屏幕边缘，鼠标触底唤醒 |
-| 🔍 **窗口预览** | 悬停 500ms 弹出 DWM 实时缩略图，再悬停触发 Peek 置顶 |
-| 🌓 **亮暗主题** | 每 5 秒检测系统主题色，自动跟随切换 |
-| 🧊 **毛玻璃模糊** | 全窗口半透明 + 圆角 DWM 模糊背景 |
+### Dock
 
-### 交互
+- Centered floating Windows desktop window.
+- Dock-style translucent visual surface.
+- Icon fisheye magnification.
+- Auto-hide.
+- Drag ordering.
+- Pinned apps.
+- Running app recognition.
+- Click decisions for launch, switch, minimize, restore, and foreground.
 
-| 特性 | 说明 |
-|------|------|
-| 🖱️ **智能点击** | 5 状态点击机：无窗口→启动 / 后台→显示 / 最小化→恢复 / 前台→最小化 / 可见→置前 |
-| 🔄 **双击启动** | 双击图标强制启动新实例 |
-| ↔️ **拖拽排序** | 拖拽图标调整顺序，实时保存 |
-| 📋 **溢出面板** | 超过上限（默认 16 个）的图标进入 "…" 弹出菜单 |
-| 🔴 **运行指示器** | 图标下方绿色圆点标记运行中的应用 |
-| 🔢 **角标** | 红色角标显示未读计数 |
+### Windows taskbar behavior
 
-### 设计
+- Read taskbar pinned items.
+- Enumerate top-level windows.
+- Map processes, app identities, and windows.
+- Support multi-window apps.
+- Show DWM thumbnails.
+- Optional native taskbar hide/restore, disabled by default and gated by explicit
+  user opt-in.
 
-- **原生窗口集成** — Win32 事件 + DWM 预览，窗口缓存使用 `QReadWriteLock`
-- **低干扰运行** — 无广告、无默认遥测；开机自启由用户主动开启
-- **便携优先** — 数据优先写入程序目录 `./data/`；目录不可写时自动回退到用户本地应用数据目录
+### Media panel
 
----
+- Use GSMTC for Windows media sessions.
+- First-pass validation should prioritize Apple Music for Windows, without
+  hard-coding it.
+- Show artwork, title, artist, progress, and play state.
+- Support previous, play/pause, and next commands.
+- Degrade cleanly when no media session or artwork exists.
+- Do not use private Apple APIs.
 
-## 下载与使用
+### Lyrics
 
-### 即下即用（便携模式）
+- Prefer local LRC.
+- Support local txt lyrics.
+- Future external lyric sources must be explicit opt-in.
+- Media playback must work without lyrics.
+- Lyric visuals should fade upward with a flame/fog-like treatment.
 
-1. 从 [Releases](https://github.com/Dreamy-MoLing/Dock_WMac/releases) 下载最新 `dock_wmac_v*.zip`
-2. 解压到任意目录（建议固定英文路径，如 `D:\Tools\Dock_WMac\`）
-3. 双击 `WMacDock.exe`
+### Audio-reactive visuals
 
-首次运行自动导入系统任务栏固定项作为初始内容。
+- Avoid cheap bar visualizers.
+- Target smooth waves, energy flow, and a polished technical feel.
+- Color may be seeded from album artwork.
+- Phase one may use pseudo-response animation before real audio analysis.
 
-### 目录结构
+## Repository Layout
 
+```text
+Dock_WMac_v2.sln        Visual Studio 2022 solution for v2
+src/v2/                 C++20 + C++/WinRT + WinUI 3 scaffold
+docs/                   v2 product, architecture, UX, validation, and workflow docs
+legacy/qt-v1/           frozen Qt v1 reference archive
 ```
-Dock_WMac/
-├── WMacDock.exe          ← 主程序
-├── Qt6Core.dll            ← Qt 运行时
-├── Qt6Gui.dll
-├── Qt6Widgets.dll
-├── Qt6Svg.dll
-├── platforms/             ← Qt 平台插件
-├── styles/                ← Qt 样式插件
-└── data/                  ← 运行数据（自动创建）
-    ├── config.json         ← 用户配置
-    ├── pinned.json         ← 用户固定项
-    └── dock.log            ← 运行日志
-```
 
-如果程序所在目录不可写，数据回退到 `%LOCALAPPDATA%\Dock_WMac\data\`。
-“隐藏原生任务栏”是默认关闭的实验选项，必须从 Dock 背景右键菜单主动开启。
-音乐伴随面板代码已接入源码，但仍是默认关闭的实验功能：
-`config.json` 中 `musicPanelEnabled=false` 时不会创建 GSMTC/WASAPI 服务或音乐面板。
+The old implementation has been archived under `legacy/qt-v1/`. Use it only as
+behavior reference; keep active v2 work under `src/v2/` until the v2 tree is
+expanded.
 
-### 卸载
+## Open and Build
 
-先在右键菜单关闭开机自启并退出，然后删除程序目录。若曾使用数据目录回退，
-可按需再删除 `%LOCALAPPDATA%\Dock_WMac\data\`。
+Required environment:
 
----
+- Visual Studio 2022 with MSVC v143.
+- Windows SDK with desktop C++ tooling.
+- Windows App SDK Stable package restore through NuGet.
+- Windows 10 1809+ or Windows 11.
 
-## 开发
-
-### 环境要求
-
-| 组件 | 要求 |
-|------|------|
-| 操作系统 | Windows 10 / 11 |
-| 编译器 | Visual Studio 2022 或 2026（MSVC） |
-| Qt | 6.8.3（MSVC 2022 64-bit） |
-| CMake | 3.20+ |
-| Task | go-task 3.x |
-
-### 快速构建
+Open:
 
 ```powershell
-$env:CMAKE_GENERATOR = "Visual Studio 17 2022"
-$env:VS_INSTALL_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Community"
-$env:QT_ROOT_DIR = "C:\Qt\6.8.3\msvc2022_64"
-
-task configure
-task build
-# 产物: build\Release\WMacDock.exe
+start Dock_WMac_v2.sln
 ```
 
-也可以复制 `CMakeUserPresets.json.example` 为不入库的 `CMakeUserPresets.json`，
-按本机路径修改后执行 `cmake --preset local`。仓库不再保存个人机器路径。
-
-### 运行测试
+Command-line build from a Developer PowerShell:
 
 ```powershell
-cmake --preset default -G "$env:CMAKE_GENERATOR" -DBUILD_TESTS=ON
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
+msbuild Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64
 ```
 
-15 个测试可执行文件，包含 Win32/DWM 实际窗口集成检查和默认关闭的音乐模块测试。测试构建会禁止修改
-HKCU 开机项和隐藏系统任务栏：
+This is the Visual Studio 2022 / `v143` baseline. On this machine, Visual
+Studio Insiders / VS2026 is also available; the current scaffold has been
+verified with:
 
-```
-test_config              test_process_monitor       test_window_cache
-test_dock_manager        test_sys_helper            test_click_state_machine
-test_pinned_items_reader test_application           test_dwm_state
-test_window_cloaked      test_display_affinity      test_windows_integration
-test_lrc_parser          test_audio_level           test_now_playing_panel
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64 /p:PlatformToolset=v145
 ```
 
-### 部署便携包
+The current v2 scaffold only creates an empty semi-transparent `DockWindow`.
+It does not connect GSMTC, hide the taskbar, enumerate windows, or animate Dock
+items yet.
 
-```bash
-task package
-# 产物: build\Dock_WMac_0.2.5b_x64.zip
-```
+## Documentation
 
-CPack 会调用 `windeployqt` 并加入 MSVC 运行库；不要只分发裸 exe。
+- `docs/PRODUCT_SPEC.md` - product requirements and non-goals.
+- `docs/ARCHITECTURE.md` - v2 layers and dependency boundaries.
+- `docs/UX_SPEC.md` - interaction and visual behavior.
+- `docs/TECH_STACK.md` - fixed technology choices and package policy.
+- `docs/MIGRATION.md` - v1-to-v2 migration plan.
+- `docs/ROADMAP.md` - staged delivery plan.
+- `docs/VALIDATION.md` - build, runtime, and release validation.
+- `docs/AI_WORKFLOW.md` - rules for future AI-assisted development.
 
-### 项目结构
-
-```
-Dock_WMac/
-├── include/
-│   ├── core/              # 核心逻辑头（13 文件，含 PathManager.h）
-│   ├── music/             # 实验音乐伴随面板（默认关闭）
-│   └── ui/                # UI 组件头（4 文件）
-├── src/
-│   ├── core/              # 核心实现（11 文件）
-│   ├── music/             # GSMTC/WASAPI、歌词解析、音乐面板实现
-│   ├── ui/                # UI 实现（4 文件）
-│   └── main.cpp           # 入口
-├── resources/             # .qrc 资源 + app.rc 图标
-├── tests/                 # Google Test 单元测试（15 个测试可执行文件）
-├── .github/workflows/     # CI/CD
-├── CMakePresets.json      # CMake 预设
-└── CMakeLists.txt         # CMake 构建定义
-```
-
-### 技术栈
-
-| 依赖 | 用途 |
-|------|------|
-| Qt6::Widgets | UI 框架 |
-| Qt6::Svg | SVG 图标渲染 |
-| Qt6::Concurrent | 音乐会话后台刷新 |
-| Qt6::Network | 可选外部歌词请求（默认关闭） |
-| dwmapi | DWM 模糊 + 缩略图 |
-| shell32 | COM Shell（图标、`.lnk` 解析） |
-| shlwapi | 注册表操作 |
-| user32 | Win32 窗口 API、钩子 |
-| windowsapp | MSVC WinRT/GSMTC 音乐会话支持 |
-| Google Test v1.14.0 | 单元测试（FetchContent 自动下载） |
-
----
-
-## 架构
-
-三层设计：**UI → Core → System**，系统层通过 Qt 信号向上报告事件。
-
-```
-┌──────────────────────────────────────┐
-│  UI 层 (Qt6)                         │
-│  DockWindow · DockItem               │
-│  WindowPreviewPanel · OverflowPanel  │
-├──────────────────────────────────────┤
-│  Core 逻辑层                          │
-│  Application · DockManager           │
-│  ConfigManager · ProcessMonitor      │
-│  WindowCache · ClickStateMachine     │
-│  IconProvider · AppIdHelper          │
-│  PinnedItemsReader · Logger          │
-├──────────────────────────────────────┤
-│  System 系统层                        │
-│  SysHelper (Win32 + COM + DWM)       │
-└──────────────────────────────────────┘
-```
-
-- **UI 层** — DockWindow（无边框置顶主窗口，鱼眼动画、拖拽排序）、DockItem（图标控件，运行/激活指示器）、WindowPreviewPanel（DWM 实时缩略图预览）、OverflowPanel（超限弹出菜单）
-- **Core 层** — Application（生命周期）、DockManager（`Docked`/`Hidden` 状态机 + 全屏检测）、WindowCache（`EnumWindows` 缓存 + WinEvent 增量更新）、ClickStateMachine（5 状态点击决策）、IconProvider（5 级 Win32 图标回退链）、ConfigManager（JSON 配置 + LRU 图标缓存）、ProcessMonitor（`CreateToolhelp32Snapshot` 每 2s 轮询）、PinnedItemsReader（COM `IShellLink` 读取系统任务栏固定项）、AppIdHelper（进程名推导）、PathManager（便携路径 header-only）
-- **System 层** — SysHelper：WinEvent 窗口钩子、`WH_KEYBOARD_LL` 键盘钩子、DWM 模糊、全屏检测、主题检测（注册表）、任务栏控制、开机自启
-
-> 当前开发与接手说明见仓库内 [AGENTS.md](./AGENTS.md)。历史规划和诊断文档已归档到 `docs/archive/`，以 README、AGENTS 和当前源码为准。
-
-真实用户验证方法、继续/转向/归档阈值和 Windows 人工验收矩阵见
-[VALIDATION.md](./VALIDATION.md)。项目默认不收集遥测。
-
----
-
-## 更新日志
-
-版本发布说明见 [GitHub Releases](https://github.com/Dreamy-MoLing/Dock_WMac/releases)。
-
----
-
-## 许可
-
-[MIT](LICENSE)
-
+When documents conflict, `AGENTS.md` and the files above define the v2 rewrite.
+Archived docs are background only.

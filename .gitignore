@@ -3,6 +3,7 @@ build/
 build-*/
 build-win/
 build-debug/
+src/v2/obj/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
@@ -47,6 +48,8 @@ config.json
 
 # ===== IDE / 编辑器 =====
 .vscode/
+!.vscode/
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
@@ -107,12 +110,31 @@ graphify-out/
 openspec/
 docs/*
 !docs/PROJECT_BRIEF.md
+!docs/PRODUCT_SPEC.md
+!docs/ARCHITECTURE.md
+!docs/UX_SPEC.md
+!docs/TECH_STACK.md
+!docs/MIGRATION.md
+!docs/ROADMAP.md
+!docs/VALIDATION.md
+!docs/AI_WORKFLOW.md
 !docs/music-player/
 !docs/music-player/DEVELOPMENT.md
 !docs/archive/
 docs/archive/*
+!docs/archive/README.md
 !docs/archive/music-player-research/
 !docs/archive/music-player-research/*.md
+!legacy/
+!legacy/qt-v1/
+!legacy/qt-v1/FREEZE.md
+!legacy/qt-v1/resources/
+!legacy/qt-v1/resources/app.ico
+!legacy/qt-v1/resources/icons/
+!legacy/qt-v1/resources/icons/*.svg
+!legacy/qt-v1/scripts/
+!legacy/qt-v1/scripts/*.ps1
+legacy/qt-v1/tests/output/
 .superpower/
 
 # ===== Clangd / LSP =====

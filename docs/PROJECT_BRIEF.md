@@ -1,61 +1,17 @@
 # Project Brief
 
-## 1. 项目一句话定义
+Dock_WMac v2 is a Windows-only desktop Dock rewrite. The current product and
+engineering source of truth has moved to:
 
-Dock_WMac 是一个 Windows-only 的 macOS 风格 Dock：提供应用启动、窗口切换和 Dock 动画体验，同时尽量保留 Windows 任务栏的核心行为与使用习惯。
+- `docs/PRODUCT_SPEC.md`
+- `docs/ARCHITECTURE.md`
+- `docs/UX_SPEC.md`
+- `docs/TECH_STACK.md`
+- `docs/MIGRATION.md`
+- `docs/ROADMAP.md`
+- `docs/VALIDATION.md`
+- `docs/AI_WORKFLOW.md`
 
-## 2. 目标用户
-
-- 想要 macOS Dock 视觉和交互体验的 Windows 个人用户。
-- 关注桌面美化、低干扰启动器和窗口切换效率的用户。
-- 需要便携运行、可恢复配置、无默认遥测的轻量桌面工具用户。
-- 愿意接受 Windows-only 原生集成限制，而不是期待跨平台 Dock 的用户。
-
-## 3. 核心问题
-
-Windows 原生任务栏稳定、熟悉，但视觉和交互不满足一部分用户对 macOS Dock 风格的需求：图标放大、自动隐藏、窗口预览、运行状态、固定应用和启动/切换反馈需要更轻、更集中、更具动画感的体验。
-
-项目要解决的是“让 Windows 桌面获得 macOS Dock 风格的启动与切换体验”，不是重写 Windows Shell。
-
-## 4. 产品目标
-
-- 稳定启动 Dock，并在 Windows 10/11 桌面环境中低干扰常驻。
-- 支持固定应用、运行中应用识别、运行状态指示和图标排序。
-- 支持可靠的应用启动、窗口切换、最小化/恢复和前台置顶行为。
-- 提供 DWM 窗口预览、Peek、自动隐藏、毛玻璃模糊、亮暗主题跟随和鱼眼动画。
-- 优先保证便携数据目录、配置恢复、日志排查和安全退出。
-- 对实验功能保持明确边界，例如隐藏原生任务栏必须由用户主动开启。
-
-## 5. 非目标
-
-- 不替代 Explorer、开始菜单、通知区域、时钟、快速设置或完整 Windows 任务栏。
-- 不实现完整窗口管理器、虚拟桌面管理器或 Shell 替代层。
-- 不做跨平台版本；当前产品方向是 Windows-only。
-- 不做主题商店、插件市场、账号系统、云同步或社交分发。
-- 不把音乐播放器探索扩展成完整音频播放引擎。
-- 不依赖私有、逆向或不稳定的平台 API 作为核心功能承诺。
-
-## 6. 成功标准
-
-- 程序可稳定启动、退出和重新启动，单实例行为正确。
-- 图标来源准确，固定项、运行中应用和窗口归属识别可靠。
-- 点击行为符合预期：启动、切换、恢复、最小化和置前不混乱。
-- 预览和 Peek 不阻塞主界面，不造成明显窗口焦点问题。
-- 鱼眼放大、自动隐藏和过渡动画不卡顿，不干扰正常桌面操作。
-- 配置、固定项和日志可恢复；便携目录不可写时能回退到用户数据目录。
-- 打包产物包含 Qt/MSVC 运行依赖，真实用户可从 ZIP 解压运行。
-- 测试和人工验收覆盖关键 Win32/DWM 行为，发布前能重复验证。
-
-## 7. 当前阶段
-
-主线 Dock 处于 MVP 后的稳定化与体验打磨阶段：核心启动、固定、切换、预览、动画、自动隐藏和便携数据路径已经是产品主线能力，当前决策应优先提高可靠性、可验证性和发布质量。
-
-音乐播放器是功能扩展探索，当前以 `docs/music-player/DEVELOPMENT.md` 为准。实验代码已接入，但必须默认关闭，并且不改变 Dock 主线的任务栏式启动和窗口管理职责；README 只说明其默认关闭状态，不把它作为稳定用户承诺。
-
-## 8. 与 README.md、AGENTS.md 的关系
-
-- `README.md` 面向用户：说明产品是什么、如何下载使用、如何构建和验证。
-- `AGENTS.md` 面向工程协作：说明源码边界、构建命令、模块归属和接手注意事项。
-- `docs/PROJECT_BRIEF.md` 面向产品和方向决策：说明要解决什么问题、为谁做、哪些能力要优先、哪些事情明确不做。
-
-当三者冲突时，先判断问题类型：用户使用和发布说明以 `README.md` 为准，工程实现和边界以 `AGENTS.md` 为准，产品取舍和范围判断以本文件为准。
+The old brief described the v1 Qt implementation and is no longer current.
+Use v1 only as behavior reference while building the C++20, C++/WinRT, WinUI 3,
+Windows App SDK v2 line.

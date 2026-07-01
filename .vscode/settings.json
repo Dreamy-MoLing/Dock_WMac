@@ -1,0 +1,8 @@
+{
+  "C_Cpp.files.exclude": {
+    "legacy/qt-v1/**": true,
+    "build/**": true,
+    "build-*/**": true,
+    "src/v2/obj/**": true
+  }
+}
