@@ -9,6 +9,9 @@ engineering source of truth has moved to:
 - `docs/TECH_STACK.md`
 - `docs/MIGRATION.md`
 - `docs/ROADMAP.md`
+- `docs/V1_RELEASE_SPEC.md`
+- `docs/UI_MOTION_BASELINE.md`
+- `docs/SYSTEM_API_RISKS.md`
 - `docs/VALIDATION.md`
 - `docs/AI_WORKFLOW.md`
 

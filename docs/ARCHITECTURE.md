@@ -10,12 +10,18 @@ not UI architecture.
 |---|---|---|
 | `app/` | app lifecycle, single instance, launch arguments, config loading, main window creation | Dock decisions, Shell calls hidden inside UI |
 | `ui/` | WinUI 3 XAML views, Dock visuals, player panel, lyrics visual layer, animation states | direct Win32, COM, DWM, GSMTC calls |
-| `dock/` | Dock state machine, icon model, pinned apps, running app mapping, click decisions, ordering, persistence | WinRT/COM calls |
-| `shell/` | window enumeration, DWM thumbnails, Shell Link parsing, icon extraction, taskbar pinned items, taskbar hide/restore | product state |
+| `dock/` | Dock state machine, icon model, durable pinned apps, running app mapping, Windows-default click decisions, ordering, persistence | WinRT/COM calls |
+| `shell/` | window enumeration, DWM thumbnails, Shell Link parsing, icon extraction, taskbar pinned item reading and later sync, taskbar hide/restore | product state |
 | `media/` | GSMTC discovery, active session selection, playback snapshot, media commands | Dock state |
 | `lyrics/` | LRC parsing, txt loading, matching, local index, cache, no-lyrics fallback | blocking media/UI work |
 | `platform/` | DPI, displays, theme, high contrast, reduced motion, window z-order | product decisions |
 | `infra/` | logging, paths, JSON config, error handling, performance sampling | UI behavior |
+
+## v1.0.0 Focus
+
+v1.0.0 must fully exercise `app/`, `ui/`, `dock/`, `shell/`, `platform/`, and
+`infra/` for taskbar-Dock behavior. `media/` and `lyrics/` remain architectural
+extension points until post-v1 feature work starts.
 
 ## Dependency Direction
 
@@ -52,8 +58,10 @@ owned by the layer that needs the behavior, not on raw system APIs.
 1. `app/` starts, enforces single instance, loads config, and creates
    `DockWindow`.
 2. `ui/` renders the Dock surface and binds to view models.
-3. `dock/` combines pinned items and running app observations into Dock items.
-4. `shell/` supplies window, process, icon, pinned item, and DWM preview data.
+3. `dock/` combines system taskbar pins and running app observations into Dock
+   items.
+4. `shell/` supplies window, process, icon, taskbar pin, and DWM preview data.
+   Taskbar pin sync commands stay isolated there when implemented.
 5. `media/` supplies the current GSMTC playback snapshot.
 6. `lyrics/` supplies local timed or plain text lyrics when available.
 

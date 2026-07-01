@@ -13,8 +13,9 @@ Current layout:
 
 ```text
 legacy/qt-v1/   frozen Qt v1 implementation and old build files
+legacy/qt-v1/docs-archive/
+                stale plans and old research
 src/v2/         active v2 scaffold during preparation
-docs/archive/   stale plans and old research
 ```
 
 ## What v1 Can Provide
@@ -23,7 +24,8 @@ docs/archive/   stale plans and old research
 - Edge cases for pinned items and running apps.
 - Test scenarios for DWM previews, hidden/cloaked windows, DPI, and taskbar
   recovery.
-- Media and lyrics exploration notes, only after checking current v2 docs.
+- Media and lyrics exploration notes from `legacy/qt-v1/docs-archive/`, only
+  after checking current v2 docs.
 
 ## What v1 Must Not Provide
 

@@ -1,6 +1,6 @@
 # Music Panel Development
 
-Dock_WMac v2 is Windows-only. The media panel is a future v2 feature built on
+Dock_WMac v2 is Windows-only. The media panel is a post-v1.0.0 feature built on
 GSMTC through the `media/` layer, not a standalone player and not a v1 Qt
 feature.
 
@@ -49,7 +49,8 @@ not reduce player controls.
 
 ## Visual Direction
 
-- Panel: compact, polished WinUI surface attached to the Dock.
+- Panel: compact, polished WinUI surface that expands sideways from the Dock
+  and remains visually connected to the Dock bar.
 - Lyrics: upward fading flame/fog-like layer.
 - Audio visuals: smooth waves or energy flow, not a basic bar meter.
 - Color may be seeded from artwork.

@@ -53,7 +53,7 @@ Run the Debug build from Visual Studio:
 - No native taskbar hide/restore is attempted.
 - No external network lyric lookup is attempted.
 
-## Manual Product Checks Before Feature Work
+## Manual Product Checks
 
 - High DPI: 100%, 125%, 150%, 200%.
 - Multi-monitor: primary, secondary, display disconnect/reconnect.
@@ -62,11 +62,27 @@ Run the Debug build from Visual Studio:
 - Explorer restart.
 - Clean user profile with no local config.
 
-## Release Gates Later
+## v1.0.0 Release Gates
+
+- Launch, switch, restore, minimize, and multi-window handling follow Windows
+  taskbar defaults in normal daily scenarios.
+- System taskbar pinned items import as Dock pinned items.
+- Dock pin/order state persists safely across restart.
+- DWM previews render for available windows and degrade cleanly for minimized,
+  cloaked, or unavailable windows.
+- Hover magnification, drag sorting, auto-hide, and reduced-motion behavior are
+  visually checked.
+- DPI, theme, Explorer restart, shutdown, and clean profile checks pass.
+- Unpackaged Win32 + Windows App SDK bootstrapper packaging installs and runs.
+
+## Post-v1 Gates
 
 - `dock/` state tests.
 - `lyrics/` parser tests.
 - `media/` fake session tests.
 - `shell/` Windows integration tests.
 - UI smoke run on Windows 10 and Windows 11.
+- Dock pin state recovery tests before pin editing can ship.
+- Taskbar pin sync tests before system sync can ship.
 - Native taskbar recovery tests before taskbar hiding can ship.
+- Packaging validation for unpackaged Win32 + Windows App SDK bootstrapper.

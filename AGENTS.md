@@ -18,18 +18,31 @@ for v1 maintenance.
 - `docs/TECH_STACK.md` defines the fixed technology stack.
 - `docs/MIGRATION.md` defines how v1 is used as reference.
 - `docs/ROADMAP.md` defines staged delivery.
+- `docs/V1_RELEASE_SPEC.md` defines the v1.0.0 release target.
+- `docs/UI_MOTION_BASELINE.md` defines the provisional v1.0.0 Dock visual and
+  motion baseline confirmed through the browser prototype.
+- `docs/SYSTEM_API_RISKS.md` defines Windows API risk handling.
 - `docs/VALIDATION.md` defines acceptance checks.
 - `docs/AI_WORKFLOW.md` defines future agent workflow.
-- `docs/archive/`, `.claude/`, `.mimocode/`, and `graphify-out/` are not
-  authoritative for v2.
+- `legacy/qt-v1/docs-archive/`, `.claude/`, `.mimocode/`, and `graphify-out/`
+  are not authoritative for v2.
 
 ## Current Engineering Rule
 
-First build a small, verifiable v2 foundation. Do not implement the full Dock,
-player, lyrics, or animation system during preparation work. Keep the first
-running result to an empty semi-transparent `DockWindow`.
+The first formal development target is `v1.0.0 Taskbar Dock Release`: a
+complete Dock-style Windows taskbar extension with polished Dock UI/animation,
+pin handling, running app recognition, Windows-default window switching,
+multi-window handling, DWM previews, ordering, persistence, and release
+packaging. Media panel, lyrics, and audio-reactive visuals are post-v1.0.0
+extension tracks unless the user explicitly changes scope.
 
 Do not introduce Electron, Qt, WPF, Avalonia, or WebView as the main UI stack.
+
+The user owns product requirements; agents own implementation choices. Do not
+ask the user to choose low-level technical details unless the choice changes
+visible behavior, privacy/security posture, release shape, or maintenance risk.
+Use local facts, official documentation, and runnable validation to choose the
+simplest implementation that satisfies the documented product need.
 
 ## Build
 
@@ -65,9 +78,10 @@ Layer ownership is fixed:
 - `ui/`: WinUI 3 XAML pages, Dock visuals, media panel, lyrics visual layer,
   animation states.
 - `dock/`: Dock state machine, icon model, pinned item management, running app
-  mapping, click decisions, ordering, persistence.
+  mapping, Windows-default click decisions, ordering, persistence.
 - `shell/`: Win32 window enumeration, DWM thumbnails, Shell Link parsing, icon
-  extraction, taskbar pinned item reading, native taskbar hide/restore.
+  extraction, taskbar pinned item reading and later sync, native taskbar
+  hide/restore.
 - `media/`: GSMTC session discovery, current session selection, playback
   snapshots, media transport commands.
 - `lyrics/`: LRC parsing, lyric matching, local lyric index, cache, no-lyrics
@@ -88,6 +102,14 @@ Layer ownership is fixed:
   mocked or isolated in tests.
 - Apple Music means Apple Music for Windows through GSMTC only.
 - Lyrics must not depend on private Apple interfaces.
+
+## Implementation Policy
+
+Use mature community approaches when they reduce risk and their licenses,
+maintenance status, and architecture fit are acceptable. Do not copy code or
+adopt a new framework without checking license and integration cost. Prefer
+native Windows behavior where it already provides the requested taskbar
+semantics.
 
 ## v1 Reference Policy
 

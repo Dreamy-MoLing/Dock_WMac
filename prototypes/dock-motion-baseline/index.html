@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dock_WMac v1.0.0 UI Motion Baseline</title>
+  <style>
+    :root {
+      --icon: 56px;
+      --gap: 10px;
+      --mag: 1.68;
+      --radius: 24px;
+      --blur: 22px;
+      --lift: 12px;
+      --active-lift: 6px;
+      --dock-bg: rgba(21, 24, 31, .54);
+      --dock-border: rgba(255, 255, 255, .22);
+      --dock-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+      --item-bg: transparent;
+      --text: #f8fafc;
+      --muted: #aeb8c6;
+      --accent: #55c8ff;
+      --surface: rgba(15, 18, 24, .78);
+      --panel-width: 318px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      font-family: "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+      background:
+        linear-gradient(135deg, rgba(32, 84, 124, .92), rgba(33, 42, 63, .92) 48%, rgba(96, 54, 70, .9)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='800' viewBox='0 0 1200 800'%3E%3Crect width='1200' height='800' fill='%23202a37'/%3E%3Cpath d='M0 520 C 220 430 330 610 540 500 S 900 360 1200 480 V800 H0Z' fill='%233d6f78' opacity='.5'/%3E%3Cpath d='M0 650 C 250 560 430 710 650 610 S 930 540 1200 620 V800 H0Z' fill='%2319232e' opacity='.8'/%3E%3C/svg%3E");
+      background-size: cover;
+    }
+
+    button, input, select { font: inherit; }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+    }
+
+    .window {
+      position: absolute;
+      color: #10151d;
+      border: 1px solid rgba(255, 255, 255, .55);
+      border-radius: 10px;
+      background: rgba(247, 249, 252, .88);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, .25);
+      overflow: hidden;
+    }
+
+    .window::before {
+      content: "";
+      display: block;
+      height: 34px;
+      background: rgba(255, 255, 255, .7);
+      border-bottom: 1px solid rgba(20, 28, 38, .08);
+    }
+
+    .window.one { left: 8vw; top: 12vh; width: 34vw; height: 32vh; }
+    .window.two { right: 14vw; top: 18vh; width: 30vw; height: 38vh; background: rgba(30, 41, 59, .82); }
+    .window.three { left: 32vw; bottom: 18vh; width: 26vw; height: 25vh; background: rgba(255, 255, 255, .72); }
+
+    .window .content {
+      display: grid;
+      gap: 10px;
+      padding: 22px;
+    }
+
+    .line {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, .14);
+    }
+
+    .controls {
+      position: fixed;
+      z-index: 30;
+      top: 18px;
+      left: 18px;
+      width: min(var(--panel-width), calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 10px;
+      background: rgba(13, 17, 23, .78);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, .36);
+      backdrop-filter: blur(20px);
+    }
+
+    .controls h1 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .controls p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .group {
+      display: grid;
+      gap: 8px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(255, 255, 255, .11);
+    }
+
+    .tabs, .seg {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      gap: 6px;
+    }
+
+    .tabs button, .seg button, .ghost {
+      min-height: 34px;
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .08);
+      cursor: pointer;
+    }
+
+    .tabs button.active, .seg button.active, .ghost.active {
+      border-color: rgba(120, 210, 255, .72);
+      background: rgba(85, 200, 255, .2);
+    }
+
+    label {
+      display: grid;
+      grid-template-columns: 104px 1fr 44px;
+      align-items: center;
+      gap: 10px;
+      color: #dbe5f1;
+      font-size: 12px;
+    }
+
+    input[type="range"] { width: 100%; }
+
+    .toggles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .dock-wrap {
+      position: fixed;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 260ms cubic-bezier(.2, .9, .2, 1), opacity 180ms ease;
+      pointer-events: none;
+    }
+
+    .dock-wrap.bottom {
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+    }
+
+    .dock-wrap.left {
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .dock-wrap.right {
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .dock-wrap.hidden.bottom { transform: translate(-50%, calc(100% + 12px)); opacity: .18; }
+    .dock-wrap.hidden.left { transform: translate(calc(-100% - 12px), -50%); opacity: .18; }
+    .dock-wrap.hidden.right { transform: translate(calc(100% + 12px), -50%); opacity: .18; }
+    .dock-wrap.hidden .dock { pointer-events: none; }
+
+    .reveal {
+      position: fixed;
+      z-index: 19;
+      border: 1px dashed rgba(255, 255, 255, .34);
+      background: rgba(255, 255, 255, .05);
+      opacity: 0;
+      transition: opacity 150ms ease;
+    }
+
+    .reveal.on { opacity: 1; }
+    .reveal.bottom { left: 25vw; right: 25vw; bottom: 0; height: 14px; }
+    .reveal.left { left: 0; top: 20vh; bottom: 20vh; width: 14px; }
+    .reveal.right { right: 0; top: 20vh; bottom: 20vh; width: 14px; }
+
+    .dock {
+      pointer-events: auto;
+      position: relative;
+      display: flex;
+      align-items: end;
+      gap: var(--gap);
+      min-height: calc(var(--icon) + 24px);
+      padding: 8px 14px 14px;
+      transition: border-radius 180ms ease, padding 180ms ease;
+    }
+
+    .dock::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--icon) * .52 + 18px);
+      border: 1px solid var(--dock-border);
+      border-radius: var(--radius);
+      background: var(--dock-bg);
+      box-shadow: var(--dock-shadow);
+      backdrop-filter: blur(var(--blur)) saturate(1.35);
+    }
+
+    .dock.vertical {
+      flex-direction: column;
+      align-items: center;
+      min-width: calc(var(--icon) + 28px);
+      min-height: auto;
+      padding: 14px 10px;
+    }
+
+    .dock.vertical::before {
+      inset: 0;
+      width: calc(var(--icon) * .52 + 18px);
+      height: auto;
+      margin: auto;
+    }
+
+    .dock-wrap.left .dock.vertical::before { right: 0; left: auto; }
+    .dock-wrap.right .dock.vertical::before { left: 0; right: auto; }
+
+    .item {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: var(--icon);
+      height: var(--icon);
+      border: 1px solid transparent;
+      border-radius: 14px;
+      background: var(--item-bg);
+      box-shadow: none;
+      transform-origin: bottom center;
+      transform: translateY(0) scale(1);
+      transition: transform 120ms linear;
+      user-select: none;
+      cursor: grab;
+    }
+
+    .vertical .item { transform-origin: center left; }
+    .bottom .item.active { transform: translateY(calc(var(--active-lift) * -1)); }
+    .left .item.active { transform: translateX(var(--active-lift)); }
+    .right .item.active { transform: translateX(calc(var(--active-lift) * -1)); }
+
+    .item.dragging {
+      opacity: .42;
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    .item.drop-left::before, .item.drop-right::after {
+      content: "";
+      position: absolute;
+      width: 3px;
+      height: calc(var(--icon) + 14px);
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .item.drop-left::before { left: calc(var(--gap) / -2 - 2px); }
+    .item.drop-right::after { right: calc(var(--gap) / -2 - 2px); }
+    .vertical .item.drop-left::before, .vertical .item.drop-right::after {
+      width: calc(var(--icon) + 14px);
+      height: 3px;
+      left: auto;
+      right: auto;
+    }
+    .vertical .item.drop-left::before { top: calc(var(--gap) / -2 - 2px); }
+    .vertical .item.drop-right::after { bottom: calc(var(--gap) / -2 - 2px); }
+
+    .glyph {
+      display: grid;
+      place-items: center;
+      width: 78%;
+      height: 78%;
+      color: white;
+      border-radius: 12px;
+      font-size: calc(var(--icon) * .38);
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .38);
+    }
+
+    .g1 { background: linear-gradient(135deg, #2f8cff, #55d4ff); }
+    .g2 { background: linear-gradient(135deg, #845ef7, #f767bd); }
+    .g3 { background: linear-gradient(135deg, #12b886, #82c91e); }
+    .g4 { background: linear-gradient(135deg, #ff922b, #ffd43b); }
+    .g5 { background: linear-gradient(135deg, #495057, #adb5bd); }
+    .g6 { background: linear-gradient(135deg, #e03131, #ff8787); }
+    .g7 { background: linear-gradient(135deg, #364fc7, #748ffc); }
+    .g8 { background: linear-gradient(135deg, #087f5b, #38d9a9); }
+
+    .item.running::after {
+      content: "";
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    .bottom .item.running::after { bottom: -8px; }
+    .left .item.running::after { left: -8px; }
+    .right .item.running::after { right: -8px; }
+
+    .item.multi::after {
+      width: 20px;
+      height: 4px;
+      border-radius: 999px;
+    }
+
+    .item.active .glyph {
+      box-shadow: 0 14px 34px rgba(96, 205, 255, .34), 0 8px 24px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .38);
+    }
+
+    .tooltip, .preview {
+      position: fixed;
+      z-index: 35;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .tooltip {
+      padding: 6px 9px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 7px;
+      background: rgba(10, 13, 18, .82);
+      backdrop-filter: blur(14px);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .preview {
+      display: grid;
+      grid-template-columns: repeat(2, 128px);
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 10px;
+      background: rgba(12, 16, 23, .82);
+      box-shadow: 0 20px 70px rgba(0, 0, 0, .42);
+      backdrop-filter: blur(18px);
+    }
+
+    .preview.show, .tooltip.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .thumb {
+      height: 82px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .84), rgba(210, 220, 234, .74));
+      overflow: hidden;
+    }
+
+    .thumb::before {
+      content: "";
+      display: block;
+      height: 18px;
+      background: rgba(20, 30, 44, .18);
+    }
+
+    .thumb.unavailable {
+      display: grid;
+      place-items: center;
+      color: #dbe5f1;
+      background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .08) 0 8px, rgba(255, 255, 255, .02) 8px 16px);
+      font-size: 12px;
+    }
+
+    .caption {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .theme-mac {
+      --dock-bg: rgba(238, 242, 248, .42);
+      --dock-border: rgba(255, 255, 255, .58);
+      --dock-shadow: 0 26px 70px rgba(13, 21, 31, .34), inset 0 1px rgba(255, 255, 255, .52);
+      --item-bg: transparent;
+      --accent: #1d1d1f;
+    }
+
+    .theme-mac .dock { border-bottom-color: rgba(255, 255, 255, .76); }
+    .theme-mac .item.running::after { background: #15181d; box-shadow: none; }
+
+    .theme-fluent {
+      --dock-bg: rgba(28, 32, 40, .64);
+      --dock-border: rgba(255, 255, 255, .16);
+      --dock-shadow: 0 18px 58px rgba(0, 0, 0, .34);
+      --item-bg: transparent;
+      --accent: #60cdff;
+      --radius: 18px;
+    }
+
+    .theme-fluent .item {
+      border-radius: 10px;
+    }
+
+    .theme-glass {
+      --dock-bg: rgba(9, 16, 24, .34);
+      --dock-border: rgba(255, 255, 255, .28);
+      --dock-shadow: 0 30px 90px rgba(2, 6, 12, .45), inset 0 1px rgba(255, 255, 255, .2);
+      --item-bg: transparent;
+      --accent: #7dd3fc;
+      --radius: 28px;
+    }
+
+    .theme-glass .dock {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .06)),
+        var(--dock-bg);
+    }
+
+    body.reduced *, body.reduced *::before, body.reduced *::after {
+      transition-duration: 1ms !important;
+      animation-duration: 1ms !important;
+    }
+
+    @media (max-width: 760px) {
+      .controls { width: calc(100vw - 24px); left: 12px; top: 12px; }
+      .dock-wrap.bottom { bottom: 10px; }
+      .window.one { left: 4vw; width: 50vw; }
+      .window.two { right: 4vw; width: 42vw; }
+    }
+  </style>
+</head>
+<body class="theme-fluent">
+  <main class="stage" aria-label="Dock preview surface">
+    <section class="window one" aria-hidden="true"><div class="content"><span class="line"></span><span class="line"></span><span class="line"></span></div></section>
+    <section class="window two" aria-hidden="true"><div class="content"><span class="line"></span><span class="line"></span><span class="line"></span></div></section>
+    <section class="window three" aria-hidden="true"><div class="content"><span class="line"></span><span class="line"></span></div></section>
+  </main>
+
+  <aside class="controls" aria-label="Prototype controls">
+    <h1>Dock UI / Motion Baseline</h1>
+    <p>用于批注视觉方向；不是 v2 正式实现。拖动图标可看排序反馈，多窗口用短条状态并触发缩略图入口。</p>
+
+    <div class="group">
+      <div class="tabs" aria-label="Style">
+        <button class="active" data-theme="fluent">Fluent</button>
+        <button data-theme="mac">Classic</button>
+        <button data-theme="glass">Glass</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="seg" aria-label="Placement">
+        <button class="active" data-place="bottom">底部</button>
+        <button data-place="left">系统左侧</button>
+        <button data-place="right">系统右侧</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label>图标尺寸 <input id="iconSize" type="range" min="42" max="76" value="56"><output id="iconOut">56</output></label>
+      <label>图标间距 <input id="gapSize" type="range" min="4" max="20" value="10"><output id="gapOut">10</output></label>
+      <label>放大倍数 <input id="magSize" type="range" min="120" max="210" value="168"><output id="magOut">1.68</output></label>
+      <label>圆角 <input id="radiusSize" type="range" min="14" max="34" value="18"><output id="radiusOut">18</output></label>
+      <label>背景模糊 <input id="blurSize" type="range" min="0" max="34" value="22"><output id="blurOut">22</output></label>
+    </div>
+
+    <div class="group toggles">
+      <button class="ghost" id="hideToggle">自动隐藏</button>
+      <button class="ghost" id="motionToggle">减少动效</button>
+    </div>
+
+    <div class="group">
+      <div class="note" id="styleNote">Fluent：默认底部；左/右位置后续跟随系统任务栏位置。背景栏采用半高书架式 Acrylic。</div>
+    </div>
+  </aside>
+
+  <div class="reveal bottom" id="reveal"></div>
+  <div class="dock-wrap bottom" id="wrap">
+    <nav class="dock" id="dock" aria-label="Dock items">
+      <div class="item running multi active" draggable="true" data-name="Files" data-windows="2"><div class="glyph g1">F</div></div>
+      <div class="item running multi" draggable="true" data-name="Edge" data-windows="3"><div class="glyph g2">E</div></div>
+      <div class="item" draggable="true" data-name="Code"><div class="glyph g3">C</div></div>
+      <div class="item running" draggable="true" data-name="Terminal"><div class="glyph g4">T</div></div>
+      <div class="item" draggable="true" data-name="Settings"><div class="glyph g5">S</div></div>
+      <div class="item running" draggable="true" data-name="Mail"><div class="glyph g6">M</div></div>
+      <div class="item" draggable="true" data-name="Store"><div class="glyph g7">W</div></div>
+      <div class="item" draggable="true" data-name="Notes"><div class="glyph g8">N</div></div>
+    </nav>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+  <div class="preview" id="preview">
+    <div class="thumb"></div>
+    <div class="thumb"></div>
+    <div class="caption">多窗口 app：显示 DWM 缩略图组，遵从 Windows 默认缩略图策略。</div>
+  </div>
+
+  <script>
+    const body = document.body;
+    const dock = document.getElementById("dock");
+    const wrap = document.getElementById("wrap");
+    const reveal = document.getElementById("reveal");
+    const tooltip = document.getElementById("tooltip");
+    const preview = document.getElementById("preview");
+    const styleNote = document.getElementById("styleNote");
+    let placement = "bottom";
+    let autoHidden = false;
+    let dragged = null;
+
+    const notes = {
+      fluent: "Fluent：默认底部；左/右位置后续跟随系统任务栏位置。背景栏采用半高书架式 Acrylic。",
+      mac: "Classic：更强 Dock 识别度，图标放大明显，但要避免复刻 macOS 外观。",
+      glass: "Glass：更轻、更现代，透明感强；风险是可读性和低端设备降级。"
+    };
+
+    function setVar(name, value, unit = "px") {
+      document.documentElement.style.setProperty(name, `${value}${unit}`);
+    }
+
+    function bindRange(id, cssName, output, unit = "px", scale = 1) {
+      const input = document.getElementById(id);
+      const out = document.getElementById(output);
+      const update = () => {
+        const raw = Number(input.value);
+        const value = raw / scale;
+        setVar(cssName, value, unit);
+        out.textContent = scale === 1 ? String(raw) : value.toFixed(2);
+      };
+      input.addEventListener("input", update);
+      update();
+    }
+
+    bindRange("iconSize", "--icon", "iconOut");
+    bindRange("gapSize", "--gap", "gapOut");
+    bindRange("magSize", "--mag", "magOut", "", 100);
+    bindRange("radiusSize", "--radius", "radiusOut");
+    bindRange("blurSize", "--blur", "blurOut");
+
+    document.querySelectorAll("[data-theme]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-theme]").forEach(b => b.classList.toggle("active", b === button));
+        body.classList.remove("theme-mac", "theme-fluent", "theme-glass");
+        body.classList.add(`theme-${button.dataset.theme}`);
+        styleNote.textContent = notes[button.dataset.theme];
+      });
+    });
+
+    document.querySelectorAll("[data-place]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-place]").forEach(b => b.classList.toggle("active", b === button));
+        placement = button.dataset.place;
+        wrap.className = `dock-wrap ${placement}${autoHidden ? " hidden" : ""}`;
+        reveal.className = `reveal ${placement}${autoHidden ? " on" : ""}`;
+        dock.classList.toggle("vertical", placement !== "bottom");
+        resetItems();
+      });
+    });
+
+    document.getElementById("hideToggle").addEventListener("click", event => {
+      autoHidden = !autoHidden;
+      event.currentTarget.classList.toggle("active", autoHidden);
+      wrap.classList.toggle("hidden", autoHidden);
+      reveal.classList.toggle("on", autoHidden);
+    });
+
+    reveal.addEventListener("pointerenter", () => {
+      if (!autoHidden) return;
+      wrap.classList.remove("hidden");
+    });
+
+    window.addEventListener("pointermove", event => {
+      if (!autoHidden) return;
+      const edge = 18;
+      const nearBottom = placement === "bottom" && window.innerHeight - event.clientY < edge;
+      const nearLeft = placement === "left" && event.clientX < edge;
+      const nearRight = placement === "right" && window.innerWidth - event.clientX < edge;
+      if (nearBottom || nearLeft || nearRight) wrap.classList.remove("hidden");
+    });
+
+    wrap.addEventListener("pointerleave", () => {
+      if (!autoHidden) return;
+      wrap.classList.add("hidden");
+      resetItems();
+    });
+
+    document.getElementById("motionToggle").addEventListener("click", event => {
+      body.classList.toggle("reduced");
+      event.currentTarget.classList.toggle("active");
+    });
+
+    function resetItems() {
+      dock.querySelectorAll(".item").forEach(item => item.style.transform = "");
+      tooltip.classList.remove("show");
+      preview.classList.remove("show");
+    }
+
+    function magnify(event) {
+      const max = Number(getComputedStyle(document.documentElement).getPropertyValue("--mag"));
+      const range = Number(getComputedStyle(document.documentElement).getPropertyValue("--icon").replace("px", "")) * 2.2;
+      dock.querySelectorAll(".item").forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const center = placement === "bottom" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
+        const pointer = placement === "bottom" ? event.clientX : event.clientY;
+        const t = Math.max(0, 1 - Math.abs(pointer - center) / range);
+        const curve = .5 - Math.cos(t * Math.PI) / 2;
+        const scale = 1 + (max - 1) * curve;
+        const hoverLift = Number(getComputedStyle(document.documentElement).getPropertyValue("--lift").replace("px", "")) * curve;
+        const activeLift = item.classList.contains("active")
+          ? Number(getComputedStyle(document.documentElement).getPropertyValue("--active-lift").replace("px", ""))
+          : 0;
+        const lift = hoverLift + activeLift;
+        if (placement === "bottom") item.style.transform = `translateY(${-lift}px) scale(${scale})`;
+        if (placement === "left") item.style.transform = `translateX(${lift}px) scale(${scale})`;
+        if (placement === "right") item.style.transform = `translateX(${-lift}px) scale(${scale})`;
+      });
+    }
+
+    dock.addEventListener("pointermove", event => {
+      magnify(event);
+      const item = event.target.closest(".item");
+      if (!item) return;
+      const rect = item.getBoundingClientRect();
+      tooltip.textContent = item.dataset.name;
+      tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;
+      tooltip.style.top = placement === "bottom" ? `${rect.top - 38}px` : `${rect.top + rect.height / 2 - 14}px`;
+      tooltip.classList.add("show");
+
+      if (item.dataset.windows) {
+        preview.style.left = placement === "right" ? `${rect.left - 282}px` : `${Math.min(rect.left, window.innerWidth - 286)}px`;
+        preview.style.top = placement === "bottom" ? `${rect.top - 138}px` : `${Math.max(16, rect.top - 22)}px`;
+        preview.classList.add("show");
+      } else {
+        preview.classList.remove("show");
+      }
+    });
+
+    dock.addEventListener("pointerleave", resetItems);
+
+    dock.addEventListener("dragstart", event => {
+      dragged = event.target.closest(".item");
+      dragged.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+    });
+
+    dock.addEventListener("dragover", event => {
+      event.preventDefault();
+      const item = event.target.closest(".item");
+      dock.querySelectorAll(".item").forEach(i => i.classList.remove("drop-left", "drop-right"));
+      if (!item || item === dragged) return;
+      const rect = item.getBoundingClientRect();
+      const before = placement === "bottom"
+        ? event.clientX < rect.left + rect.width / 2
+        : event.clientY < rect.top + rect.height / 2;
+      item.classList.add(before ? "drop-left" : "drop-right");
+    });
+
+    dock.addEventListener("drop", event => {
+      event.preventDefault();
+      const item = event.target.closest(".item");
+      if (!item || item === dragged) return;
+      const before = item.classList.contains("drop-left");
+      dock.insertBefore(dragged, before ? item : item.nextSibling);
+      dock.querySelectorAll(".item").forEach(i => i.classList.remove("drop-left", "drop-right"));
+    });
+
+    dock.addEventListener("dragend", () => {
+      if (dragged) dragged.classList.remove("dragging");
+      dock.querySelectorAll(".item").forEach(i => i.classList.remove("drop-left", "drop-right"));
+      dragged = null;
+    });
+  </script>
+</body>
+</html>

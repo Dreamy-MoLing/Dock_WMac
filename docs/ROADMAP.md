@@ -11,50 +11,34 @@ the next phase starts.
 - Start only an empty semi-transparent `DockWindow`.
 - Archive v1 as reference under `legacy/qt-v1/`.
 
-## Phase 1 - App Foundation
+## Phase 1 - v1.0.0 Taskbar Dock Release
 
-- Single instance.
-- Launch argument handling.
-- Config load/save.
-- Logging and paths.
-- Basic error surface.
-- Window positioning with DPI and multi-monitor awareness.
+- App lifecycle: single instance, launch arguments, config load/save, logging,
+  paths, and error surface.
+- Platform: DPI, theme, reduced motion, primary display work area, and
+  bottom/left/right placement model without per-monitor placement UI.
+- Shell/taskbar: window enumeration, process/app identity, taskbar pinned item
+  reader, Shell icon extraction, DWM thumbnail previews, and Explorer restart
+  recovery.
+- Dock model: pinned/running merge, durable Dock pin state, ordering
+  persistence, running indicators, and Windows-default click decisions.
+- Dock UI: polished Dock-style surface, hover magnification, drag sorting,
+  predictable auto-hide, multi-window preview/chooser, and graceful fallback
+  states.
+- Release: unpackaged Win32 + Windows App SDK bootstrapper packaging and clean
+  Windows 10/11 validation.
 
-## Phase 2 - Shell Observations
-
-- Window enumeration adapter.
-- Process and executable identity.
-- Taskbar pinned item reader.
-- Icon extraction.
-- Fake shell data for tests.
-
-## Phase 3 - Dock Model
-
-- Dock item model.
-- Pinned/running merge.
-- Click decision state machine.
-- Ordering persistence.
-- Multi-window grouping.
-
-## Phase 4 - Dock UI
-
-- WinUI item row.
-- Hover magnification.
-- Running indicators.
-- Drag sorting.
-- Auto-hide without native taskbar hiding.
-- DWM preview panel.
-
-## Phase 5 - Media Panel
+## Phase 2 - Post-v1 Media Panel
 
 - GSMTC session discovery.
 - Current session selection.
 - Playback snapshot.
 - Transport commands.
 - Artwork placeholder.
+- Side-attached panel connected to the Dock surface.
 - Apple Music for Windows manual validation.
 
-## Phase 6 - Lyrics
+## Phase 3 - Post-v1 Lyrics
 
 - LRC parser.
 - Local txt fallback.
@@ -63,14 +47,14 @@ the next phase starts.
 - Non-blocking no-lyrics fallback.
 - Upward fade visual layer.
 
-## Phase 7 - Audio Visuals
+## Phase 4 - Post-v1 Audio Visuals
 
 - Pseudo-response wave/energy flow.
 - Artwork-derived colors.
 - Reduced-motion fallback.
 - Later: real audio analysis only after a reviewed design.
 
-## Phase 8 - Native Taskbar Option
+## Phase 5 - Native Taskbar Option
 
 - Explicit opt-in setting.
 - Hide/restore adapter.
@@ -78,8 +62,9 @@ the next phase starts.
 - Explorer restart recovery.
 - Manual restore command.
 
-## Phase 9 - Packaging and Release
+## Later Capability Backlog
 
-- CI for v2.
-- Release packaging.
-- Clean Windows 10 and Windows 11 validation.
+- Sync Dock pin changes back to the system taskbar after Dock pin state is
+  durable and recoverable.
+- Revisit MSIX or self-contained packaging only if release validation requires
+  it.

@@ -13,6 +13,7 @@ Frozen reference areas include:
 - `legacy/qt-v1/src/`
 - `legacy/qt-v1/tests/`
 - `legacy/qt-v1/resources/`
+- `legacy/qt-v1/docs-archive/`
 
 Rules:
 

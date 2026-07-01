@@ -51,9 +51,33 @@ Local VS2026 verification command:
 & "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64 /p:PlatformToolset=v145
 ```
 
-The current minimal target creates only `DockWindow`. XAML files exist as v2 UI
-placeholders; the first scaffold builds its semi-transparent content in C++ so
-toolchain and runtime linkage are verified before full XAML view wiring.
+The current preparation target creates only `DockWindow`. XAML files exist as v2
+UI placeholders; the first scaffold builds its semi-transparent content in C++
+so toolchain and runtime linkage are verified before full XAML view wiring.
+
+## Packaging Decision
+
+Default v2 packaging direction: unpackaged Win32 app with Windows App SDK
+bootstrapper.
+
+- MSIX packaged app: provides app identity, clean install/uninstall, update
+  plumbing, and tighter integration with Windows deployment rules. It is better
+  when installer behavior and identity matter more than portable layout.
+- Unpackaged Win32 app with Windows App SDK bootstrapper: behaves like a
+  traditional desktop app, is easier to zip or install with a custom installer,
+  and depends on the Windows App SDK runtime being installed or bootstrapped.
+- Self-contained unpackaged app: carries more runtime files for fewer machine
+  prerequisites, at the cost of larger output and more packaging weight.
+
+Revisit this only if release, update, or system-integration validation proves
+the default shape is the wrong fit.
+
+## Community Solution Policy
+
+Mature community approaches are allowed when they reduce delivery risk. Before
+using one, verify license compatibility, active maintenance, Windows behavior,
+and fit with the v2 architecture. Do not adopt another main UI framework or copy
+code without review. Native Windows APIs remain preferred for taskbar semantics.
 
 ## API Policy
 
