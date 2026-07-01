@@ -6,6 +6,7 @@ namespace DockWMac::infra
     {
         std::filesystem::path userDataDir;
         std::filesystem::path configFile;
+        std::filesystem::path dockStateFile;
         std::filesystem::path logDir;
         std::filesystem::path logFile;
     };

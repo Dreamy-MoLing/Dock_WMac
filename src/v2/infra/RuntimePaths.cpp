@@ -31,6 +31,7 @@ namespace DockWMac::infra
         RuntimePaths paths;
         paths.userDataDir = LocalAppData() / L"Dock_WMac";
         paths.configFile = paths.userDataDir / L"settings.json";
+        paths.dockStateFile = paths.userDataDir / L"dock_state.json";
         paths.logDir = paths.userDataDir / L"logs";
         paths.logFile = paths.logDir / L"dock.log";
         return paths;

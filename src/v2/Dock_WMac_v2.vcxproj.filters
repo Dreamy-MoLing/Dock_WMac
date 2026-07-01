@@ -16,6 +16,9 @@
     <Filter Include="shell">
       <UniqueIdentifier>{E3B85953-2B14-4C80-8E63-42C3C17A7F37}</UniqueIdentifier>
     </Filter>
+    <Filter Include="dock">
+      <UniqueIdentifier>{4EAF429B-F6B2-44A2-9587-935540478ED2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -24,6 +27,12 @@
     </ClInclude>
     <ClInclude Include="app\App.xaml.h">
       <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="dock\DockModel.h">
+      <Filter>dock</Filter>
+    </ClInclude>
+    <ClInclude Include="dock\DockStateStore.h">
+      <Filter>dock</Filter>
     </ClInclude>
     <ClInclude Include="infra\AppSettings.h">
       <Filter>infra</Filter>
@@ -58,6 +67,12 @@
     </ClCompile>
     <ClCompile Include="app\App.xaml.cpp">
       <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="dock\DockModel.cpp">
+      <Filter>dock</Filter>
+    </ClCompile>
+    <ClCompile Include="dock\DockStateStore.cpp">
+      <Filter>dock</Filter>
     </ClCompile>
     <ClCompile Include="infra\AppSettings.cpp">
       <Filter>infra</Filter>

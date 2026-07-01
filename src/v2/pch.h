@@ -17,10 +17,14 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <algorithm>
+#include <map>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Microsoft.UI.Xaml.h>
