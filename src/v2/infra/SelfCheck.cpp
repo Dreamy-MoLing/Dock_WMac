@@ -10,9 +10,12 @@ namespace DockWMac::infra
 {
     namespace
     {
-        bool Check(bool value)
+        void Check(std::vector<std::string>& failures, std::string name, bool value)
         {
-            return value;
+            if (!value)
+            {
+                failures.push_back(std::move(name));
+            }
         }
     }
 
@@ -24,6 +27,7 @@ namespace DockWMac::infra
         RuntimePaths paths;
         paths.userDataDir = temp;
         paths.configFile = temp / L"settings.json";
+        paths.dockStateFile = temp / L"dock_state.json";
         paths.logDir = temp / L"logs";
         paths.logFile = paths.logDir / L"dock.log";
 
@@ -39,9 +43,8 @@ namespace DockWMac::infra
 
         DockWMac::dock::DockState dockState;
         dockState.order = { L"second", L"first" };
-        auto dockStatePath = temp / L"dock_state.json";
-        DockWMac::dock::SaveDockState(dockStatePath, dockState);
-        auto loadedDockState = DockWMac::dock::LoadDockState(dockStatePath);
+        DockWMac::dock::SaveDockState(paths.dockStateFile, dockState);
+        auto loadedDockState = DockWMac::dock::LoadDockState(paths.dockStateFile);
 
         std::vector<DockWMac::shell::PinnedApp> pinned{
             { L"First", L"first.lnk", L"C:\\First.exe", L"", L"first" },
@@ -57,25 +60,38 @@ namespace DockWMac::infra
             { { reinterpret_cast<HWND>(3), L"A", false, false, false }, { reinterpret_cast<HWND>(4), L"B", false, false, false } },
         });
 
-        const auto ok =
-            Check(loaded.placement == DockWMac::platform::DockPlacement::Right) &&
-            Check(loaded.autoHide) &&
-            Check(loaded.reducedMotion) &&
-            Check(loaded.dockWidth == 800) &&
-            Check(loaded.dockHeight == 120) &&
-            Check(loadedDockState.order.size() == 2) &&
-            Check(loadedDockState.order.front() == L"second") &&
-            Check(items.size() == 3) &&
-            Check(items.front().id == L"second") &&
-            Check(items.front().running) &&
-            Check(items.front().foreground) &&
-            Check(DockWMac::dock::DecideClickAction(items.front()).kind == DockWMac::dock::DockActionKind::ActivateWindow) &&
-            Check(multiAction.kind == DockWMac::dock::DockActionKind::ShowWindowChooser) &&
-            Check(DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left) &&
-            Check(DockWMac::platform::PlacementFromConfig(L"bad") == DockWMac::platform::DockPlacement::Bottom) &&
-            Check(!DockWMac::shell::EnumerateTopLevelWindows().empty());
+        auto enumeratedWindows = DockWMac::shell::EnumerateTopLevelWindows();
 
-        std::filesystem::remove_all(temp);
-        return ok ? 0 : 1;
+        std::vector<std::string> failures;
+        Check(failures, "settings.placement", loaded.placement == DockWMac::platform::DockPlacement::Right);
+        Check(failures, "settings.autoHide", loaded.autoHide);
+        Check(failures, "settings.reducedMotion", loaded.reducedMotion);
+        Check(failures, "settings.dockWidth", loaded.dockWidth == 800);
+        Check(failures, "settings.dockHeight", loaded.dockHeight == 120);
+        Check(failures, "dockState.order.size", loadedDockState.order.size() == 2);
+        Check(failures, "dockState.order.first", !loadedDockState.order.empty() && loadedDockState.order.front() == L"second");
+        Check(failures, "dockModel.items.size", items.size() == 3);
+        Check(failures, "dockModel.first.id", !items.empty() && items.front().id == L"second");
+        Check(failures, "dockModel.first.running", !items.empty() && items.front().running);
+        Check(failures, "dockModel.first.foreground", !items.empty() && items.front().foreground);
+        Check(failures, "dockModel.click.foreground", !items.empty() && DockWMac::dock::DecideClickAction(items.front()).kind == DockWMac::dock::DockActionKind::MinimizeWindow);
+        Check(failures, "dockModel.click.multi", multiAction.kind == DockWMac::dock::DockActionKind::ShowWindowChooser);
+        Check(failures, "platform.placement.left", DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left);
+        Check(failures, "platform.placement.fallback", DockWMac::platform::PlacementFromConfig(L"bad") == DockWMac::platform::DockPlacement::Bottom);
+        Check(failures, "shell.enumerate.safe", enumeratedWindows.size() < 10000);
+
+        if (failures.empty())
+        {
+            std::filesystem::remove_all(temp);
+            return 0;
+        }
+
+        std::filesystem::create_directories(temp);
+        std::ofstream output{ temp / L"selfcheck_failures.txt", std::ios::binary | std::ios::trunc };
+        for (auto const& failure : failures)
+        {
+            output << failure << "\n";
+        }
+        return 1;
     }
 }

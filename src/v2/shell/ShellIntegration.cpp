@@ -279,4 +279,9 @@ namespace DockWMac::shell
         AllowSetForegroundWindow(ASFW_ANY);
         return SetForegroundWindow(hwnd) != FALSE;
     }
+
+    bool MinimizeWindow(HWND hwnd)
+    {
+        return IsWindow(hwnd) && ShowWindow(hwnd, SW_MINIMIZE);
+    }
 }
