@@ -102,6 +102,7 @@
     <ClInclude Include="infra\RuntimePaths.h" />
     <ClInclude Include="infra\SelfCheck.h" />
     <ClInclude Include="platform\DockPlacement.h" />
+    <ClInclude Include="shell\DwmPreviewHost.h" />
     <ClInclude Include="shell\ShellIntegration.h" />
     <ClInclude Include="shell\ShellTypes.h" />
     <ClInclude Include="ui\DockWindow.xaml.h">
@@ -124,6 +125,7 @@
     <ClCompile Include="infra\RuntimePaths.cpp" />
     <ClCompile Include="infra\SelfCheck.cpp" />
     <ClCompile Include="platform\DockPlacement.cpp" />
+    <ClCompile Include="shell\DwmPreviewHost.cpp" />
     <ClCompile Include="shell\ShellIntegration.cpp" />
     <ClCompile Include="ui\DockWindow.xaml.cpp">
       <DependentUpon>DockWindow.xaml</DependentUpon>

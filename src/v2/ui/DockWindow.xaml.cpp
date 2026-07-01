@@ -20,12 +20,16 @@ namespace winrt::DockWMac::implementation
         ::DockWMac::infra::AppSettings const& settings,
         std::vector<::DockWMac::dock::DockItem> items,
         DockActionHandler actionHandler,
-        DockOrderChangedHandler orderChangedHandler)
+        DockOrderChangedHandler orderChangedHandler,
+        DockPreviewHandler previewHandler,
+        DockPreviewHideHandler previewHideHandler)
     {
         m_settings = settings;
         m_items = std::move(items);
         m_actionHandler = std::move(actionHandler);
         m_orderChangedHandler = std::move(orderChangedHandler);
+        m_previewHandler = std::move(previewHandler);
+        m_previewHideHandler = std::move(previewHideHandler);
         if (auto window = AppWindow())
         {
             window.Resize({ WindowWidth(), WindowHeight() });
@@ -261,7 +265,7 @@ namespace winrt::DockWMac::implementation
                 BeginDrag(item.id);
             });
 
-            button.PointerEntered([this, transform](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+            button.PointerEntered([this, transform, item](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
             {
                 if (!m_settings.reducedMotion)
                 {
@@ -269,12 +273,14 @@ namespace winrt::DockWMac::implementation
                     transform.ScaleY(1.18);
                     transform.TranslateY(-8);
                 }
+                ShowPreviewForItem(item);
             });
             button.PointerExited([this, transform, item](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
             {
                 transform.ScaleX(1.0);
                 transform.ScaleY(1.0);
                 transform.TranslateY(item.foreground ? -4 : 0);
+                HidePreview();
             });
 
             row.Children().Append(button);
@@ -305,6 +311,17 @@ namespace winrt::DockWMac::implementation
                 {
                     m_actionHandler(::DockWMac::dock::DockAction{ ::DockWMac::dock::DockActionKind::ActivateWindow, L"", window.hwnd });
                 }
+            });
+            menuItem.PointerEntered([this, window](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+            {
+                if (m_previewHandler && !window.cloaked && !window.minimized)
+                {
+                    m_previewHandler(window.hwnd);
+                }
+            });
+            menuItem.PointerExited([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+            {
+                HidePreview();
             });
             flyout.Items().Append(menuItem);
         }
@@ -468,5 +485,30 @@ namespace winrt::DockWMac::implementation
             order.push_back(item.id);
         }
         m_orderChangedHandler(order);
+    }
+
+    void DockWindow::ShowPreviewForItem(::DockWMac::dock::DockItem const& item)
+    {
+        if (!m_previewHandler || item.windows.empty())
+        {
+            return;
+        }
+
+        auto it = std::find_if(item.windows.begin(), item.windows.end(), [](auto const& window)
+        {
+            return !window.minimized && !window.cloaked;
+        });
+        if (it != item.windows.end())
+        {
+            m_previewHandler(it->hwnd);
+        }
+    }
+
+    void DockWindow::HidePreview()
+    {
+        if (m_previewHideHandler)
+        {
+            m_previewHideHandler();
+        }
     }
 }

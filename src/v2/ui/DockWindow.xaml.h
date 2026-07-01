@@ -12,12 +12,16 @@ namespace winrt::DockWMac::implementation
 
         using DockActionHandler = std::function<void(::DockWMac::dock::DockAction const&)>;
         using DockOrderChangedHandler = std::function<void(std::vector<std::wstring> const&)>;
+        using DockPreviewHandler = std::function<void(HWND)>;
+        using DockPreviewHideHandler = std::function<void()>;
 
         void Configure(
             ::DockWMac::infra::AppSettings const& settings,
             std::vector<::DockWMac::dock::DockItem> items,
             DockActionHandler actionHandler,
-            DockOrderChangedHandler orderChangedHandler);
+            DockOrderChangedHandler orderChangedHandler,
+            DockPreviewHandler previewHandler,
+            DockPreviewHideHandler previewHideHandler);
         void ApplyPlacement();
 
     private:
@@ -46,11 +50,15 @@ namespace winrt::DockWMac::implementation
         void CompleteDrag();
         void ResetDrag();
         void NotifyOrderChanged();
+        void ShowPreviewForItem(::DockWMac::dock::DockItem const& item);
+        void HidePreview();
 
         ::DockWMac::infra::AppSettings m_settings;
         std::vector<::DockWMac::dock::DockItem> m_items;
         DockActionHandler m_actionHandler;
         DockOrderChangedHandler m_orderChangedHandler;
+        DockPreviewHandler m_previewHandler;
+        DockPreviewHideHandler m_previewHideHandler;
         std::wstring m_dragItemId;
         std::optional<size_t> m_dragTargetIndex;
         bool m_dragMoved{};

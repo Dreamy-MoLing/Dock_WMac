@@ -29,6 +29,7 @@ namespace winrt::DockWMac::implementation
 
         ::DockWMac::infra::SaveAppSettings(m_paths, m_settings);
         ::DockWMac::infra::LogLine(m_paths, "Dock_WMac v2 starting.");
+        m_previewHost = std::make_unique<::DockWMac::shell::DwmPreviewHost>();
 
         auto dockState = ::DockWMac::dock::LoadDockState(m_paths.dockStateFile);
         m_items = ::DockWMac::dock::BuildDockItems(
@@ -56,6 +57,14 @@ namespace winrt::DockWMac::implementation
             [this](std::vector<std::wstring> const& order)
             {
                 HandleDockOrderChanged(order);
+            },
+            [this](HWND hwnd)
+            {
+                ShowDockPreview(hwnd);
+            },
+            [this]()
+            {
+                HideDockPreview();
             });
         m_window = window;
         m_window.Activate();
@@ -115,5 +124,21 @@ namespace winrt::DockWMac::implementation
             }
         }
         m_items = std::move(ordered);
+    }
+
+    void App::ShowDockPreview(HWND hwnd)
+    {
+        if (m_previewHost && !m_previewHost->Show(hwnd))
+        {
+            ::DockWMac::infra::LogLine(m_paths, "DWM preview unavailable for window.");
+        }
+    }
+
+    void App::HideDockPreview()
+    {
+        if (m_previewHost)
+        {
+            m_previewHost->Hide();
+        }
     }
 }

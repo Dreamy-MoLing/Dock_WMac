@@ -4,6 +4,7 @@
 #include "SingleInstanceGuard.h"
 #include "../dock/DockModel.h"
 #include "../infra/AppSettings.h"
+#include "../shell/DwmPreviewHost.h"
 
 namespace winrt::DockWMac::implementation
 {
@@ -16,10 +17,13 @@ namespace winrt::DockWMac::implementation
     private:
         void HandleDockAction(::DockWMac::dock::DockAction const& action);
         void HandleDockOrderChanged(std::vector<std::wstring> const& order);
+        void ShowDockPreview(HWND hwnd);
+        void HideDockPreview();
 
         ::DockWMac::app::SingleInstanceGuard m_instance;
         ::DockWMac::infra::RuntimePaths m_paths;
         ::DockWMac::infra::AppSettings m_settings;
+        std::unique_ptr<::DockWMac::shell::DwmPreviewHost> m_previewHost;
         std::vector<::DockWMac::dock::DockItem> m_items;
         winrt::Microsoft::UI::Xaml::Window m_window{ nullptr };
     };

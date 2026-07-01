@@ -4,6 +4,7 @@
 #include "../dock/DockModel.h"
 #include "../dock/DockStateStore.h"
 #include "../platform/DockPlacement.h"
+#include "../shell/DwmPreviewHost.h"
 #include "../shell/ShellIntegration.h"
 
 namespace DockWMac::infra
@@ -64,6 +65,17 @@ namespace DockWMac::infra
         auto rightHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Right, 120, 800);
 
         auto enumeratedWindows = DockWMac::shell::EnumerateTopLevelWindows();
+        auto previewWindow = std::find_if(enumeratedWindows.begin(), enumeratedWindows.end(), [](auto const& window)
+        {
+            return window.hwnd && !window.minimized && !window.cloaked;
+        });
+        auto previewOk = true;
+        if (previewWindow != enumeratedWindows.end())
+        {
+            DockWMac::shell::DwmPreviewHost preview;
+            previewOk = preview.Show(previewWindow->hwnd);
+            preview.Hide();
+        }
 
         std::vector<std::string> failures;
         Check(failures, "settings.placement", loaded.placement == DockWMac::platform::DockPlacement::Right);
@@ -85,6 +97,7 @@ namespace DockWMac::infra
         Check(failures, "platform.autohide.left", leftHidden.width == 8 && leftHidden.height == 800);
         Check(failures, "platform.autohide.right", rightHidden.width == 8 && rightHidden.height == 800);
         Check(failures, "shell.enumerate.safe", enumeratedWindows.size() < 10000);
+        Check(failures, "shell.dwmPreview", previewOk);
 
         if (failures.empty())
         {

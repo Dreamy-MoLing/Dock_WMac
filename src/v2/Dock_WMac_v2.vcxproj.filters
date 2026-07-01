@@ -49,6 +49,9 @@
     <ClInclude Include="platform\DockPlacement.h">
       <Filter>platform</Filter>
     </ClInclude>
+    <ClInclude Include="shell\DwmPreviewHost.h">
+      <Filter>shell</Filter>
+    </ClInclude>
     <ClInclude Include="shell\ShellIntegration.h">
       <Filter>shell</Filter>
     </ClInclude>
@@ -88,6 +91,9 @@
     </ClCompile>
     <ClCompile Include="platform\DockPlacement.cpp">
       <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shell\DwmPreviewHost.cpp">
+      <Filter>shell</Filter>
     </ClCompile>
     <ClCompile Include="shell\ShellIntegration.cpp">
       <Filter>shell</Filter>
