@@ -52,6 +52,10 @@ namespace winrt::DockWMac::implementation
             [this](::DockWMac::dock::DockAction const& action)
             {
                 HandleDockAction(action);
+            },
+            [this](std::vector<std::wstring> const& order)
+            {
+                HandleDockOrderChanged(order);
             });
         m_window = window;
         m_window.Activate();
@@ -85,5 +89,31 @@ namespace winrt::DockWMac::implementation
         default:
             break;
         }
+    }
+
+    void App::HandleDockOrderChanged(std::vector<std::wstring> const& order)
+    {
+        ::DockWMac::dock::DockState dockState;
+        dockState.order = order;
+        ::DockWMac::dock::SaveDockState(m_paths.dockStateFile, dockState);
+        ::DockWMac::infra::LogLine(m_paths, "Dock order updated.");
+
+        std::vector<::DockWMac::dock::DockItem> ordered;
+        ordered.reserve(m_items.size());
+        for (auto const& id : order)
+        {
+            if (auto it = std::find_if(m_items.begin(), m_items.end(), [&](auto const& item) { return item.id == id; }); it != m_items.end())
+            {
+                ordered.push_back(*it);
+            }
+        }
+        for (auto const& item : m_items)
+        {
+            if (std::none_of(ordered.begin(), ordered.end(), [&](auto const& existing) { return existing.id == item.id; }))
+            {
+                ordered.push_back(item);
+            }
+        }
+        m_items = std::move(ordered);
     }
 }

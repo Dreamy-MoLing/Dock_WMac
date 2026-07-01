@@ -63,6 +63,30 @@ namespace DockWMac::platform
         return rect;
     }
 
+    DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
+    {
+        constexpr int32_t triggerThickness = 8;
+        auto rect = CalculateDockRect(hwnd, placement, width, height);
+
+        switch (placement)
+        {
+        case DockPlacement::Left:
+            rect.width = triggerThickness;
+            break;
+        case DockPlacement::Right:
+            rect.x += rect.width - triggerThickness;
+            rect.width = triggerThickness;
+            break;
+        case DockPlacement::Bottom:
+        default:
+            rect.y += rect.height - triggerThickness;
+            rect.height = triggerThickness;
+            break;
+        }
+
+        return rect;
+    }
+
     void ApplyDockWindowPlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
     {
         if (!hwnd)
@@ -71,6 +95,24 @@ namespace DockWMac::platform
         }
 
         const auto rect = CalculateDockRect(hwnd, placement, width, height);
+        SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            rect.x,
+            rect.y,
+            rect.width,
+            rect.height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+
+    void ApplyDockWindowAutoHidePlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
+    {
+        if (!hwnd)
+        {
+            return;
+        }
+
+        const auto rect = CalculateDockAutoHideRect(hwnd, placement, width, height);
         SetWindowPos(
             hwnd,
             HWND_TOPMOST,

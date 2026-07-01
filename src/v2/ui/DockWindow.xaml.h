@@ -11,27 +11,51 @@ namespace winrt::DockWMac::implementation
         DockWindow();
 
         using DockActionHandler = std::function<void(::DockWMac::dock::DockAction const&)>;
+        using DockOrderChangedHandler = std::function<void(std::vector<std::wstring> const&)>;
 
         void Configure(
             ::DockWMac::infra::AppSettings const& settings,
             std::vector<::DockWMac::dock::DockItem> items,
-            DockActionHandler actionHandler);
+            DockActionHandler actionHandler,
+            DockOrderChangedHandler orderChangedHandler);
         void ApplyPlacement();
 
     private:
+        bool IsVertical() const;
+        int32_t WindowWidth() const;
+        int32_t WindowHeight() const;
         HWND WindowHandle() const;
         void ConfigurePresenter();
         void BuildContent();
+        void ShowDock();
+        void HideDock();
         void ShowWindowChooser(
             ::DockWMac::dock::DockItem const& item,
             winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
         void HandleItemClick(
             ::DockWMac::dock::DockItem const& item,
             winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
+        std::optional<size_t> IndexOfItem(std::wstring const& itemId) const;
+        size_t CalculateInsertIndex(
+            winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+            winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args) const;
+        void BeginDrag(std::wstring itemId);
+        void UpdateDragTarget(
+            winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+            winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+        void CompleteDrag();
+        void ResetDrag();
+        void NotifyOrderChanged();
 
         ::DockWMac::infra::AppSettings m_settings;
         std::vector<::DockWMac::dock::DockItem> m_items;
         DockActionHandler m_actionHandler;
+        DockOrderChangedHandler m_orderChangedHandler;
+        std::wstring m_dragItemId;
+        std::optional<size_t> m_dragTargetIndex;
+        bool m_dragMoved{};
+        bool m_suppressNextClick{};
+        bool m_hidden{};
     };
 }
 

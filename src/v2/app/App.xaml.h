@@ -15,6 +15,7 @@ namespace winrt::DockWMac::implementation
 
     private:
         void HandleDockAction(::DockWMac::dock::DockAction const& action);
+        void HandleDockOrderChanged(std::vector<std::wstring> const& order);
 
         ::DockWMac::app::SingleInstanceGuard m_instance;
         ::DockWMac::infra::RuntimePaths m_paths;

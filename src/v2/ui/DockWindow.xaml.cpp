@@ -19,25 +19,45 @@ namespace winrt::DockWMac::implementation
     void DockWindow::Configure(
         ::DockWMac::infra::AppSettings const& settings,
         std::vector<::DockWMac::dock::DockItem> items,
-        DockActionHandler actionHandler)
+        DockActionHandler actionHandler,
+        DockOrderChangedHandler orderChangedHandler)
     {
         m_settings = settings;
         m_items = std::move(items);
         m_actionHandler = std::move(actionHandler);
+        m_orderChangedHandler = std::move(orderChangedHandler);
         if (auto window = AppWindow())
         {
-            window.Resize({ m_settings.dockWidth, m_settings.dockHeight });
+            window.Resize({ WindowWidth(), WindowHeight() });
         }
         BuildContent();
     }
 
     void DockWindow::ApplyPlacement()
     {
-        ::DockWMac::platform::ApplyDockWindowPlacement(
-            WindowHandle(),
-            m_settings.placement,
-            m_settings.dockWidth,
-            m_settings.dockHeight);
+        if (m_settings.autoHide)
+        {
+            HideDock();
+            return;
+        }
+
+        ShowDock();
+    }
+
+    bool DockWindow::IsVertical() const
+    {
+        return m_settings.placement == ::DockWMac::platform::DockPlacement::Left ||
+            m_settings.placement == ::DockWMac::platform::DockPlacement::Right;
+    }
+
+    int32_t DockWindow::WindowWidth() const
+    {
+        return IsVertical() ? m_settings.dockHeight : m_settings.dockWidth;
+    }
+
+    int32_t DockWindow::WindowHeight() const
+    {
+        return IsVertical() ? m_settings.dockWidth : m_settings.dockHeight;
     }
 
     HWND DockWindow::WindowHandle() const
@@ -62,19 +82,65 @@ namespace winrt::DockWMac::implementation
                 presenter.IsMinimizable(false);
                 presenter.IsResizable(false);
             }
-            window.Resize({ m_settings.dockWidth, m_settings.dockHeight });
+            window.Resize({ WindowWidth(), WindowHeight() });
         }
+    }
+
+    void DockWindow::ShowDock()
+    {
+        m_hidden = false;
+        ::DockWMac::platform::ApplyDockWindowPlacement(
+            WindowHandle(),
+            m_settings.placement,
+            WindowWidth(),
+            WindowHeight());
+    }
+
+    void DockWindow::HideDock()
+    {
+        if (!m_settings.autoHide || !m_dragItemId.empty())
+        {
+            return;
+        }
+
+        m_hidden = true;
+        ::DockWMac::platform::ApplyDockWindowAutoHidePlacement(
+            WindowHandle(),
+            m_settings.placement,
+            WindowWidth(),
+            WindowHeight());
     }
 
     void DockWindow::BuildContent()
     {
         namespace Controls = winrt::Microsoft::UI::Xaml::Controls;
         namespace Media = winrt::Microsoft::UI::Xaml::Media;
-        namespace Shapes = winrt::Microsoft::UI::Xaml::Shapes;
         namespace Xaml = winrt::Microsoft::UI::Xaml;
 
         auto root = Controls::Grid{};
         root.Background(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 } });
+        root.PointerEntered([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+        {
+            if (m_settings.autoHide && m_hidden)
+            {
+                ShowDock();
+            }
+        });
+        root.PointerExited([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+        {
+            if (m_settings.autoHide)
+            {
+                HideDock();
+            }
+        });
+        root.PointerMoved([this, root](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
+        {
+            UpdateDragTarget(root, args);
+        });
+        root.PointerReleased([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+        {
+            CompleteDrag();
+        });
 
         auto shelf = Controls::Border{};
         shelf.CornerRadius({ 18, 18, 18, 18 });
@@ -86,15 +152,41 @@ namespace winrt::DockWMac::implementation
         shelf.BorderThickness({ 1, 1, 1, 1 });
 
         auto row = Controls::StackPanel{};
-        row.Orientation(Controls::Orientation::Horizontal);
+        row.Orientation(IsVertical() ? Controls::Orientation::Vertical : Controls::Orientation::Horizontal);
         row.Spacing(10);
         shelf.Child(row);
 
-        for (auto const& item : m_items)
+        auto marker = [&]()
         {
+            auto insert = Controls::Border{};
+            if (IsVertical())
+            {
+                insert.Width(36);
+                insert.Height(3);
+            }
+            else
+            {
+                insert.Width(3);
+                insert.Height(36);
+            }
+            insert.CornerRadius({ 2, 2, 2, 2 });
+            insert.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
+            insert.VerticalAlignment(Xaml::VerticalAlignment::Center);
+            insert.Background(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xFF, 0x7D, 0xE8, 0xFF } });
+            return insert;
+        };
+
+        for (size_t index = 0; index < m_items.size(); ++index)
+        {
+            if (m_dragTargetIndex && *m_dragTargetIndex == index)
+            {
+                row.Children().Append(marker());
+            }
+
+            auto const& item = m_items[index];
             auto button = Controls::Button{};
-            button.Width(56);
-            button.Height(66);
+            button.Width(IsVertical() ? 66 : 56);
+            button.Height(IsVertical() ? 56 : 66);
             button.Padding({ 0, 0, 0, 0 });
             button.Background(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0x00, 0x00, 0x00, 0x00 } });
             button.BorderThickness({ 0, 0, 0, 0 });
@@ -149,10 +241,24 @@ namespace winrt::DockWMac::implementation
             button.Content(cell);
             button.Click([this, item](winrt::Windows::Foundation::IInspectable const& sender, Xaml::RoutedEventArgs const&)
             {
+                if (m_suppressNextClick)
+                {
+                    m_suppressNextClick = false;
+                    return;
+                }
+
                 if (auto anchor = sender.try_as<Xaml::FrameworkElement>())
                 {
                     HandleItemClick(item, anchor);
                 }
+            });
+            button.PointerPressed([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
+            {
+                if (auto buttonElement = sender.try_as<Xaml::UIElement>())
+                {
+                    buttonElement.CapturePointer(args.Pointer());
+                }
+                BeginDrag(item.id);
             });
 
             button.PointerEntered([this, transform](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
@@ -172,6 +278,11 @@ namespace winrt::DockWMac::implementation
             });
 
             row.Children().Append(button);
+        }
+
+        if (m_dragTargetIndex && *m_dragTargetIndex == m_items.size())
+        {
+            row.Children().Append(marker());
         }
 
         root.Children().Append(shelf);
@@ -215,5 +326,147 @@ namespace winrt::DockWMac::implementation
         {
             m_actionHandler(action);
         }
+    }
+
+    std::optional<size_t> DockWindow::IndexOfItem(std::wstring const& itemId) const
+    {
+        auto it = std::find_if(m_items.begin(), m_items.end(), [&](auto const& item)
+        {
+            return item.id == itemId;
+        });
+        if (it == m_items.end())
+        {
+            return std::nullopt;
+        }
+        return static_cast<size_t>(std::distance(m_items.begin(), it));
+    }
+
+    size_t DockWindow::CalculateInsertIndex(
+        winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args) const
+    {
+        if (m_items.empty())
+        {
+            return 0;
+        }
+
+        auto point = args.GetCurrentPoint(root).Position();
+        const auto axis = IsVertical() ? point.Y : point.X;
+        const auto extent = IsVertical() ? root.ActualHeight() : root.ActualWidth();
+        constexpr double itemExtent = 56.0;
+        constexpr double spacing = 10.0;
+        const auto total = static_cast<double>(m_items.size()) * itemExtent +
+            static_cast<double>(m_items.size() - 1) * spacing;
+        const auto start = (std::max)(0.0, (extent - total) / 2.0);
+        const auto slot = itemExtent + spacing;
+        auto index = static_cast<int>((axis - start + itemExtent / 2.0) / slot);
+        index = std::clamp(index, 0, static_cast<int>(m_items.size()));
+        return static_cast<size_t>(index);
+    }
+
+    void DockWindow::BeginDrag(std::wstring itemId)
+    {
+        if (itemId.empty())
+        {
+            return;
+        }
+
+        m_dragItemId = std::move(itemId);
+        m_dragTargetIndex = IndexOfItem(m_dragItemId);
+        m_dragMoved = false;
+        m_suppressNextClick = false;
+    }
+
+    void DockWindow::UpdateDragTarget(
+        winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+        winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
+    {
+        if (m_dragItemId.empty())
+        {
+            return;
+        }
+
+        if (!args.GetCurrentPoint(root).Properties().IsLeftButtonPressed())
+        {
+            CompleteDrag();
+            return;
+        }
+
+        auto target = CalculateInsertIndex(root, args);
+        if (!m_dragTargetIndex || *m_dragTargetIndex != target)
+        {
+            m_dragTargetIndex = target;
+            m_dragMoved = true;
+            BuildContent();
+        }
+    }
+
+    void DockWindow::CompleteDrag()
+    {
+        if (m_dragItemId.empty())
+        {
+            return;
+        }
+
+        const auto dragged = m_dragMoved;
+        auto from = IndexOfItem(m_dragItemId);
+        auto target = m_dragTargetIndex.value_or(from.value_or(0));
+        auto changed = false;
+
+        if (from)
+        {
+            auto item = m_items[*from];
+            m_items.erase(m_items.begin() + static_cast<ptrdiff_t>(*from));
+
+            if (target > *from)
+            {
+                --target;
+            }
+            target = (std::min)(target, m_items.size());
+
+            if (target != *from)
+            {
+                m_items.insert(m_items.begin() + static_cast<ptrdiff_t>(target), std::move(item));
+                changed = true;
+            }
+            else
+            {
+                m_items.insert(m_items.begin() + static_cast<ptrdiff_t>(*from), std::move(item));
+            }
+        }
+
+        ResetDrag();
+        m_suppressNextClick = dragged;
+        if (changed)
+        {
+            NotifyOrderChanged();
+        }
+        if (changed || dragged)
+        {
+            BuildContent();
+        }
+    }
+
+    void DockWindow::ResetDrag()
+    {
+        m_dragItemId.clear();
+        m_dragTargetIndex = std::nullopt;
+        m_dragMoved = false;
+    }
+
+    void DockWindow::NotifyOrderChanged()
+    {
+        if (!m_orderChangedHandler)
+        {
+            return;
+        }
+
+        std::vector<std::wstring> order;
+        order.reserve(m_items.size());
+        for (auto const& item : m_items)
+        {
+            order.push_back(item.id);
+        }
+        m_orderChangedHandler(order);
     }
 }

@@ -59,6 +59,9 @@ namespace DockWMac::infra
             L"multi", L"Multi", L"", L"", L"", L"", true, true, false,
             { { reinterpret_cast<HWND>(3), L"A", false, false, false }, { reinterpret_cast<HWND>(4), L"B", false, false, false } },
         });
+        auto bottomHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Bottom, 800, 120);
+        auto leftHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Left, 120, 800);
+        auto rightHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Right, 120, 800);
 
         auto enumeratedWindows = DockWMac::shell::EnumerateTopLevelWindows();
 
@@ -78,6 +81,9 @@ namespace DockWMac::infra
         Check(failures, "dockModel.click.multi", multiAction.kind == DockWMac::dock::DockActionKind::ShowWindowChooser);
         Check(failures, "platform.placement.left", DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left);
         Check(failures, "platform.placement.fallback", DockWMac::platform::PlacementFromConfig(L"bad") == DockWMac::platform::DockPlacement::Bottom);
+        Check(failures, "platform.autohide.bottom", bottomHidden.width == 800 && bottomHidden.height == 8);
+        Check(failures, "platform.autohide.left", leftHidden.width == 8 && leftHidden.height == 800);
+        Check(failures, "platform.autohide.right", rightHidden.width == 8 && rightHidden.height == 800);
         Check(failures, "shell.enumerate.safe", enumeratedWindows.size() < 10000);
 
         if (failures.empty())
