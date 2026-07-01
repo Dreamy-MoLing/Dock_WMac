@@ -7,11 +7,35 @@
     <Filter Include="ui">
       <UniqueIdentifier>{ED578109-454D-46E4-97E9-2A9FC4359A2E}</UniqueIdentifier>
     </Filter>
+    <Filter Include="infra">
+      <UniqueIdentifier>{9D8E0C81-09E8-42A3-AEC6-7D1D92F3A8E4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform">
+      <UniqueIdentifier>{9E8C10CC-6F20-4C0D-8973-88EFA0CCB3D1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="app\SingleInstanceGuard.h">
+      <Filter>app</Filter>
+    </ClInclude>
     <ClInclude Include="app\App.xaml.h">
       <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="infra\AppSettings.h">
+      <Filter>infra</Filter>
+    </ClInclude>
+    <ClInclude Include="infra\Logger.h">
+      <Filter>infra</Filter>
+    </ClInclude>
+    <ClInclude Include="infra\RuntimePaths.h">
+      <Filter>infra</Filter>
+    </ClInclude>
+    <ClInclude Include="infra\SelfCheck.h">
+      <Filter>infra</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\DockPlacement.h">
+      <Filter>platform</Filter>
     </ClInclude>
     <ClInclude Include="ui\DockWindow.xaml.h">
       <Filter>ui</Filter>
@@ -20,8 +44,26 @@
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\SingleInstanceGuard.cpp">
+      <Filter>app</Filter>
+    </ClCompile>
     <ClCompile Include="app\App.xaml.cpp">
       <Filter>app</Filter>
+    </ClCompile>
+    <ClCompile Include="infra\AppSettings.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
+    <ClCompile Include="infra\Logger.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
+    <ClCompile Include="infra\RuntimePaths.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
+    <ClCompile Include="infra\SelfCheck.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\DockPlacement.cpp">
+      <Filter>platform</Filter>
     </ClCompile>
     <ClCompile Include="ui\DockWindow.xaml.cpp">
       <Filter>ui</Filter>

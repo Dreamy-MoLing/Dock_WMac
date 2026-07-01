@@ -66,6 +66,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>User32.lib;Shell32.lib;Ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -85,13 +86,20 @@
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>User32.lib;Shell32.lib;Ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="app\SingleInstanceGuard.h" />
     <ClInclude Include="app\App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
     </ClInclude>
+    <ClInclude Include="infra\AppSettings.h" />
+    <ClInclude Include="infra\Logger.h" />
+    <ClInclude Include="infra\RuntimePaths.h" />
+    <ClInclude Include="infra\SelfCheck.h" />
+    <ClInclude Include="platform\DockPlacement.h" />
     <ClInclude Include="ui\DockWindow.xaml.h">
       <DependentUpon>DockWindow.xaml</DependentUpon>
     </ClInclude>
@@ -101,9 +109,15 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\SingleInstanceGuard.cpp" />
     <ClCompile Include="app\App.xaml.cpp">
       <DependentUpon>App.xaml</DependentUpon>
     </ClCompile>
+    <ClCompile Include="infra\AppSettings.cpp" />
+    <ClCompile Include="infra\Logger.cpp" />
+    <ClCompile Include="infra\RuntimePaths.cpp" />
+    <ClCompile Include="infra\SelfCheck.cpp" />
+    <ClCompile Include="platform\DockPlacement.cpp" />
     <ClCompile Include="ui\DockWindow.xaml.cpp">
       <DependentUpon>DockWindow.xaml</DependentUpon>
     </ClCompile>
