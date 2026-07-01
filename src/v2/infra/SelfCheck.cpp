@@ -44,7 +44,7 @@ namespace DockWMac::infra
         auto loaded = LoadAppSettings(paths);
 
         DockWMac::dock::DockState dockState;
-        dockState.order = { L"second", L"first" };
+        dockState.order = { L"second", L"c:\\transient.exe", L"first" };
         dockState.localPins = { { L"Local", L"", L"C:\\Local.exe", L"", L"local", L"" } };
         dockState.hiddenSystemPins = { L"hidden" };
         DockWMac::dock::SaveDockState(paths.dockStateFile, dockState);
@@ -56,12 +56,13 @@ namespace DockWMac::infra
             { L"Hidden", L"hidden.lnk", L"C:\\Hidden.exe", L"", L"hidden", L"hidden.lnk" },
         };
         std::vector<DockWMac::shell::WindowInfo> windows{
-            { reinterpret_cast<HWND>(1), 10, L"Second Window", L"C:\\Second.exe", L"second", L"C:\\Second.exe", false, false, true },
-            { reinterpret_cast<HWND>(2), 11, L"Transient Window", L"C:\\Transient.exe", L"", L"C:\\Transient.exe", false, false, false },
+            { reinterpret_cast<HWND>(1), 10, L"Second Window", L"C:\\Second.exe", L"second", L"C:\\Second.exe", false, false, true, true },
+            { reinterpret_cast<HWND>(2), 11, L"Transient Window", L"C:\\Transient.exe", L"", L"C:\\Transient.exe", false, false, false, true },
+            { reinterpret_cast<HWND>(5), 12, L"Background Window", L"C:\\Background.exe", L"", L"C:\\Background.exe", false, false, false, false },
         };
         auto items = DockWMac::dock::BuildDockItems(pinned, windows, dockState);
         auto multiAction = DockWMac::dock::DecideClickAction(DockWMac::dock::DockItem{
-            L"multi", L"Multi", L"", L"", L"", L"", L"", true, true, false, true, false,
+            L"multi", L"Multi", L"", L"", L"", L"", L"", true, true, false, false, true, false,
             { { reinterpret_cast<HWND>(3), L"A", false, false, false }, { reinterpret_cast<HWND>(4), L"B", false, false, false } },
         });
         auto bottomHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Bottom, 800, 120);
@@ -98,7 +99,7 @@ namespace DockWMac::infra
         Check(failures, "settings.reducedMotion", loaded.reducedMotion);
         Check(failures, "settings.dockWidth", loaded.dockWidth == 800);
         Check(failures, "settings.dockHeight", loaded.dockHeight == 120);
-        Check(failures, "dockState.order.size", loadedDockState.order.size() == 2);
+        Check(failures, "dockState.order.size", loadedDockState.order.size() == 3);
         Check(failures, "dockState.order.first", !loadedDockState.order.empty() && loadedDockState.order.front() == L"second");
         Check(failures, "dockState.localPins", loadedDockState.localPins.size() == 1);
         Check(failures, "dockState.hiddenSystemPins", loadedDockState.hiddenSystemPins.size() == 1);
@@ -108,6 +109,9 @@ namespace DockWMac::infra
         Check(failures, "dockModel.first.foreground", !items.empty() && items.front().foreground);
         Check(failures, "dockModel.hidden", std::none_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"hidden"; }));
         Check(failures, "dockModel.localPinned", std::any_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"local" && item.localPinned; }));
+        Check(failures, "dockModel.transient.visible", std::any_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"c:\\transient.exe" && item.running && item.transientRunningOnly && !item.pinned; }));
+        Check(failures, "dockModel.transient.afterPinned", items.size() == 4 && items.back().id == L"c:\\transient.exe");
+        Check(failures, "dockModel.background.filtered", std::none_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"c:\\background.exe"; }));
         Check(failures, "dockModel.click.foreground", !items.empty() && DockWMac::dock::DecideClickAction(items.front()).kind == DockWMac::dock::DockActionKind::MinimizeWindow);
         Check(failures, "dockModel.click.multi", multiAction.kind == DockWMac::dock::DockActionKind::ShowWindowChooser);
         Check(failures, "platform.placement.left", DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left);

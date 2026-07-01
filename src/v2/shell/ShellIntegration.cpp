@@ -328,6 +328,15 @@ namespace DockWMac::shell
                 className == L"MsgrIMEWindowClass";
         }
 
+        bool IsHelperWindowClass(std::wstring_view className)
+        {
+            return className == L"MSCTFIME UI" ||
+                className == L"IME" ||
+                className == L"Default IME" ||
+                className == L"ApplicationFrameInputSinkWindow" ||
+                className == L"Windows.UI.Core.CoreWindow";
+        }
+
         std::wstring WindowClass(HWND hwnd)
         {
             wchar_t className[128]{};
@@ -392,14 +401,38 @@ namespace DockWMac::shell
             return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked;
         }
 
-        bool ShouldIncludeWindow(HWND hwnd)
+        bool IsTaskbarCandidateWindow(HWND hwnd)
         {
-            if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER))
+            if (!IsWindow(hwnd) || !IsWindowVisible(hwnd))
             {
                 return false;
             }
 
-            if (IsTaskbarClass(WindowClass(hwnd)))
+            DWORD processId{};
+            GetWindowThreadProcessId(hwnd, &processId);
+            if (processId == GetCurrentProcessId())
+            {
+                return false;
+            }
+
+            auto const exStyle = static_cast<LONG_PTR>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+            if ((exStyle & WS_EX_TOOLWINDOW) != 0)
+            {
+                return false;
+            }
+
+            if (GetWindow(hwnd, GW_OWNER) && (exStyle & WS_EX_APPWINDOW) == 0)
+            {
+                return false;
+            }
+
+            auto const className = WindowClass(hwnd);
+            if (IsTaskbarClass(className) || IsHelperWindowClass(className))
+            {
+                return false;
+            }
+
+            if (IsCloaked(hwnd))
             {
                 return false;
             }
@@ -416,7 +449,13 @@ namespace DockWMac::shell
         BOOL CALLBACK EnumWindowProc(HWND hwnd, LPARAM lparam)
         {
             auto* context = reinterpret_cast<EnumContext*>(lparam);
-            if (!context || !context->windows || !ShouldIncludeWindow(hwnd))
+            if (!context || !context->windows)
+            {
+                return TRUE;
+            }
+
+            const auto taskbarCandidate = IsTaskbarCandidateWindow(hwnd);
+            if (!taskbarCandidate)
             {
                 return TRUE;
             }
@@ -434,6 +473,7 @@ namespace DockWMac::shell
             info.minimized = IsIconic(hwnd) != FALSE;
             info.cloaked = IsCloaked(hwnd);
             info.foreground = hwnd == context->foreground;
+            info.isTaskbarCandidate = taskbarCandidate;
             context->windows->push_back(std::move(info));
             return TRUE;
         }

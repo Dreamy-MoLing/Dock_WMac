@@ -23,5 +23,6 @@ namespace DockWMac::shell
         bool minimized{};
         bool cloaked{};
         bool foreground{};
+        bool isTaskbarCandidate{};
     };
 }

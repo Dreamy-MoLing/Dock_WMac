@@ -25,6 +25,7 @@ namespace DockWMac::dock
         bool pinned{};
         bool systemPinned{};
         bool localPinned{};
+        bool transientRunningOnly{};
         bool running{};
         bool foreground{};
         std::vector<DockWindowRef> windows;

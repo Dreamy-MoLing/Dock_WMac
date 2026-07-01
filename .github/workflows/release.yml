@@ -2,94 +2,99 @@ name: Build & Release
 
 on:
   push:
-    branches: [master]
+    branches: [master, rewrite]
     tags: ["v*"]
   pull_request:
-    branches: [master]
+    branches: [master, rewrite]
 
 env:
-  BUILD_TYPE: Release
-  QT_VERSION: '6.8.3'
+  CONFIGURATION: Release
+  PLATFORM: x64
+  PLATFORM_TOOLSET: v143
+  ARTIFACT_NAME: dock_wmac-windows-x64
+
+permissions:
+  contents: write
 
 jobs:
   build:
     name: Windows (MSVC)
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Qt6
-        uses: jurplel/install-qt-action@v4
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
         with:
-          version: ${{ env.QT_VERSION }}
-          arch: win64_msvc2022_64
+          msbuild-architecture: x64
 
-      - name: Install Task
-        uses: arduino/setup-task@v2
-
-      - name: Set MSVC path & generator
-        shell: bash
-        run: |
-          VS_PATH=$(vswhere -latest -property installationPath)
-          VS_VER=$(vswhere -latest -property installationVersion)
-          VS_MAJOR=$(echo "$VS_VER" | cut -d. -f1)
-          case "$VS_MAJOR" in
-            17) VS_YEAR=2022 ;;
-            18) VS_YEAR=2026 ;;
-            *)  echo "未知 VS major: $VS_MAJOR"; exit 1 ;;
-          esac
-          echo "VS_INSTALL_PATH=$VS_PATH" >> "$GITHUB_ENV"
-          echo "CMAKE_GENERATOR=Visual Studio ${VS_MAJOR} ${VS_YEAR}" >> "$GITHUB_ENV"
-
-      - name: Verify build environment
+      - name: Resolve MSBuild path
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Command cmake | Out-Null
-          Get-Command task | Out-Null
-          if (-not $env:QT_ROOT_DIR -or -not (Test-Path -LiteralPath $env:QT_ROOT_DIR)) {
-            throw "QT_ROOT_DIR is missing or invalid: '$env:QT_ROOT_DIR'"
+          $msbuild = (Get-Command msbuild.exe).Source
+          if (-not $msbuild -or -not (Test-Path -LiteralPath $msbuild)) {
+            throw "MSBuild not found"
           }
-          if (-not $env:VS_INSTALL_PATH -or -not (Test-Path -LiteralPath $env:VS_INSTALL_PATH)) {
-            throw "VS_INSTALL_PATH is missing or invalid: '$env:VS_INSTALL_PATH'"
-          }
-          if (-not $env:CMAKE_GENERATOR) {
-            throw 'CMAKE_GENERATOR is missing'
-          }
-          & (Join-Path $env:QT_ROOT_DIR 'bin/qmake.exe') -query QT_VERSION
+          "MSBUILD_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & $msbuild -version
 
-      - name: Build, test, and package
-        run: task ci
+      - name: Build solution
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & $env:MSBUILD_PATH Dock_WMac_v2.sln /restore `
+            "/p:Configuration=$env:CONFIGURATION" `
+            "/p:Platform=$env:PLATFORM" `
+            "/p:PlatformToolset=$env:PLATFORM_TOOLSET"
+
+      - name: Run self-check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD "build\v2\$env:PLATFORM\$env:CONFIGURATION\Dock_WMac_v2.exe"
+          if (-not (Test-Path -LiteralPath $exe)) {
+            throw "Built executable not found: $exe"
+          }
+          & $exe --self-check
+
+      - name: Package app folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\package-v1-release.ps1 `
+            -Configuration $env:CONFIGURATION `
+            -Platform $env:PLATFORM `
+            -PlatformToolset $env:PLATFORM_TOOLSET `
+            -MSBuildPath $env:MSBUILD_PATH
+
+      - name: Compress release artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { $shortSha }
+          $zipName = "Dock_WMac-$version-windows-x64.zip"
+          $zipPath = Join-Path (Join-Path $PWD "artifacts\release") $zipName
+          if (Test-Path -LiteralPath $zipPath) {
+            Remove-Item -LiteralPath $zipPath -Force
+          }
+          Compress-Archive -Path "artifacts\release\Dock_WMac\*" -DestinationPath $zipPath -Force
+          "RELEASE_ZIP=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dock_wmac-windows
-          path: build/Dock_WMac_*.zip
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.RELEASE_ZIP }}
           if-no-files-found: error
 
-  release:
-    name: Create Release
-    runs-on: windows-latest
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: dock_wmac-windows
-          path: .
-
-      - name: Create Release
+      - name: Publish GitHub Release asset
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            Dock_WMac_*.zip
-            LICENSE
-          generate_release_notes: true
+          files: ${{ env.RELEASE_ZIP }}
+          fail_on_unmatched_files: true
+          overwrite_files: true

@@ -45,6 +45,38 @@ namespace winrt::DockWMac::implementation
             }
             return {};
         }
+
+        std::vector<std::wstring> PersistentOrderFromItems(
+            std::vector<std::wstring> const& requestedOrder,
+            std::vector<::DockWMac::dock::DockItem> const& items)
+        {
+            std::vector<std::wstring> persistent;
+            for (auto const& id : requestedOrder)
+            {
+                auto it = std::find_if(items.begin(), items.end(), [&](auto const& item)
+                {
+                    return item.id == id && item.pinned && !item.transientRunningOnly;
+                });
+                if (it != items.end() && !Contains(persistent, id))
+                {
+                    persistent.push_back(id);
+                }
+            }
+            return persistent;
+        }
+
+        std::vector<std::wstring> PinnedOrderFromItems(std::vector<::DockWMac::dock::DockItem> const& items)
+        {
+            std::vector<std::wstring> order;
+            for (auto const& item : items)
+            {
+                if (item.pinned && !item.transientRunningOnly && !Contains(order, item.id))
+                {
+                    order.push_back(item.id);
+                }
+            }
+            return order;
+        }
     }
 
     App::App()
@@ -99,10 +131,7 @@ namespace winrt::DockWMac::implementation
 
         if (initializeOrder && m_dockState.order.empty())
         {
-            for (auto const& item : m_items)
-            {
-                m_dockState.order.push_back(item.id);
-            }
+            m_dockState.order = PinnedOrderFromItems(m_items);
             ::DockWMac::dock::SaveDockState(m_paths.dockStateFile, m_dockState);
         }
 
@@ -199,7 +228,7 @@ namespace winrt::DockWMac::implementation
 
     void App::HandleDockOrderChanged(std::vector<std::wstring> const& order)
     {
-        m_dockState.order = order;
+        m_dockState.order = PersistentOrderFromItems(order, m_items);
         ::DockWMac::dock::SaveDockState(m_paths.dockStateFile, m_dockState);
         ::DockWMac::infra::LogLine(m_paths, "Dock order updated.");
 

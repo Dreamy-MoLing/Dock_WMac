@@ -68,6 +68,7 @@ namespace DockWMac::dock
             item.pinned = true;
             item.systemPinned = item.systemPinned || systemPin;
             item.localPinned = item.localPinned || localPin;
+            item.transientRunningOnly = false;
         }
     }
 
@@ -96,7 +97,8 @@ namespace DockWMac::dock
         DockState const& state)
     {
         std::map<std::wstring, DockItem> byId;
-        std::vector<std::wstring> sourceOrder;
+        std::vector<std::wstring> pinnedSourceOrder;
+        std::vector<std::wstring> transientRunningOrder;
 
         for (auto const& app : pinnedApps)
         {
@@ -109,7 +111,7 @@ namespace DockWMac::dock
             auto& item = byId[id];
             item.id = id;
             ApplyPinnedApp(item, app, true, false);
-            sourceOrder.push_back(id);
+            pinnedSourceOrder.push_back(id);
         }
 
         for (auto const& app : state.localPins)
@@ -123,11 +125,16 @@ namespace DockWMac::dock
             auto& item = byId[id];
             item.id = id;
             ApplyPinnedApp(item, app, false, true);
-            sourceOrder.push_back(id);
+            pinnedSourceOrder.push_back(id);
         }
 
         for (auto const& window : windows)
         {
+            if (!window.isTaskbarCandidate)
+            {
+                continue;
+            }
+
             auto id = IdentityForWindow(window);
             if (id.empty())
             {
@@ -142,10 +149,12 @@ namespace DockWMac::dock
                 item.targetPath = window.executablePath;
                 item.appUserModelId = window.appUserModelId;
                 item.iconPath = FirstNonEmpty({ window.iconPath, window.executablePath });
-                sourceOrder.push_back(id);
+                item.transientRunningOnly = true;
+                transientRunningOrder.push_back(id);
             }
 
             item.running = true;
+            item.transientRunningOnly = !item.pinned;
             item.foreground = item.foreground || window.foreground;
             item.iconPath = FirstNonEmpty({ item.iconPath, window.iconPath, window.executablePath });
             if (item.displayName.empty())
@@ -164,12 +173,19 @@ namespace DockWMac::dock
         std::vector<DockItem> result;
         for (auto const& id : state.order)
         {
+            if (auto it = byId.find(id); it != byId.end() && it->second.pinned)
+            {
+                AppendOrdered(result, it->second);
+            }
+        }
+        for (auto const& id : pinnedSourceOrder)
+        {
             if (auto it = byId.find(id); it != byId.end())
             {
                 AppendOrdered(result, it->second);
             }
         }
-        for (auto const& id : sourceOrder)
+        for (auto const& id : transientRunningOrder)
         {
             if (auto it = byId.find(id); it != byId.end())
             {
