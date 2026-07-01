@@ -10,7 +10,7 @@ on:
 env:
   CONFIGURATION: Release
   PLATFORM: x64
-  PLATFORM_TOOLSET: v143
+  PLATFORM_TOOLSET: v145
   ARTIFACT_NAME: dock_wmac-windows-x64
 
 permissions:
@@ -19,7 +19,7 @@ permissions:
 jobs:
   build:
     name: Windows (MSVC)
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -28,6 +28,7 @@ jobs:
         uses: microsoft/setup-msbuild@v2
         with:
           msbuild-architecture: x64
+          vs-prerelease: true
 
       - name: Resolve MSBuild path
         shell: pwsh
