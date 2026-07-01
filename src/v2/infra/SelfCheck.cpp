@@ -29,6 +29,7 @@ namespace DockWMac::infra
         paths.userDataDir = temp;
         paths.configFile = temp / L"settings.json";
         paths.dockStateFile = temp / L"dock_state.json";
+        paths.iconCacheDir = temp / L"icons";
         paths.logDir = temp / L"logs";
         paths.logFile = paths.logDir / L"dock.log";
 
@@ -44,20 +45,23 @@ namespace DockWMac::infra
 
         DockWMac::dock::DockState dockState;
         dockState.order = { L"second", L"first" };
+        dockState.localPins = { { L"Local", L"", L"C:\\Local.exe", L"", L"local", L"" } };
+        dockState.hiddenSystemPins = { L"hidden" };
         DockWMac::dock::SaveDockState(paths.dockStateFile, dockState);
         auto loadedDockState = DockWMac::dock::LoadDockState(paths.dockStateFile);
 
         std::vector<DockWMac::shell::PinnedApp> pinned{
-            { L"First", L"first.lnk", L"C:\\First.exe", L"", L"first" },
-            { L"Second", L"second.lnk", L"C:\\Second.exe", L"", L"second" },
+            { L"First", L"first.lnk", L"C:\\First.exe", L"", L"first", L"first.lnk" },
+            { L"Second", L"second.lnk", L"C:\\Second.exe", L"", L"second", L"second.lnk" },
+            { L"Hidden", L"hidden.lnk", L"C:\\Hidden.exe", L"", L"hidden", L"hidden.lnk" },
         };
         std::vector<DockWMac::shell::WindowInfo> windows{
-            { reinterpret_cast<HWND>(1), 10, L"Second Window", L"C:\\Second.exe", L"second", false, false, true },
-            { reinterpret_cast<HWND>(2), 11, L"Transient Window", L"C:\\Transient.exe", L"", false, false, false },
+            { reinterpret_cast<HWND>(1), 10, L"Second Window", L"C:\\Second.exe", L"second", L"C:\\Second.exe", false, false, true },
+            { reinterpret_cast<HWND>(2), 11, L"Transient Window", L"C:\\Transient.exe", L"", L"C:\\Transient.exe", false, false, false },
         };
         auto items = DockWMac::dock::BuildDockItems(pinned, windows, dockState);
         auto multiAction = DockWMac::dock::DecideClickAction(DockWMac::dock::DockItem{
-            L"multi", L"Multi", L"", L"", L"", L"", true, true, false,
+            L"multi", L"Multi", L"", L"", L"", L"", L"", true, true, false, true, false,
             { { reinterpret_cast<HWND>(3), L"A", false, false, false }, { reinterpret_cast<HWND>(4), L"B", false, false, false } },
         });
         auto bottomHidden = DockWMac::platform::CalculateDockAutoHideRect(nullptr, DockWMac::platform::DockPlacement::Bottom, 800, 120);
@@ -77,6 +81,16 @@ namespace DockWMac::infra
             preview.Hide();
         }
 
+        wchar_t windowsDir[MAX_PATH]{};
+        GetWindowsDirectoryW(windowsDir, MAX_PATH);
+        auto explorerPath = std::filesystem::path{ windowsDir } / L"explorer.exe";
+        auto iconOk = true;
+        if (std::filesystem::exists(explorerPath))
+        {
+            auto iconPath = DockWMac::shell::CacheIconForPath(explorerPath.wstring(), paths.iconCacheDir, L"explorer");
+            iconOk = !iconPath.empty() && std::filesystem::exists(iconPath);
+        }
+
         std::vector<std::string> failures;
         Check(failures, "settings.placement", loaded.placement == DockWMac::platform::DockPlacement::Right);
         Check(failures, "settings.autoHide", loaded.autoHide);
@@ -85,10 +99,14 @@ namespace DockWMac::infra
         Check(failures, "settings.dockHeight", loaded.dockHeight == 120);
         Check(failures, "dockState.order.size", loadedDockState.order.size() == 2);
         Check(failures, "dockState.order.first", !loadedDockState.order.empty() && loadedDockState.order.front() == L"second");
-        Check(failures, "dockModel.items.size", items.size() == 3);
+        Check(failures, "dockState.localPins", loadedDockState.localPins.size() == 1);
+        Check(failures, "dockState.hiddenSystemPins", loadedDockState.hiddenSystemPins.size() == 1);
+        Check(failures, "dockModel.items.size", items.size() == 4);
         Check(failures, "dockModel.first.id", !items.empty() && items.front().id == L"second");
         Check(failures, "dockModel.first.running", !items.empty() && items.front().running);
         Check(failures, "dockModel.first.foreground", !items.empty() && items.front().foreground);
+        Check(failures, "dockModel.hidden", std::none_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"hidden"; }));
+        Check(failures, "dockModel.localPinned", std::any_of(items.begin(), items.end(), [](auto const& item) { return item.id == L"local" && item.localPinned; }));
         Check(failures, "dockModel.click.foreground", !items.empty() && DockWMac::dock::DecideClickAction(items.front()).kind == DockWMac::dock::DockActionKind::MinimizeWindow);
         Check(failures, "dockModel.click.multi", multiAction.kind == DockWMac::dock::DockActionKind::ShowWindowChooser);
         Check(failures, "platform.placement.left", DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left);
@@ -98,6 +116,7 @@ namespace DockWMac::infra
         Check(failures, "platform.autohide.right", rightHidden.width == 8 && rightHidden.height == 800);
         Check(failures, "shell.enumerate.safe", enumeratedWindows.size() < 10000);
         Check(failures, "shell.dwmPreview", previewOk);
+        Check(failures, "shell.iconCache", iconOk);
 
         if (failures.empty())
         {

@@ -46,6 +46,29 @@ namespace DockWMac::dock
                 result.push_back(std::move(item));
             }
         }
+
+        bool Contains(std::vector<std::wstring> const& values, std::wstring const& value)
+        {
+            return std::find(values.begin(), values.end(), value) != values.end();
+        }
+
+        void ApplyPinnedApp(DockItem& item, shell::PinnedApp const& app, bool systemPin, bool localPin)
+        {
+            if (item.id.empty())
+            {
+                item.id = IdentityForPinned(app);
+            }
+
+            item.displayName = FirstNonEmpty({ item.displayName, app.name, FileName(app.targetPath), app.appUserModelId });
+            item.linkPath = FirstNonEmpty({ item.linkPath, app.linkPath });
+            item.targetPath = FirstNonEmpty({ item.targetPath, app.targetPath });
+            item.arguments = FirstNonEmpty({ item.arguments, app.arguments });
+            item.appUserModelId = FirstNonEmpty({ item.appUserModelId, app.appUserModelId });
+            item.iconPath = FirstNonEmpty({ item.iconPath, app.iconPath, app.linkPath, app.targetPath });
+            item.pinned = true;
+            item.systemPinned = item.systemPinned || systemPin;
+            item.localPinned = item.localPinned || localPin;
+        }
     }
 
     std::wstring IdentityForPinned(shell::PinnedApp const& app)
@@ -78,20 +101,28 @@ namespace DockWMac::dock
         for (auto const& app : pinnedApps)
         {
             auto id = IdentityForPinned(app);
+            if (id.empty() || Contains(state.hiddenSystemPins, id))
+            {
+                continue;
+            }
+
+            auto& item = byId[id];
+            item.id = id;
+            ApplyPinnedApp(item, app, true, false);
+            sourceOrder.push_back(id);
+        }
+
+        for (auto const& app : state.localPins)
+        {
+            auto id = IdentityForPinned(app);
             if (id.empty())
             {
                 continue;
             }
 
-            DockItem item;
+            auto& item = byId[id];
             item.id = id;
-            item.displayName = FirstNonEmpty({ app.name, FileName(app.targetPath), app.appUserModelId });
-            item.linkPath = app.linkPath;
-            item.targetPath = app.targetPath;
-            item.arguments = app.arguments;
-            item.appUserModelId = app.appUserModelId;
-            item.pinned = true;
-            byId[id] = std::move(item);
+            ApplyPinnedApp(item, app, false, true);
             sourceOrder.push_back(id);
         }
 
@@ -110,11 +141,13 @@ namespace DockWMac::dock
                 item.displayName = FirstNonEmpty({ FileName(window.executablePath), window.title, window.appUserModelId });
                 item.targetPath = window.executablePath;
                 item.appUserModelId = window.appUserModelId;
+                item.iconPath = FirstNonEmpty({ window.iconPath, window.executablePath });
                 sourceOrder.push_back(id);
             }
 
             item.running = true;
             item.foreground = item.foreground || window.foreground;
+            item.iconPath = FirstNonEmpty({ item.iconPath, window.iconPath, window.executablePath });
             if (item.displayName.empty())
             {
                 item.displayName = FirstNonEmpty({ FileName(window.executablePath), window.title });

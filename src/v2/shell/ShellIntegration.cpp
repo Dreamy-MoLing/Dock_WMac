@@ -1,10 +1,94 @@
 #include "pch.h"
 #include "ShellIntegration.h"
 
+#include <gdiplus.h>
+
 namespace DockWMac::shell
 {
     namespace
     {
+        struct IconHandle
+        {
+            HICON value{};
+
+            ~IconHandle()
+            {
+                if (value)
+                {
+                    DestroyIcon(value);
+                }
+            }
+
+            IconHandle() = default;
+            IconHandle(IconHandle const&) = delete;
+            IconHandle& operator=(IconHandle const&) = delete;
+        };
+
+        struct GdiPlusSession
+        {
+            ULONG_PTR token{};
+
+            GdiPlusSession()
+            {
+                Gdiplus::GdiplusStartupInput input;
+                Gdiplus::GdiplusStartup(&token, &input, nullptr);
+            }
+
+            ~GdiPlusSession()
+            {
+                if (token)
+                {
+                    Gdiplus::GdiplusShutdown(token);
+                }
+            }
+
+            explicit operator bool() const
+            {
+                return token != 0;
+            }
+        };
+
+        std::optional<CLSID> EncoderClsid(std::wstring_view mimeType)
+        {
+            UINT count{};
+            UINT size{};
+            if (Gdiplus::GetImageEncodersSize(&count, &size) != Gdiplus::Ok || count == 0 || size == 0)
+            {
+                return std::nullopt;
+            }
+
+            std::vector<BYTE> buffer(size);
+            auto* encoders = reinterpret_cast<Gdiplus::ImageCodecInfo*>(buffer.data());
+            if (Gdiplus::GetImageEncoders(count, size, encoders) != Gdiplus::Ok)
+            {
+                return std::nullopt;
+            }
+
+            for (UINT i = 0; i < count; ++i)
+            {
+                if (encoders[i].MimeType && mimeType == encoders[i].MimeType)
+                {
+                    return encoders[i].Clsid;
+                }
+            }
+            return std::nullopt;
+        }
+
+        std::wstring HexHash(std::wstring const& value)
+        {
+            std::wstringstream stream;
+            stream << std::hex << std::hash<std::wstring>{}(value);
+            return stream.str();
+        }
+
+        std::filesystem::path IconCachePath(
+            std::filesystem::path const& cacheDir,
+            std::wstring const& cacheKey,
+            std::wstring const& sourcePath)
+        {
+            return cacheDir / (HexHash(cacheKey + L"|" + sourcePath) + L".png");
+        }
+
         std::wstring AppData()
         {
             PWSTR rawPath{};
@@ -92,6 +176,7 @@ namespace DockWMac::shell
             app.targetPath = target;
             app.arguments = arguments;
             app.appUserModelId = ShortcutAppUserModelId(link.get());
+            app.iconPath = path.wstring();
             return app;
         }
 
@@ -205,6 +290,7 @@ namespace DockWMac::shell
             info.title = WindowTitle(hwnd);
             info.executablePath = ProcessPath(processId);
             info.appUserModelId = WindowAppUserModelId(hwnd);
+            info.iconPath = info.executablePath;
             info.minimized = IsIconic(hwnd) != FALSE;
             info.cloaked = IsCloaked(hwnd);
             info.foreground = hwnd == context->foreground;
@@ -283,5 +369,67 @@ namespace DockWMac::shell
     bool MinimizeWindow(HWND hwnd)
     {
         return IsWindow(hwnd) && ShowWindow(hwnd, SW_MINIMIZE);
+    }
+
+    std::wstring CacheIconForPath(
+        std::wstring const& sourcePath,
+        std::filesystem::path const& cacheDir,
+        std::wstring const& cacheKey)
+    {
+        if (sourcePath.empty() || cacheDir.empty())
+        {
+            return {};
+        }
+
+        const auto output = IconCachePath(cacheDir, cacheKey, sourcePath);
+        if (std::filesystem::exists(output))
+        {
+            return output.wstring();
+        }
+
+        std::filesystem::create_directories(cacheDir);
+
+        SHFILEINFOW fileInfo{};
+        if (!SHGetFileInfoW(
+            sourcePath.c_str(),
+            FILE_ATTRIBUTE_NORMAL,
+            &fileInfo,
+            sizeof(fileInfo),
+            SHGFI_ICON | SHGFI_LARGEICON))
+        {
+            return {};
+        }
+
+        IconHandle icon;
+        icon.value = fileInfo.hIcon;
+        if (!icon.value)
+        {
+            return {};
+        }
+
+        GdiPlusSession gdiplus;
+        if (!gdiplus)
+        {
+            return {};
+        }
+
+        auto pngEncoder = EncoderClsid(L"image/png");
+        if (!pngEncoder)
+        {
+            return {};
+        }
+
+        Gdiplus::Bitmap bitmap(icon.value);
+        if (bitmap.GetLastStatus() != Gdiplus::Ok)
+        {
+            return {};
+        }
+
+        if (bitmap.Save(output.c_str(), &*pngEncoder, nullptr) != Gdiplus::Ok)
+        {
+            return {};
+        }
+
+        return output.wstring();
     }
 }

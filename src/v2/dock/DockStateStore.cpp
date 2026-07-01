@@ -23,68 +23,93 @@ namespace DockWMac::dock
             return winrt::to_string(value);
         }
 
-        std::wstring FromUtf8(std::string const& value)
+        winrt::hstring HString(std::wstring const& value)
         {
-            return winrt::to_hstring(value).c_str();
+            return winrt::hstring{ value };
         }
 
-        std::string EscapeJson(std::wstring const& value)
+        std::wstring StringValue(
+            winrt::Windows::Data::Json::JsonObject const& object,
+            winrt::hstring const& key)
         {
-            std::string escaped;
-            for (auto ch : ToUtf8(value))
-            {
-                if (ch == '\\' || ch == '"')
-                {
-                    escaped.push_back('\\');
-                }
-                escaped.push_back(ch);
-            }
-            return escaped;
+            return object.HasKey(key) ? std::wstring{ object.GetNamedString(key) } : std::wstring{};
         }
 
-        std::vector<std::wstring> ParseOrder(std::string const& json)
+        std::vector<std::wstring> StringArray(
+            winrt::Windows::Data::Json::JsonObject const& object,
+            winrt::hstring const& key)
         {
             std::vector<std::wstring> values;
-            auto key = json.find("\"order\"");
-            if (key == std::string::npos)
+            if (!object.HasKey(key))
             {
                 return values;
             }
 
-            auto open = json.find('[', key);
-            auto close = json.find(']', open);
-            if (open == std::string::npos || close == std::string::npos || close <= open)
+            for (auto const& entry : object.GetNamedArray(key))
             {
-                return values;
-            }
-
-            auto pos = open + 1;
-            while (pos < close)
-            {
-                auto quote = json.find('"', pos);
-                if (quote == std::string::npos || quote >= close)
+                if (entry.ValueType() == winrt::Windows::Data::Json::JsonValueType::String)
                 {
-                    break;
-                }
-
-                std::string value;
-                for (auto i = quote + 1; i < close; ++i)
-                {
-                    if (json[i] == '\\' && i + 1 < close)
-                    {
-                        value.push_back(json[++i]);
-                        continue;
-                    }
-                    if (json[i] == '"')
-                    {
-                        pos = i + 1;
-                        values.push_back(FromUtf8(value));
-                        break;
-                    }
-                    value.push_back(json[i]);
+                    values.push_back(std::wstring{ entry.GetString() });
                 }
             }
             return values;
+        }
+
+        std::vector<shell::PinnedApp> PinnedArray(
+            winrt::Windows::Data::Json::JsonObject const& object,
+            winrt::hstring const& key)
+        {
+            std::vector<shell::PinnedApp> values;
+            if (!object.HasKey(key))
+            {
+                return values;
+            }
+
+            for (auto const& entry : object.GetNamedArray(key))
+            {
+                if (entry.ValueType() != winrt::Windows::Data::Json::JsonValueType::Object)
+                {
+                    continue;
+                }
+
+                auto pinned = entry.GetObject();
+                shell::PinnedApp app;
+                app.name = StringValue(pinned, L"name");
+                app.linkPath = StringValue(pinned, L"linkPath");
+                app.targetPath = StringValue(pinned, L"targetPath");
+                app.arguments = StringValue(pinned, L"arguments");
+                app.appUserModelId = StringValue(pinned, L"appUserModelId");
+                app.iconPath = StringValue(pinned, L"iconPath");
+                values.push_back(std::move(app));
+            }
+            return values;
+        }
+
+        winrt::Windows::Data::Json::JsonArray ToJsonArray(std::vector<std::wstring> const& values)
+        {
+            winrt::Windows::Data::Json::JsonArray array;
+            for (auto const& value : values)
+            {
+                array.Append(winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value)));
+            }
+            return array;
+        }
+
+        winrt::Windows::Data::Json::JsonArray ToJsonArray(std::vector<shell::PinnedApp> const& values)
+        {
+            winrt::Windows::Data::Json::JsonArray array;
+            for (auto const& value : values)
+            {
+                winrt::Windows::Data::Json::JsonObject object;
+                object.SetNamedValue(L"name", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.name)));
+                object.SetNamedValue(L"linkPath", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.linkPath)));
+                object.SetNamedValue(L"targetPath", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.targetPath)));
+                object.SetNamedValue(L"arguments", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.arguments)));
+                object.SetNamedValue(L"appUserModelId", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.appUserModelId)));
+                object.SetNamedValue(L"iconPath", winrt::Windows::Data::Json::JsonValue::CreateStringValue(HString(value.iconPath)));
+                array.Append(object);
+            }
+            return array;
         }
     }
 
@@ -96,7 +121,17 @@ namespace DockWMac::dock
             return state;
         }
 
-        state.order = ParseOrder(ReadFile(path));
+        try
+        {
+            auto json = winrt::Windows::Data::Json::JsonObject::Parse(winrt::to_hstring(ReadFile(path)));
+            state.order = StringArray(json, L"order");
+            state.localPins = PinnedArray(json, L"localPins");
+            state.hiddenSystemPins = StringArray(json, L"hiddenSystemPins");
+        }
+        catch (...)
+        {
+            return {};
+        }
         return state;
     }
 
@@ -104,12 +139,12 @@ namespace DockWMac::dock
     {
         std::filesystem::create_directories(path.parent_path());
 
+        winrt::Windows::Data::Json::JsonObject json;
+        json.SetNamedValue(L"order", ToJsonArray(state.order));
+        json.SetNamedValue(L"localPins", ToJsonArray(state.localPins));
+        json.SetNamedValue(L"hiddenSystemPins", ToJsonArray(state.hiddenSystemPins));
+
         std::ofstream output{ path, std::ios::binary | std::ios::trunc };
-        output << "{\n  \"order\": [";
-        for (size_t i = 0; i < state.order.size(); ++i)
-        {
-            output << (i == 0 ? "\n    \"" : ",\n    \"") << EscapeJson(state.order[i]) << "\"";
-        }
-        output << "\n  ]\n}\n";
+        output << ToUtf8(std::wstring{ json.Stringify() });
     }
 }

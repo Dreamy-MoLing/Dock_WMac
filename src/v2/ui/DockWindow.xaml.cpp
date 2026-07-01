@@ -8,6 +8,20 @@
 
 namespace winrt::DockWMac::implementation
 {
+    namespace
+    {
+        std::wstring FileUri(std::wstring path)
+        {
+            if (path.empty())
+            {
+                return {};
+            }
+
+            std::replace(path.begin(), path.end(), L'\\', L'/');
+            return L"file:///" + path;
+        }
+    }
+
     DockWindow::DockWindow()
     {
         Title(L"DockWindow");
@@ -219,15 +233,32 @@ namespace winrt::DockWMac::implementation
                     : winrt::Windows::UI::Color{ 0xFF, 0x4B, 0x55, 0x66 }
             });
 
-            auto label = Controls::TextBlock{};
-            auto text = item.displayName.empty() ? L"?" : std::wstring{ 1, static_cast<wchar_t>(::towupper(item.displayName.front())) };
-            label.Text(text);
-            label.FontSize(20);
-            label.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
-            label.Foreground(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF } });
-            label.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
-            label.VerticalAlignment(Xaml::VerticalAlignment::Center);
-            glyph.Child(label);
+            if (!item.iconPath.empty())
+            {
+                auto bitmap = winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage{};
+                bitmap.UriSource(winrt::Windows::Foundation::Uri{ winrt::hstring{ FileUri(item.iconPath) } });
+
+                auto image = Controls::Image{};
+                image.Width(38);
+                image.Height(38);
+                image.Stretch(Media::Stretch::Uniform);
+                image.Source(bitmap);
+                image.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
+                image.VerticalAlignment(Xaml::VerticalAlignment::Center);
+                glyph.Child(image);
+            }
+            else
+            {
+                auto label = Controls::TextBlock{};
+                auto text = item.displayName.empty() ? L"?" : std::wstring{ 1, static_cast<wchar_t>(::towupper(item.displayName.front())) };
+                label.Text(text);
+                label.FontSize(20);
+                label.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+                label.Foreground(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF } });
+                label.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
+                label.VerticalAlignment(Xaml::VerticalAlignment::Center);
+                glyph.Child(label);
+            }
 
             Controls::Grid::SetRow(glyph, 0);
             cell.Children().Append(glyph);
@@ -256,10 +287,39 @@ namespace winrt::DockWMac::implementation
                     HandleItemClick(item, anchor);
                 }
             });
+            button.RightTapped([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args)
+            {
+                if (!m_actionHandler)
+                {
+                    return;
+                }
+
+                auto flyout = Controls::MenuFlyout{};
+                auto command = Controls::MenuFlyoutItem{};
+                auto kind = item.pinned
+                    ? ::DockWMac::dock::DockActionKind::UnpinFromDock
+                    : ::DockWMac::dock::DockActionKind::PinToDock;
+                command.Text(item.pinned ? L"Unpin from Dock" : L"Pin to Dock");
+                command.Click([this, item, kind](winrt::Windows::Foundation::IInspectable const&, Xaml::RoutedEventArgs const&)
+                {
+                    m_actionHandler(::DockWMac::dock::DockAction{ kind, item.id, nullptr });
+                });
+                flyout.Items().Append(command);
+
+                if (auto anchor = sender.try_as<Xaml::FrameworkElement>())
+                {
+                    flyout.ShowAt(anchor);
+                    args.Handled(true);
+                }
+            });
             button.PointerPressed([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
             {
                 if (auto buttonElement = sender.try_as<Xaml::UIElement>())
                 {
+                    if (!args.GetCurrentPoint(buttonElement).Properties().IsLeftButtonPressed())
+                    {
+                        return;
+                    }
                     buttonElement.CapturePointer(args.Pointer());
                 }
                 BeginDrag(item.id);

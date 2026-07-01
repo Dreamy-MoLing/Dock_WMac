@@ -32,6 +32,7 @@ namespace DockWMac::infra
         paths.userDataDir = LocalAppData() / L"Dock_WMac";
         paths.configFile = paths.userDataDir / L"settings.json";
         paths.dockStateFile = paths.userDataDir / L"dock_state.json";
+        paths.iconCacheDir = paths.userDataDir / L"icons";
         paths.logDir = paths.userDataDir / L"logs";
         paths.logFile = paths.logDir / L"dock.log";
         return paths;
@@ -40,6 +41,7 @@ namespace DockWMac::infra
     void EnsureRuntimePaths(RuntimePaths const& paths)
     {
         std::filesystem::create_directories(paths.userDataDir);
+        std::filesystem::create_directories(paths.iconCacheDir);
         std::filesystem::create_directories(paths.logDir);
     }
 }

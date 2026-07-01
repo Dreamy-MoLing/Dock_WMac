@@ -9,6 +9,7 @@ namespace DockWMac::shell
         std::wstring targetPath;
         std::wstring arguments;
         std::wstring appUserModelId;
+        std::wstring iconPath;
     };
 
     struct WindowInfo
@@ -18,6 +19,7 @@ namespace DockWMac::shell
         std::wstring title;
         std::wstring executablePath;
         std::wstring appUserModelId;
+        std::wstring iconPath;
         bool minimized{};
         bool cloaked{};
         bool foreground{};

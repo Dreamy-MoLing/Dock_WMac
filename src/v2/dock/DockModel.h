@@ -21,7 +21,10 @@ namespace DockWMac::dock
         std::wstring targetPath;
         std::wstring arguments;
         std::wstring appUserModelId;
+        std::wstring iconPath;
         bool pinned{};
+        bool systemPinned{};
+        bool localPinned{};
         bool running{};
         bool foreground{};
         std::vector<DockWindowRef> windows;
@@ -30,6 +33,8 @@ namespace DockWMac::dock
     struct DockState
     {
         std::vector<std::wstring> order;
+        std::vector<shell::PinnedApp> localPins;
+        std::vector<std::wstring> hiddenSystemPins;
     };
 
     enum class DockActionKind
@@ -39,6 +44,8 @@ namespace DockWMac::dock
         ActivateWindow,
         MinimizeWindow,
         ShowWindowChooser,
+        PinToDock,
+        UnpinFromDock,
     };
 
     struct DockAction
