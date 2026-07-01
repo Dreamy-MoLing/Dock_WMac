@@ -10,6 +10,7 @@ namespace DockWMac::infra
         DockWMac::platform::DockPlacement placement{ DockWMac::platform::DockPlacement::Bottom };
         bool autoHide{ false };
         bool reducedMotion{ false };
+        bool highContrast{ false };
         int32_t dockWidth{ 720 };
         int32_t dockHeight{ 96 };
     };

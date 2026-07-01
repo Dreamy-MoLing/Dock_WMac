@@ -70,12 +70,16 @@ namespace winrt::DockWMac::implementation
 
     int32_t DockWindow::WindowWidth() const
     {
-        return IsVertical() ? m_settings.dockHeight : m_settings.dockWidth;
+        return ::DockWMac::platform::ScaleForWindow(
+            WindowHandle(),
+            IsVertical() ? m_settings.dockHeight : m_settings.dockWidth);
     }
 
     int32_t DockWindow::WindowHeight() const
     {
-        return IsVertical() ? m_settings.dockWidth : m_settings.dockHeight;
+        return ::DockWMac::platform::ScaleForWindow(
+            WindowHandle(),
+            IsVertical() ? m_settings.dockWidth : m_settings.dockHeight);
     }
 
     HWND DockWindow::WindowHandle() const
@@ -165,8 +169,16 @@ namespace winrt::DockWMac::implementation
         shelf.Padding({ 12, 8, 12, 10 });
         shelf.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
         shelf.VerticalAlignment(Xaml::VerticalAlignment::Center);
-        shelf.Background(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xCC, 0x1C, 0x20, 0x28 } });
-        shelf.BorderBrush(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0x33, 0xFF, 0xFF, 0xFF } });
+        shelf.Background(Media::SolidColorBrush{
+            m_settings.highContrast
+                ? winrt::Windows::UI::Color{ 0xFF, 0x00, 0x00, 0x00 }
+                : winrt::Windows::UI::Color{ 0xCC, 0x1C, 0x20, 0x28 }
+        });
+        shelf.BorderBrush(Media::SolidColorBrush{
+            m_settings.highContrast
+                ? winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF }
+                : winrt::Windows::UI::Color{ 0x33, 0xFF, 0xFF, 0xFF }
+        });
         shelf.BorderThickness({ 1, 1, 1, 1 });
 
         auto row = Controls::StackPanel{};
@@ -228,10 +240,14 @@ namespace winrt::DockWMac::implementation
             glyph.CornerRadius({ 12, 12, 12, 12 });
             glyph.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
             glyph.Background(Media::SolidColorBrush{
-                item.running
+                m_settings.highContrast
+                    ? winrt::Windows::UI::Color{ 0xFF, 0x00, 0x00, 0x00 }
+                    : item.running
                     ? winrt::Windows::UI::Color{ 0xFF, 0x31, 0x8F, 0xD8 }
                     : winrt::Windows::UI::Color{ 0xFF, 0x4B, 0x55, 0x66 }
             });
+            glyph.BorderThickness(m_settings.highContrast ? winrt::Microsoft::UI::Xaml::Thickness{ 1, 1, 1, 1 } : winrt::Microsoft::UI::Xaml::Thickness{ 0, 0, 0, 0 });
+            glyph.BorderBrush(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF } });
 
             if (!item.iconPath.empty())
             {
@@ -269,7 +285,11 @@ namespace winrt::DockWMac::implementation
             indicator.Margin({ 0, 5, 0, 0 });
             indicator.CornerRadius({ 4, 4, 4, 4 });
             indicator.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
-            indicator.Background(Media::SolidColorBrush{ winrt::Windows::UI::Color{ 0xFF, 0x60, 0xCD, 0xFF } });
+            indicator.Background(Media::SolidColorBrush{
+                m_settings.highContrast
+                    ? winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0x00 }
+                    : winrt::Windows::UI::Color{ 0xFF, 0x60, 0xCD, 0xFF }
+            });
             Controls::Grid::SetRow(indicator, 1);
             cell.Children().Append(indicator);
 

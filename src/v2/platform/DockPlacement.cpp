@@ -30,6 +30,36 @@ namespace DockWMac::platform
         return DockPlacement::Bottom;
     }
 
+    SystemAccessibility ReadSystemAccessibility()
+    {
+        SystemAccessibility accessibility;
+
+        HIGHCONTRASTW highContrast{ sizeof(highContrast) };
+        if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(highContrast), &highContrast, 0))
+        {
+            accessibility.highContrast = (highContrast.dwFlags & HCF_HIGHCONTRASTON) != 0;
+        }
+
+        BOOL clientAreaAnimation = TRUE;
+        if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &clientAreaAnimation, 0))
+        {
+            accessibility.reducedMotion = clientAreaAnimation == FALSE;
+        }
+
+        return accessibility;
+    }
+
+    int32_t ScaleForWindow(HWND hwnd, int32_t value)
+    {
+        auto dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
+        if (dpi == 0)
+        {
+            dpi = USER_DEFAULT_SCREEN_DPI;
+        }
+
+        return MulDiv(value, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+    }
+
     DockRect CalculateDockRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
     {
         auto monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
@@ -39,7 +69,7 @@ namespace DockWMac::platform
             info.rcWork = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
         }
 
-        constexpr int32_t margin = 12;
+        const auto margin = ScaleForWindow(hwnd, 12);
         const auto workWidth = static_cast<int32_t>(info.rcWork.right - info.rcWork.left);
         const auto workHeight = static_cast<int32_t>(info.rcWork.bottom - info.rcWork.top);
 
@@ -65,7 +95,7 @@ namespace DockWMac::platform
 
     DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
     {
-        constexpr int32_t triggerThickness = 8;
+        const auto triggerThickness = ScaleForWindow(hwnd, 8);
         auto rect = CalculateDockRect(hwnd, placement, width, height);
 
         switch (placement)

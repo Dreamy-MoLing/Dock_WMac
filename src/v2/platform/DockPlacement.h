@@ -20,6 +20,15 @@ namespace DockWMac::platform
     std::wstring ToConfigString(DockPlacement placement);
     DockPlacement PlacementFromConfig(std::wstring_view value);
 
+    struct SystemAccessibility
+    {
+        bool highContrast{};
+        bool reducedMotion{};
+    };
+
+    SystemAccessibility ReadSystemAccessibility();
+    int32_t ScaleForWindow(HWND hwnd, int32_t value);
+
     DockRect CalculateDockRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     void ApplyDockWindowPlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);

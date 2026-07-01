@@ -2,6 +2,7 @@
 #include "App.xaml.h"
 #include "../dock/DockStateStore.h"
 #include "../infra/Logger.h"
+#include "../platform/DockPlacement.h"
 #include "../shell/ShellIntegration.h"
 #include "../ui/DockWindow.xaml.h"
 
@@ -120,8 +121,13 @@ namespace winrt::DockWMac::implementation
             return;
         }
 
+        auto effectiveSettings = m_settings;
+        auto const accessibility = ::DockWMac::platform::ReadSystemAccessibility();
+        effectiveSettings.reducedMotion = effectiveSettings.reducedMotion || accessibility.reducedMotion;
+        effectiveSettings.highContrast = accessibility.highContrast;
+
         m_dockWindow->Configure(
-            m_settings,
+            effectiveSettings,
             m_items,
             [this](::DockWMac::dock::DockAction const& action)
             {
@@ -139,6 +145,7 @@ namespace winrt::DockWMac::implementation
             {
                 HideDockPreview();
             });
+        m_dockWindow->ApplyPlacement();
     }
 
     void App::ApplyIconCache()
