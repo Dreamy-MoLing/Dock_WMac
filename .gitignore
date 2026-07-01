@@ -3,6 +3,7 @@ build/
 build-*/
 build-win/
 build-debug/
+artifacts/
 src/v2/obj/
 cmake-build-*/
 CMakeFiles/
