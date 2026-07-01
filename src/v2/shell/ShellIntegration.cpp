@@ -22,6 +22,23 @@ namespace DockWMac::shell
             IconHandle() = default;
             IconHandle(IconHandle const&) = delete;
             IconHandle& operator=(IconHandle const&) = delete;
+            IconHandle(IconHandle&& other) noexcept : value(other.value)
+            {
+                other.value = {};
+            }
+            IconHandle& operator=(IconHandle&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    if (value)
+                    {
+                        DestroyIcon(value);
+                    }
+                    value = other.value;
+                    other.value = {};
+                }
+                return *this;
+            }
         };
 
         struct GdiPlusSession
@@ -86,7 +103,88 @@ namespace DockWMac::shell
             std::wstring const& cacheKey,
             std::wstring const& sourcePath)
         {
-            return cacheDir / (HexHash(cacheKey + L"|" + sourcePath) + L".png");
+            return cacheDir / (L"dock-v2-" + HexHash(cacheKey + L"|" + sourcePath) + L".png");
+        }
+
+        std::optional<int> SystemImageIndex(std::wstring const& sourcePath)
+        {
+            if (sourcePath.empty())
+            {
+                return std::nullopt;
+            }
+
+            SHFILEINFOW fileInfo{};
+            auto flags = SHGFI_SYSICONINDEX | SHGFI_LARGEICON;
+            if (!std::filesystem::exists(sourcePath))
+            {
+                flags |= SHGFI_USEFILEATTRIBUTES;
+            }
+
+            if (!SHGetFileInfoW(
+                sourcePath.c_str(),
+                FILE_ATTRIBUTE_NORMAL,
+                &fileInfo,
+                sizeof(fileInfo),
+                flags))
+            {
+                return std::nullopt;
+            }
+
+            return fileInfo.iIcon;
+        }
+
+        bool TryIconFromSystemImageList(int imageIndex, int imageListKind, IconHandle& icon)
+        {
+            IImageList* imageList{};
+            if (FAILED(SHGetImageList(imageListKind, IID_IImageList, reinterpret_cast<void**>(&imageList))) || !imageList)
+            {
+                return false;
+            }
+
+            HICON extracted{};
+            const auto result = imageList->GetIcon(imageIndex, ILD_TRANSPARENT, &extracted);
+            imageList->Release();
+            if (FAILED(result) || !extracted)
+            {
+                return false;
+            }
+
+            icon.value = extracted;
+            return true;
+        }
+
+        bool TryLegacyFileIcon(std::wstring const& sourcePath, IconHandle& icon)
+        {
+            SHFILEINFOW fileInfo{};
+            if (!SHGetFileInfoW(
+                sourcePath.c_str(),
+                FILE_ATTRIBUTE_NORMAL,
+                &fileInfo,
+                sizeof(fileInfo),
+                SHGFI_ICON | SHGFI_LARGEICON))
+            {
+                return false;
+            }
+
+            icon.value = fileInfo.hIcon;
+            return icon.value != nullptr;
+        }
+
+        IconHandle ExtractBestIcon(std::wstring const& sourcePath)
+        {
+            IconHandle icon;
+            if (auto imageIndex = SystemImageIndex(sourcePath))
+            {
+                if (TryIconFromSystemImageList(*imageIndex, SHIL_JUMBO, icon) ||
+                    TryIconFromSystemImageList(*imageIndex, SHIL_EXTRALARGE, icon) ||
+                    TryIconFromSystemImageList(*imageIndex, SHIL_LARGE, icon))
+                {
+                    return icon;
+                }
+            }
+
+            TryLegacyFileIcon(sourcePath, icon);
+            return icon;
         }
 
         std::wstring AppData()
@@ -431,19 +529,7 @@ namespace DockWMac::shell
 
         std::filesystem::create_directories(cacheDir);
 
-        SHFILEINFOW fileInfo{};
-        if (!SHGetFileInfoW(
-            sourcePath.c_str(),
-            FILE_ATTRIBUTE_NORMAL,
-            &fileInfo,
-            sizeof(fileInfo),
-            SHGFI_ICON | SHGFI_LARGEICON))
-        {
-            return {};
-        }
-
-        IconHandle icon;
-        icon.value = fileInfo.hIcon;
+        auto icon = ExtractBestIcon(sourcePath);
         if (!icon.value)
         {
             return {};

@@ -233,40 +233,15 @@ namespace DockWMac::platform
             return;
         }
 
-        const auto itemLength = DockItemsLength(hwnd, visibleItemCount);
-        const auto railPadding = ScaleForWindow(hwnd, 28);
-        const auto railLength = itemLength + railPadding;
-        const auto railThickness = ScaleForWindow(hwnd, 42);
-        const auto railRadius = ScaleForWindow(hwnd, 18);
-        const auto buttonCross = ScaleForWindow(hwnd, 70);
-        const auto surfacePad = ScaleForWindow(hwnd, 8);
-
-        RegionHandle region;
-        if (placement == DockPlacement::Left || placement == DockPlacement::Right)
-        {
-            const auto railY = (std::max)(0, (height - railLength) / 2);
-            const auto itemX = (std::max)(0, (width - buttonCross) / 2);
-            region = RegionHandle{ CreateRoundRectRgn(
-                (std::max)(0, itemX - surfacePad),
-                railY,
-                (std::min)(width, itemX + buttonCross + surfacePad) + 1,
-                railY + railLength + 1,
-                railRadius * 2,
-                railRadius * 2) };
-        }
-        else
-        {
-            const auto railX = (std::max)(0, (width - railLength) / 2);
-            const auto railY = (std::max)(0, height - ScaleForWindow(hwnd, 10) - railThickness);
-            const auto itemY = (std::max)(0, (height - buttonCross) / 2);
-            region = RegionHandle{ CreateRoundRectRgn(
-                railX,
-                (std::max)(0, itemY - surfacePad),
-                railX + railLength + 1,
-                (std::min)(height, railY + railThickness + surfacePad) + 1,
-                railRadius * 2,
-                railRadius * 2) };
-        }
+        UNREFERENCED_PARAMETER(placement);
+        const auto radius = ScaleForWindow(hwnd, 28);
+        RegionHandle region{ CreateRoundRectRgn(
+            0,
+            0,
+            width + 1,
+            height + 1,
+            radius * 2,
+            radius * 2) };
 
         if (!region.value)
         {

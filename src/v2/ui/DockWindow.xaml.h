@@ -33,6 +33,13 @@ namespace winrt::DockWMac::implementation
         void BuildContent();
         void ShowDock();
         void HideDock();
+        double DockAxisPosition(
+            winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+            winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args) const;
+        void UpdateItemTransforms(
+            winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
+            winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+        void ResetItemTransforms();
         void ShowWindowChooser(
             ::DockWMac::dock::DockItem const& item,
             winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
@@ -59,6 +66,7 @@ namespace winrt::DockWMac::implementation
         DockOrderChangedHandler m_orderChangedHandler;
         DockPreviewHandler m_previewHandler;
         DockPreviewHideHandler m_previewHideHandler;
+        std::vector<winrt::Microsoft::UI::Xaml::Media::CompositeTransform> m_itemTransforms;
         std::wstring m_dragItemId;
         std::optional<size_t> m_dragTargetIndex;
         bool m_dragMoved{};

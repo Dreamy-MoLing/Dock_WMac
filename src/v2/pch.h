@@ -2,6 +2,8 @@
 
 #include <windows.h>
 #include <unknwn.h>
+#include <commctrl.h>
+#include <commoncontrols.h>
 #include <microsoft.ui.xaml.window.h>
 #include <dwmapi.h>
 #include <propkey.h>
@@ -13,6 +15,7 @@
 #endif
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
