@@ -3,6 +3,73 @@
 
 namespace DockWMac::platform
 {
+    namespace
+    {
+        struct RegionHandle
+        {
+            HRGN value{};
+
+            ~RegionHandle()
+            {
+                if (value)
+                {
+                    DeleteObject(value);
+                }
+            }
+
+            RegionHandle() = default;
+            explicit RegionHandle(HRGN region) : value(region) {}
+            RegionHandle(RegionHandle const&) = delete;
+            RegionHandle& operator=(RegionHandle const&) = delete;
+            RegionHandle(RegionHandle&& other) noexcept : value(other.value)
+            {
+                other.value = {};
+            }
+            RegionHandle& operator=(RegionHandle&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    if (value)
+                    {
+                        DeleteObject(value);
+                    }
+                    value = other.value;
+                    other.value = {};
+                }
+                return *this;
+            }
+
+            HRGN release()
+            {
+                auto region = value;
+                value = {};
+                return region;
+            }
+        };
+
+        int32_t DockItemsLength(HWND hwnd, size_t visibleItemCount)
+        {
+            if (visibleItemCount == 0)
+            {
+                return 0;
+            }
+
+            constexpr int32_t itemExtent = 58;
+            constexpr int32_t itemGap = 10;
+            return ScaleForWindow(
+                hwnd,
+                static_cast<int32_t>(visibleItemCount) * itemExtent +
+                    static_cast<int32_t>(visibleItemCount - 1) * itemGap);
+        }
+
+        void SuppressDwmBorder(HWND hwnd)
+        {
+            constexpr DWORD borderColorAttribute = DWMWA_BORDER_COLOR;
+            constexpr COLORREF noBorder = 0xFFFFFFFE;
+            DwmSetWindowAttribute(hwnd, borderColorAttribute, &noBorder, sizeof(noBorder));
+        }
+    }
+
     std::wstring ToConfigString(DockPlacement placement)
     {
         switch (placement)
@@ -151,5 +218,66 @@ namespace DockWMac::platform
             rect.width,
             rect.height,
             SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+
+    void ApplyDockWindowShape(HWND hwnd, DockPlacement placement, int32_t width, int32_t height, size_t visibleItemCount)
+    {
+        if (!hwnd)
+        {
+            return;
+        }
+
+        if (visibleItemCount == 0)
+        {
+            SetWindowRgn(hwnd, nullptr, TRUE);
+            return;
+        }
+
+        const auto itemLength = DockItemsLength(hwnd, visibleItemCount);
+        const auto railPadding = ScaleForWindow(hwnd, 28);
+        const auto railLength = itemLength + railPadding;
+        const auto railThickness = ScaleForWindow(hwnd, 42);
+        const auto railRadius = ScaleForWindow(hwnd, 18);
+        const auto buttonCross = ScaleForWindow(hwnd, 70);
+        const auto surfacePad = ScaleForWindow(hwnd, 8);
+
+        RegionHandle region;
+        if (placement == DockPlacement::Left || placement == DockPlacement::Right)
+        {
+            const auto railY = (std::max)(0, (height - railLength) / 2);
+            const auto itemX = (std::max)(0, (width - buttonCross) / 2);
+            region = RegionHandle{ CreateRoundRectRgn(
+                (std::max)(0, itemX - surfacePad),
+                railY,
+                (std::min)(width, itemX + buttonCross + surfacePad) + 1,
+                railY + railLength + 1,
+                railRadius * 2,
+                railRadius * 2) };
+        }
+        else
+        {
+            const auto railX = (std::max)(0, (width - railLength) / 2);
+            const auto railY = (std::max)(0, height - ScaleForWindow(hwnd, 10) - railThickness);
+            const auto itemY = (std::max)(0, (height - buttonCross) / 2);
+            region = RegionHandle{ CreateRoundRectRgn(
+                railX,
+                (std::max)(0, itemY - surfacePad),
+                railX + railLength + 1,
+                (std::min)(height, railY + railThickness + surfacePad) + 1,
+                railRadius * 2,
+                railRadius * 2) };
+        }
+
+        if (!region.value)
+        {
+            SetWindowRgn(hwnd, nullptr, TRUE);
+            return;
+        }
+
+        if (SetWindowRgn(hwnd, region.value, TRUE) != 0)
+        {
+            region.release();
+        }
+        SuppressDwmBorder(hwnd);
     }
 }

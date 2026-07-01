@@ -149,6 +149,44 @@ namespace DockWMac::shell
             return appId;
         }
 
+        std::wstring ExpandEnvironmentPath(std::wstring const& path)
+        {
+            if (path.empty())
+            {
+                return {};
+            }
+
+            std::wstring expanded(32767, L'\0');
+            const auto size = ExpandEnvironmentStringsW(
+                path.c_str(),
+                expanded.data(),
+                static_cast<DWORD>(expanded.size()));
+            if (size == 0 || size > expanded.size())
+            {
+                return path;
+            }
+
+            expanded.resize(size - 1);
+            return expanded;
+        }
+
+        std::wstring ShortcutIconPath(IShellLinkW* link)
+        {
+            if (!link)
+            {
+                return {};
+            }
+
+            wchar_t iconPath[MAX_PATH]{};
+            int iconIndex{};
+            if (FAILED(link->GetIconLocation(iconPath, MAX_PATH, &iconIndex)) || iconPath[0] == L'\0')
+            {
+                return {};
+            }
+
+            return ExpandEnvironmentPath(iconPath);
+        }
+
         std::optional<PinnedApp> ResolveShortcut(std::filesystem::path const& path)
         {
             auto link = winrt::com_ptr<IShellLinkW>{};
@@ -176,7 +214,11 @@ namespace DockWMac::shell
             app.targetPath = target;
             app.arguments = arguments;
             app.appUserModelId = ShortcutAppUserModelId(link.get());
-            app.iconPath = path.wstring();
+            app.iconPath = ShortcutIconPath(link.get());
+            if (app.iconPath.empty())
+            {
+                app.iconPath = app.targetPath;
+            }
             return app;
         }
 

@@ -152,7 +152,7 @@ namespace winrt::DockWMac::implementation
     {
         for (auto& item : m_items)
         {
-            auto const source = FirstNonEmpty({ item.linkPath, item.targetPath, item.iconPath });
+            auto const source = FirstNonEmpty({ item.iconPath, item.targetPath, item.linkPath });
             auto iconPath = ::DockWMac::shell::CacheIconForPath(source, m_paths.iconCacheDir, item.id);
             if (!iconPath.empty())
             {
