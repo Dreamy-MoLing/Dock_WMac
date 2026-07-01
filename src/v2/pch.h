@@ -3,7 +3,11 @@
 #include <windows.h>
 #include <unknwn.h>
 #include <microsoft.ui.xaml.window.h>
+#include <dwmapi.h>
+#include <propkey.h>
+#include <propsys.h>
 #include <shlobj_core.h>
+#include <shobjidl.h>
 #ifdef GetCurrentTime
 #undef GetCurrentTime
 #endif

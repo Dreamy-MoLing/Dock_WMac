@@ -2,6 +2,7 @@
 #include "AppSettings.h"
 #include "SelfCheck.h"
 #include "../platform/DockPlacement.h"
+#include "../shell/ShellIntegration.h"
 
 namespace DockWMac::infra
 {
@@ -41,7 +42,8 @@ namespace DockWMac::infra
             Check(loaded.dockWidth == 800) &&
             Check(loaded.dockHeight == 120) &&
             Check(DockWMac::platform::PlacementFromConfig(L"left") == DockWMac::platform::DockPlacement::Left) &&
-            Check(DockWMac::platform::PlacementFromConfig(L"bad") == DockWMac::platform::DockPlacement::Bottom);
+            Check(DockWMac::platform::PlacementFromConfig(L"bad") == DockWMac::platform::DockPlacement::Bottom) &&
+            Check(!DockWMac::shell::EnumerateTopLevelWindows().empty());
 
         std::filesystem::remove_all(temp);
         return ok ? 0 : 1;

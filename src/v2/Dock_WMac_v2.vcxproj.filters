@@ -13,6 +13,9 @@
     <Filter Include="platform">
       <UniqueIdentifier>{9E8C10CC-6F20-4C0D-8973-88EFA0CCB3D1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shell">
+      <UniqueIdentifier>{E3B85953-2B14-4C80-8E63-42C3C17A7F37}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -36,6 +39,12 @@
     </ClInclude>
     <ClInclude Include="platform\DockPlacement.h">
       <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shell\ShellIntegration.h">
+      <Filter>shell</Filter>
+    </ClInclude>
+    <ClInclude Include="shell\ShellTypes.h">
+      <Filter>shell</Filter>
     </ClInclude>
     <ClInclude Include="ui\DockWindow.xaml.h">
       <Filter>ui</Filter>
@@ -64,6 +73,9 @@
     </ClCompile>
     <ClCompile Include="platform\DockPlacement.cpp">
       <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shell\ShellIntegration.cpp">
+      <Filter>shell</Filter>
     </ClCompile>
     <ClCompile Include="ui\DockWindow.xaml.cpp">
       <Filter>ui</Filter>
