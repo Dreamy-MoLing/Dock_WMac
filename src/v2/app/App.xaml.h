@@ -5,6 +5,7 @@
 #include "../dock/DockModel.h"
 #include "../infra/AppSettings.h"
 #include "../shell/DwmPreviewHost.h"
+#include "../shell/ShellTypes.h"
 
 namespace winrt::DockWMac::implementation
 {
@@ -18,9 +19,10 @@ namespace winrt::DockWMac::implementation
 
     private:
         void StartRefreshTimer();
+        void LoadSystemPinnedSnapshot();
         void RefreshDockItems(bool initializeOrder);
         void ConfigureDockWindow();
-        void ApplyIconCache();
+        void ApplyIconCache(std::vector<::DockWMac::dock::DockItem>& items);
         void HandleDockAction(::DockWMac::dock::DockAction const& action);
         void HandleDockOrderChanged(std::vector<std::wstring> const& order);
         void HandlePinToDock(std::wstring const& itemId);
@@ -33,6 +35,7 @@ namespace winrt::DockWMac::implementation
         ::DockWMac::infra::AppSettings m_settings;
         ::DockWMac::dock::DockState m_dockState;
         std::unique_ptr<::DockWMac::shell::DwmPreviewHost> m_previewHost;
+        std::vector<::DockWMac::shell::PinnedApp> m_systemPinnedApps;
         std::vector<::DockWMac::dock::DockItem> m_items;
         winrt::Microsoft::UI::Xaml::Window m_window{ nullptr };
         DockWindow* m_dockWindow{};

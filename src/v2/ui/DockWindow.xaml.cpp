@@ -84,9 +84,10 @@ namespace winrt::DockWMac::implementation
 
     DockWindow::DockWindow()
     {
-        Title(L"DockWindow");
+        Title(L"");
         ExtendsContentIntoTitleBar(true);
         ConfigurePresenter();
+        ::DockWMac::platform::ApplyDockWindowSwitcherBehavior(WindowHandle());
         BuildContent();
     }
 
@@ -165,6 +166,7 @@ namespace winrt::DockWMac::implementation
     {
         if (auto window = AppWindow())
         {
+            window.IsShownInSwitchers(false);
             if (auto presenter = window.Presenter().try_as<winrt::Microsoft::UI::Windowing::OverlappedPresenter>())
             {
                 presenter.SetBorderAndTitleBar(false, false);
@@ -263,14 +265,8 @@ namespace winrt::DockWMac::implementation
         }
 
         POINT cursor{};
-        if (!GetCursorPos(&cursor))
-        {
-            ResetItemTransforms();
-            return;
-        }
-
         RECT rect{};
-        if (!GetWindowRect(WindowHandle(), &rect))
+        if (!GetCursorPos(&cursor) || !GetWindowRect(WindowHandle(), &rect))
         {
             ResetItemTransforms();
             return;
@@ -280,14 +276,6 @@ namespace winrt::DockWMac::implementation
         {
             ResetItemTransforms();
             HidePreview();
-            ::DockWMac::platform::ApplyDockWindowHoverShape(
-                WindowHandle(),
-                m_settings.placement,
-                WindowWidth(),
-                WindowHeight(),
-                m_items.size() + (m_dragTargetIndex ? 1 : 0),
-                0.0,
-                false);
             return;
         }
 
@@ -300,14 +288,6 @@ namespace winrt::DockWMac::implementation
         const auto axis = IsVertical() ? logicalY : logicalX;
         const auto extent = IsVertical() ? m_contentRoot.ActualHeight() : m_contentRoot.ActualWidth();
         UpdateItemTransformsAtAxis(axis, extent);
-        ::DockWMac::platform::ApplyDockWindowHoverShape(
-            WindowHandle(),
-            m_settings.placement,
-            WindowWidth(),
-            WindowHeight(),
-            m_items.size() + (m_dragTargetIndex ? 1 : 0),
-            axis,
-            true);
     }
 
     void DockWindow::ResetItemTransforms()
@@ -355,7 +335,7 @@ namespace winrt::DockWMac::implementation
         root.Height(logicalRootHeight);
         root.Background(m_settings.highContrast
             ? Solid(0xFF, 0x00, 0x00, 0x00)
-            : Solid(0x01, 0x00, 0x00, 0x00));
+            : Solid(0x00, 0x00, 0x00, 0x00));
         m_contentRoot = root;
         if (!m_hoverTimer)
         {
@@ -459,7 +439,7 @@ namespace winrt::DockWMac::implementation
             auto itemHost = Controls::Grid{};
             itemHost.Width(ItemSlot);
             itemHost.Height(IsVertical() ? ItemSlot : BottomItemHostHeight);
-            itemHost.Background(Solid(0x00, 0x00, 0x00, 0x00));
+            itemHost.Background(Solid(0x01, 0x00, 0x00, 0x00));
 
             auto transform = Media::CompositeTransform{};
             transform.CenterX(ItemSlot / 2.0);

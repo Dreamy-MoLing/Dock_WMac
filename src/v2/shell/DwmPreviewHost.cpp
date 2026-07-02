@@ -8,9 +8,40 @@ namespace DockWMac::shell
         constexpr wchar_t PreviewClassName[] = L"DockWMacDwmPreviewHost";
         constexpr int32_t MaxPreviewWidth = 320;
         constexpr int32_t MaxPreviewHeight = 220;
+        constexpr UINT_PTR HideTimerId = 1;
+        constexpr UINT HideDelayMs = 300;
 
         LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
         {
+            if (message == WM_NCCREATE)
+            {
+                auto create = reinterpret_cast<CREATESTRUCTW*>(lparam);
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+            }
+
+            auto host = reinterpret_cast<DwmPreviewHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+            if (host)
+            {
+                switch (message)
+                {
+                case WM_MOUSEMOVE:
+                    host->OnMouseMove();
+                    break;
+                case WM_MOUSELEAVE:
+                    host->OnMouseLeave();
+                    break;
+                case WM_TIMER:
+                    if (wparam == HideTimerId)
+                    {
+                        host->OnHideTimer();
+                        return 0;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+
             if (message == WM_ERASEBKGND)
             {
                 return 1;
@@ -86,7 +117,7 @@ namespace DockWMac::shell
 
     DwmPreviewHost::~DwmPreviewHost()
     {
-        Hide();
+        HideImmediate();
         if (m_hwnd)
         {
             DestroyWindow(m_hwnd);
@@ -114,7 +145,7 @@ namespace DockWMac::shell
             nullptr,
             nullptr,
             GetModuleHandleW(nullptr),
-            nullptr);
+            this);
         return m_hwnd != nullptr;
     }
 
@@ -129,7 +160,7 @@ namespace DockWMac::shell
 
     bool DwmPreviewHost::Show(HWND source)
     {
-        Hide();
+        HideImmediate();
         if (!IsWindow(source) || IsIconic(source))
         {
             return false;
@@ -173,12 +204,66 @@ namespace DockWMac::shell
         return true;
     }
 
-    void DwmPreviewHost::Hide()
+    void DwmPreviewHost::RequestHide()
     {
+        if (!m_hwnd || !IsWindowVisible(m_hwnd))
+        {
+            HideImmediate();
+            return;
+        }
+
+        SetTimer(m_hwnd, HideTimerId, HideDelayMs, nullptr);
+    }
+
+    void DwmPreviewHost::CancelHide()
+    {
+        if (m_hwnd)
+        {
+            KillTimer(m_hwnd, HideTimerId);
+        }
+    }
+
+    void DwmPreviewHost::HideImmediate()
+    {
+        CancelHide();
         ClearThumbnail();
         if (m_hwnd)
         {
             ShowWindow(m_hwnd, SW_HIDE);
         }
+        m_trackingMouse = false;
+    }
+
+    void DwmPreviewHost::Hide()
+    {
+        HideImmediate();
+    }
+
+    void DwmPreviewHost::OnMouseMove()
+    {
+        CancelHide();
+        if (!m_hwnd || m_trackingMouse)
+        {
+            return;
+        }
+
+        TRACKMOUSEEVENT track{ sizeof(track) };
+        track.dwFlags = TME_LEAVE;
+        track.hwndTrack = m_hwnd;
+        if (TrackMouseEvent(&track))
+        {
+            m_trackingMouse = true;
+        }
+    }
+
+    void DwmPreviewHost::OnMouseLeave()
+    {
+        m_trackingMouse = false;
+        RequestHide();
+    }
+
+    void DwmPreviewHost::OnHideTimer()
+    {
+        HideImmediate();
     }
 }

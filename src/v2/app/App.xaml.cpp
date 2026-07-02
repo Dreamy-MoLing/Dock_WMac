@@ -77,6 +77,62 @@ namespace winrt::DockWMac::implementation
             }
             return order;
         }
+
+        bool SameWindowRef(::DockWMac::dock::DockWindowRef const& left, ::DockWMac::dock::DockWindowRef const& right)
+        {
+            return left.hwnd == right.hwnd &&
+                left.title == right.title &&
+                left.minimized == right.minimized &&
+                left.cloaked == right.cloaked &&
+                left.foreground == right.foreground;
+        }
+
+        bool SameDockItem(::DockWMac::dock::DockItem const& left, ::DockWMac::dock::DockItem const& right)
+        {
+            if (left.id != right.id ||
+                left.displayName != right.displayName ||
+                left.linkPath != right.linkPath ||
+                left.targetPath != right.targetPath ||
+                left.arguments != right.arguments ||
+                left.appUserModelId != right.appUserModelId ||
+                left.iconPath != right.iconPath ||
+                left.pinned != right.pinned ||
+                left.systemPinned != right.systemPinned ||
+                left.localPinned != right.localPinned ||
+                left.transientRunningOnly != right.transientRunningOnly ||
+                left.running != right.running ||
+                left.foreground != right.foreground ||
+                left.windows.size() != right.windows.size())
+            {
+                return false;
+            }
+
+            for (size_t index = 0; index < left.windows.size(); ++index)
+            {
+                if (!SameWindowRef(left.windows[index], right.windows[index]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool SameDockItems(std::vector<::DockWMac::dock::DockItem> const& left, std::vector<::DockWMac::dock::DockItem> const& right)
+        {
+            if (left.size() != right.size())
+            {
+                return false;
+            }
+
+            for (size_t index = 0; index < left.size(); ++index)
+            {
+                if (!SameDockItem(left[index], right[index]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     App::App()
@@ -99,6 +155,7 @@ namespace winrt::DockWMac::implementation
         ::DockWMac::infra::LogLine(m_paths, "Dock_WMac v2 starting.");
         m_previewHost = std::make_unique<::DockWMac::shell::DwmPreviewHost>();
         m_dockState = ::DockWMac::dock::LoadDockState(m_paths.dockStateFile);
+        LoadSystemPinnedSnapshot();
         RefreshDockItems(true);
 
         auto window = winrt::make<DockWindow>();
@@ -121,20 +178,36 @@ namespace winrt::DockWMac::implementation
         m_refreshTimer.Start();
     }
 
+    void App::LoadSystemPinnedSnapshot()
+    {
+        m_systemPinnedApps = ::DockWMac::shell::ReadTaskbarPinnedItems();
+    }
+
     void App::RefreshDockItems(bool initializeOrder)
     {
-        m_items = ::DockWMac::dock::BuildDockItems(
-            ::DockWMac::shell::ReadTaskbarPinnedItems(),
+        auto nextItems = ::DockWMac::dock::BuildDockItems(
+            m_systemPinnedApps,
             ::DockWMac::shell::EnumerateTopLevelWindows(),
             m_dockState);
-        ApplyIconCache();
+        ApplyIconCache(nextItems);
 
         if (initializeOrder && m_dockState.order.empty())
         {
-            m_dockState.order = PinnedOrderFromItems(m_items);
+            m_dockState.order = PinnedOrderFromItems(nextItems);
             ::DockWMac::dock::SaveDockState(m_paths.dockStateFile, m_dockState);
+            nextItems = ::DockWMac::dock::BuildDockItems(
+                m_systemPinnedApps,
+                ::DockWMac::shell::EnumerateTopLevelWindows(),
+                m_dockState);
+            ApplyIconCache(nextItems);
         }
 
+        if (!initializeOrder && SameDockItems(m_items, nextItems))
+        {
+            return;
+        }
+
+        m_items = std::move(nextItems);
         ConfigureDockWindow();
     }
 
@@ -177,9 +250,9 @@ namespace winrt::DockWMac::implementation
         m_dockWindow->ApplyPlacement();
     }
 
-    void App::ApplyIconCache()
+    void App::ApplyIconCache(std::vector<::DockWMac::dock::DockItem>& items)
     {
-        for (auto& item : m_items)
+        for (auto& item : items)
         {
             auto const source = FirstNonEmpty({ item.iconPath, item.targetPath, item.linkPath });
             auto iconPath = ::DockWMac::shell::CacheIconForPath(source, m_paths.iconCacheDir, item.id);
@@ -319,7 +392,7 @@ namespace winrt::DockWMac::implementation
     {
         if (m_previewHost)
         {
-            m_previewHost->Hide();
+            m_previewHost->RequestHide();
         }
     }
 }

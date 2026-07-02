@@ -98,6 +98,27 @@ namespace DockWMac::shell
             return stream.str();
         }
 
+        std::wstring Lower(std::wstring value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
+            {
+                return static_cast<wchar_t>(::towlower(ch));
+            });
+            return value;
+        }
+
+        std::wstring FirstNonEmpty(std::initializer_list<std::wstring> values)
+        {
+            for (auto const& value : values)
+            {
+                if (!value.empty())
+                {
+                    return value;
+                }
+            }
+            return {};
+        }
+
         std::filesystem::path IconCachePath(
             std::filesystem::path const& cacheDir,
             std::wstring const& cacheKey,
@@ -320,6 +341,16 @@ namespace DockWMac::shell
             return app;
         }
 
+        std::wstring PinnedAppIdentity(PinnedApp const& app)
+        {
+            return Lower(FirstNonEmpty({
+                app.appUserModelId,
+                app.targetPath,
+                app.linkPath,
+                app.name,
+            }));
+        }
+
         bool IsTaskbarClass(std::wstring_view className)
         {
             return className == L"Shell_TrayWnd" ||
@@ -512,15 +543,32 @@ namespace DockWMac::shell
             return items;
         }
 
+        std::vector<std::filesystem::path> shortcuts;
         for (auto const& entry : std::filesystem::directory_iterator(folder))
         {
             if (!entry.is_regular_file() || entry.path().extension() != L".lnk")
             {
                 continue;
             }
+            shortcuts.push_back(entry.path());
+        }
 
-            if (auto app = ResolveShortcut(entry.path()))
+        std::sort(shortcuts.begin(), shortcuts.end(), [](auto const& left, auto const& right)
+        {
+            return Lower(left.filename().wstring()) < Lower(right.filename().wstring());
+        });
+
+        std::vector<std::wstring> seen;
+        for (auto const& shortcut : shortcuts)
+        {
+            if (auto app = ResolveShortcut(shortcut))
             {
+                auto id = PinnedAppIdentity(*app);
+                if (id.empty() || std::find(seen.begin(), seen.end(), id) != seen.end())
+                {
+                    continue;
+                }
+                seen.push_back(std::move(id));
                 items.push_back(std::move(*app));
             }
         }

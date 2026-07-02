@@ -12,7 +12,13 @@ namespace DockWMac::shell
         DwmPreviewHost& operator=(DwmPreviewHost const&) = delete;
 
         bool Show(HWND source);
+        void RequestHide();
+        void CancelHide();
+        void HideImmediate();
         void Hide();
+        void OnMouseMove();
+        void OnMouseLeave();
+        void OnHideTimer();
 
     private:
         bool EnsureWindow();
@@ -20,5 +26,6 @@ namespace DockWMac::shell
 
         HWND m_hwnd{};
         HTHUMBNAIL m_thumbnail{};
+        bool m_trackingMouse{};
     };
 }

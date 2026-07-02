@@ -28,6 +28,7 @@ namespace DockWMac::platform
 
     SystemAccessibility ReadSystemAccessibility();
     int32_t ScaleForWindow(HWND hwnd, int32_t value);
+    void ApplyDockWindowSwitcherBehavior(HWND hwnd);
 
     DockRect CalculateDockRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
@@ -35,12 +36,4 @@ namespace DockWMac::platform
     void ApplyDockWindowAutoHidePlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     void ApplyDockWindowTransparency(HWND hwnd, bool highContrast);
     void ApplyDockWindowShape(HWND hwnd, DockPlacement placement, int32_t width, int32_t height, size_t visibleItemCount);
-    void ApplyDockWindowHoverShape(
-        HWND hwnd,
-        DockPlacement placement,
-        int32_t width,
-        int32_t height,
-        size_t visibleItemCount,
-        double hoverAxis,
-        bool hoverActive);
 }
