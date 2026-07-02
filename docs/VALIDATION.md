@@ -53,6 +53,35 @@ Run the Debug build from Visual Studio:
 - No native taskbar hide/restore is attempted.
 - No external network lyric lookup is attempted.
 
+## Dock State Dump Check
+
+The diagnostic dump must run without starting the WinUI Dock window and must
+not rewrite product state.
+
+From PowerShell:
+
+```powershell
+$state = Join-Path $env:LOCALAPPDATA "Dock_WMac\dock_state.json"
+$before = if (Test-Path $state) { (Get-Item $state).LastWriteTimeUtc } else { $null }
+build\v2\x64\Debug\Dock_WMac_v2.exe --dump-dock-state
+$after = if (Test-Path $state) { (Get-Item $state).LastWriteTimeUtc } else { $null }
+Get-ChildItem "$env:LOCALAPPDATA\Dock_WMac\diagnostics\dock-state-*.json" |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+```
+
+Pass criteria:
+
+- A new `%LOCALAPPDATA%\Dock_WMac\diagnostics\dock-state-*.json` file exists.
+- No `DockWindow` appears while the command runs.
+- `dock_state.json` is not created or rewritten by the dump command.
+- The JSON includes `systemTaskbarPinnedItems`, `localPins`,
+  `hiddenSystemPins`, `enumeratedWindows`, and `dockItems`.
+- `enumeratedWindows` includes taskbar candidates and filtered windows with
+  `isTaskbarCandidate` and `filteredReason`.
+- `dockItems` distinguishes pinned items from running-only transient items with
+  `pinned` and `transientRunningOnly`.
+
 ## Manual Product Checks
 
 - High DPI: 100%, 125%, 150%, 200%.

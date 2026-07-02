@@ -37,6 +37,9 @@
     <ClInclude Include="infra\AppSettings.h">
       <Filter>infra</Filter>
     </ClInclude>
+    <ClInclude Include="infra\DockStateDump.h">
+      <Filter>infra</Filter>
+    </ClInclude>
     <ClInclude Include="infra\Logger.h">
       <Filter>infra</Filter>
     </ClInclude>
@@ -78,6 +81,9 @@
       <Filter>dock</Filter>
     </ClCompile>
     <ClCompile Include="infra\AppSettings.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
+    <ClCompile Include="infra\DockStateDump.cpp">
       <Filter>infra</Filter>
     </ClCompile>
     <ClCompile Include="infra\Logger.cpp">

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "app/App.xaml.h"
+#include "infra/DockStateDump.h"
 #include "infra/SelfCheck.h"
 
 int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR commandLine, int)
@@ -8,6 +9,10 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR commandLine, int)
     if (commandLine && std::wstring_view{ commandLine }.find(L"--self-check") != std::wstring_view::npos)
     {
         return ::DockWMac::infra::RunSelfCheck();
+    }
+    if (commandLine && std::wstring_view{ commandLine }.find(L"--dump-dock-state") != std::wstring_view::npos)
+    {
+        return ::DockWMac::infra::RunDockStateDump();
     }
 
     winrt::Microsoft::UI::Xaml::Application::Start([](auto&&)

@@ -98,6 +98,7 @@
     <ClInclude Include="dock\DockModel.h" />
     <ClInclude Include="dock\DockStateStore.h" />
     <ClInclude Include="infra\AppSettings.h" />
+    <ClInclude Include="infra\DockStateDump.h" />
     <ClInclude Include="infra\Logger.h" />
     <ClInclude Include="infra\RuntimePaths.h" />
     <ClInclude Include="infra\SelfCheck.h" />
@@ -121,6 +122,7 @@
     <ClCompile Include="dock\DockModel.cpp" />
     <ClCompile Include="dock\DockStateStore.cpp" />
     <ClCompile Include="infra\AppSettings.cpp" />
+    <ClCompile Include="infra\DockStateDump.cpp" />
     <ClCompile Include="infra\Logger.cpp" />
     <ClCompile Include="infra\RuntimePaths.cpp" />
     <ClCompile Include="infra\SelfCheck.cpp" />

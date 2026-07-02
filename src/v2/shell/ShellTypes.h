@@ -24,5 +24,8 @@ namespace DockWMac::shell
         bool cloaked{};
         bool foreground{};
         bool isTaskbarCandidate{};
+        std::wstring className;
+        LONG_PTR exStyle{};
+        std::wstring filteredReason;
     };
 }

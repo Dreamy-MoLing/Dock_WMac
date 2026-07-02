@@ -6,6 +6,7 @@ namespace DockWMac::shell
 {
     std::vector<PinnedApp> ReadTaskbarPinnedItems();
     std::vector<WindowInfo> EnumerateTopLevelWindows();
+    std::vector<WindowInfo> EnumerateTopLevelWindowsForDiagnostics();
 
     bool LaunchPinnedApp(PinnedApp const& app);
     bool ActivateWindow(HWND hwnd);

@@ -24,6 +24,7 @@ for v1 maintenance.
 - `docs/SYSTEM_API_RISKS.md` defines Windows API risk handling.
 - `docs/VALIDATION.md` defines acceptance checks.
 - `docs/AI_WORKFLOW.md` defines future agent workflow.
+- `.gitignore` controls which `docs/` files are tracked; unlisted docs ignored.
 - `legacy/qt-v1/docs-archive/`, `.claude/`, `.mimocode/`, and `graphify-out/`
   are not authoritative for v2.
 
@@ -68,6 +69,26 @@ toolset override:
 
 The old CMake and go-task files are archived under `legacy/qt-v1/`. Root-level
 build work should use `Dock_WMac_v2.sln`.
+
+CLI flags (headless):
+  Dock_WMac_v2.exe --self-check
+  Dock_WMac_v2.exe --dump-dock-state
+
+Build output: `build\v2\$(Platform)\$(Configuration)\Dock_WMac_v2.exe`
+
+NuGet pins (upgrade only in dedicated toolchain change):
+  - `Microsoft.WindowsAppSDK` `1.8.260529003`
+  - `Microsoft.Windows.CppWinRT` `2.0.250303.1`
+
+Windows SDK: target `10.0.26100.0`, min `10.0.17763.0` (Win10 1809+).
+
+PCH: new `.cpp` files include `"pch.h"` first.
+
+## Continuous Integration
+
+Workflow `.github/workflows/release.yml`: triggers on push/PR to `master`/`rewrite`
+and `v*` tags. Builds Release x64 (`PlatformToolset=v145`), runs `--self-check`,
+packages via `scripts/package-v1-release.ps1`. Tag pushes publish a GitHub Release.
 
 ## v2 Architecture
 
@@ -116,6 +137,11 @@ semantics.
 Use v1 to understand behavior, edge cases, and tests. Do not copy Qt ownership
 boundaries into v2. v1 is archived under `legacy/qt-v1/` and documented by
 `legacy/qt-v1/FREEZE.md`.
+
+## Workflow Tools
+
+OpenSpec (`openspec/`): schema-driven changes via `/opsx-*` commands
+(docs in `.opencode/commands/`, skills in `.opencode/skills/`).
 
 ## Code Discovery
 

@@ -401,61 +401,75 @@ namespace DockWMac::shell
             return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked;
         }
 
-        bool IsTaskbarCandidateWindow(HWND hwnd)
+        struct WindowFilterResult
         {
-            if (!IsWindow(hwnd) || !IsWindowVisible(hwnd))
+            bool isTaskbarCandidate{};
+            std::wstring reason;
+        };
+
+        WindowFilterResult EvaluateTaskbarCandidateWindow(HWND hwnd, std::wstring const& className, std::wstring const& title, LONG_PTR exStyle)
+        {
+            if (!IsWindow(hwnd))
             {
-                return false;
+                return { false, L"invalid-window" };
+            }
+
+            if (!IsWindowVisible(hwnd))
+            {
+                return { false, L"not-visible" };
             }
 
             DWORD processId{};
             GetWindowThreadProcessId(hwnd, &processId);
             if (processId == GetCurrentProcessId())
             {
-                return false;
+                return { false, L"own-process" };
             }
 
-            auto const exStyle = static_cast<LONG_PTR>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
             if ((exStyle & WS_EX_TOOLWINDOW) != 0)
             {
-                return false;
+                return { false, L"tool-window" };
             }
 
             if (GetWindow(hwnd, GW_OWNER) && (exStyle & WS_EX_APPWINDOW) == 0)
             {
-                return false;
+                return { false, L"owner-without-appwindow" };
             }
 
-            auto const className = WindowClass(hwnd);
-            if (IsTaskbarClass(className) || IsHelperWindowClass(className))
+            if (IsTaskbarClass(className))
             {
-                return false;
+                return { false, L"taskbar-class" };
+            }
+
+            if (IsHelperWindowClass(className))
+            {
+                return { false, L"helper-class" };
             }
 
             if (IsCloaked(hwnd))
             {
-                return false;
+                return { false, L"cloaked" };
             }
 
-            return !WindowTitle(hwnd).empty();
+            if (title.empty())
+            {
+                return { false, L"empty-title" };
+            }
+
+            return { true, L"included" };
         }
 
         struct EnumContext
         {
             std::vector<WindowInfo>* windows{};
             HWND foreground{};
+            bool includeFiltered{};
         };
 
         BOOL CALLBACK EnumWindowProc(HWND hwnd, LPARAM lparam)
         {
             auto* context = reinterpret_cast<EnumContext*>(lparam);
             if (!context || !context->windows)
-            {
-                return TRUE;
-            }
-
-            const auto taskbarCandidate = IsTaskbarCandidateWindow(hwnd);
-            if (!taskbarCandidate)
             {
                 return TRUE;
             }
@@ -467,13 +481,23 @@ namespace DockWMac::shell
             info.hwnd = hwnd;
             info.processId = processId;
             info.title = WindowTitle(hwnd);
+            info.className = WindowClass(hwnd);
+            info.exStyle = static_cast<LONG_PTR>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+            auto const filter = EvaluateTaskbarCandidateWindow(hwnd, info.className, info.title, info.exStyle);
+            info.isTaskbarCandidate = filter.isTaskbarCandidate;
+            info.filteredReason = filter.reason;
+
+            if (!info.isTaskbarCandidate && !context->includeFiltered)
+            {
+                return TRUE;
+            }
+
             info.executablePath = ProcessPath(processId);
             info.appUserModelId = WindowAppUserModelId(hwnd);
             info.iconPath = info.executablePath;
             info.minimized = IsIconic(hwnd) != FALSE;
             info.cloaked = IsCloaked(hwnd);
             info.foreground = hwnd == context->foreground;
-            info.isTaskbarCandidate = taskbarCandidate;
             context->windows->push_back(std::move(info));
             return TRUE;
         }
@@ -507,7 +531,15 @@ namespace DockWMac::shell
     std::vector<WindowInfo> EnumerateTopLevelWindows()
     {
         std::vector<WindowInfo> windows;
-        EnumContext context{ &windows, GetForegroundWindow() };
+        EnumContext context{ &windows, GetForegroundWindow(), false };
+        EnumWindows(EnumWindowProc, reinterpret_cast<LPARAM>(&context));
+        return windows;
+    }
+
+    std::vector<WindowInfo> EnumerateTopLevelWindowsForDiagnostics()
+    {
+        std::vector<WindowInfo> windows;
+        EnumContext context{ &windows, GetForegroundWindow(), true };
         EnumWindows(EnumWindowProc, reinterpret_cast<LPARAM>(&context));
         return windows;
     }

@@ -11,17 +11,21 @@ namespace winrt::DockWMac::implementation
     namespace
     {
         constexpr double Pi = 3.14159265358979323846;
-        constexpr double IconSize = 64.0;
-        constexpr double IconImageSize = 62.0;
-        constexpr double ItemSlot = 72.0;
+        constexpr double IconSize = 56.0;
+        constexpr double IconImageSize = 54.0;
+        constexpr double ItemSlot = 66.0;
         constexpr double ItemGap = 10.0;
-        constexpr double DockCrossAxis = 152.0;
-        constexpr double DockEndPadding = 42.0;
-        constexpr double ShelfThickness = 46.0;
-        constexpr double ShelfRadius = 22.0;
+        constexpr double DockCrossAxis = 176.0;
+        constexpr double DockEndPadding = 34.0;
+        constexpr double ShelfThickness = IconSize * 0.52 + 18.0;
+        constexpr double ShelfRadius = 18.0;
         constexpr double MaxMagnification = 1.68;
-        constexpr double HoverLift = 14.0;
+        constexpr double HoverLift = 12.0;
         constexpr double ActiveLift = 6.0;
+        constexpr double GlyphBottomInset = 8.0;
+        constexpr double BottomCellHeight = IconSize + 16.0;
+        constexpr double BottomItemHostHeight = BottomCellHeight;
+        constexpr double MagnificationRange = IconSize * 2.2;
 
         winrt::Windows::UI::Color Color(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
         {
@@ -54,8 +58,8 @@ namespace winrt::DockWMac::implementation
 
             auto brush = Media::AcrylicBrush{};
             brush.TintColor(Color(0xFF, 0x12, 0x16, 0x20));
-            brush.TintOpacity(0.58);
-            brush.FallbackColor(Color(0xE8, 0x12, 0x16, 0x20));
+            brush.TintOpacity(0.42);
+            brush.FallbackColor(Color(0xD0, 0x12, 0x16, 0x20));
             return brush;
         }
 
@@ -73,8 +77,7 @@ namespace winrt::DockWMac::implementation
 
         double MagnificationCurve(double distance)
         {
-            const auto range = IconSize * 2.2;
-            const auto t = std::clamp(1.0 - distance / range, 0.0, 1.0);
+            const auto t = std::clamp(1.0 - distance / MagnificationRange, 0.0, 1.0);
             return 0.5 - 0.5 * std::cos(t * Pi);
         }
     }
@@ -210,14 +213,19 @@ namespace winrt::DockWMac::implementation
         winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
         winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
     {
+        const auto axis = DockAxisPosition(root, args);
+        const auto extent = IsVertical() ? root.ActualHeight() : root.ActualWidth();
+        UpdateItemTransformsAtAxis(axis, extent);
+    }
+
+    void DockWindow::UpdateItemTransformsAtAxis(double axis, double extent)
+    {
         if (m_itemTransforms.empty() || m_settings.reducedMotion)
         {
             ResetItemTransforms();
             return;
         }
 
-        const auto axis = DockAxisPosition(root, args);
-        const auto extent = IsVertical() ? root.ActualHeight() : root.ActualWidth();
         const auto total = static_cast<double>(m_items.size()) * ItemSlot +
             static_cast<double>(m_items.empty() ? 0 : m_items.size() - 1) * ItemGap;
         const auto start = (std::max)(0.0, (extent - total) / 2.0);
@@ -245,6 +253,61 @@ namespace winrt::DockWMac::implementation
                 transform.TranslateY(-lift);
             }
         }
+    }
+
+    void DockWindow::UpdateHoverFromCursor()
+    {
+        if (!m_contentRoot)
+        {
+            return;
+        }
+
+        POINT cursor{};
+        if (!GetCursorPos(&cursor))
+        {
+            ResetItemTransforms();
+            return;
+        }
+
+        RECT rect{};
+        if (!GetWindowRect(WindowHandle(), &rect))
+        {
+            ResetItemTransforms();
+            return;
+        }
+
+        if (cursor.x < rect.left || cursor.x >= rect.right || cursor.y < rect.top || cursor.y >= rect.bottom)
+        {
+            ResetItemTransforms();
+            HidePreview();
+            ::DockWMac::platform::ApplyDockWindowHoverShape(
+                WindowHandle(),
+                m_settings.placement,
+                WindowWidth(),
+                WindowHeight(),
+                m_items.size() + (m_dragTargetIndex ? 1 : 0),
+                0.0,
+                false);
+            return;
+        }
+
+        const auto pixelWidth = (std::max)(1L, rect.right - rect.left);
+        const auto pixelHeight = (std::max)(1L, rect.bottom - rect.top);
+        const auto logicalX = static_cast<double>(cursor.x - rect.left) *
+            m_contentRoot.ActualWidth() / static_cast<double>(pixelWidth);
+        const auto logicalY = static_cast<double>(cursor.y - rect.top) *
+            m_contentRoot.ActualHeight() / static_cast<double>(pixelHeight);
+        const auto axis = IsVertical() ? logicalY : logicalX;
+        const auto extent = IsVertical() ? m_contentRoot.ActualHeight() : m_contentRoot.ActualWidth();
+        UpdateItemTransformsAtAxis(axis, extent);
+        ::DockWMac::platform::ApplyDockWindowHoverShape(
+            WindowHandle(),
+            m_settings.placement,
+            WindowWidth(),
+            WindowHeight(),
+            m_items.size() + (m_dragTargetIndex ? 1 : 0),
+            axis,
+            true);
     }
 
     void DockWindow::ResetItemTransforms()
@@ -293,6 +356,17 @@ namespace winrt::DockWMac::implementation
         root.Background(m_settings.highContrast
             ? Solid(0xFF, 0x00, 0x00, 0x00)
             : Solid(0x01, 0x00, 0x00, 0x00));
+        m_contentRoot = root;
+        if (!m_hoverTimer)
+        {
+            m_hoverTimer = Xaml::DispatcherTimer{};
+            m_hoverTimer.Interval(std::chrono::milliseconds{ 16 });
+            m_hoverTimer.Tick([this](winrt::Windows::Foundation::IInspectable const&, winrt::Windows::Foundation::IInspectable const&)
+            {
+                UpdateHoverFromCursor();
+            });
+            m_hoverTimer.Start();
+        }
         root.PointerEntered([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
         {
             if (m_settings.autoHide && m_hidden)
@@ -335,14 +409,14 @@ namespace winrt::DockWMac::implementation
         {
             shelf.Width(railLength);
             shelf.Height(ShelfThickness);
-            shelf.Margin({ 0, 0, 0, 18 });
+            shelf.Margin({ 0, 0, 0, 14 });
             shelf.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
             shelf.VerticalAlignment(Xaml::VerticalAlignment::Bottom);
         }
         shelf.Background(DockSurfaceBrush(m_settings.highContrast));
         shelf.BorderBrush(m_settings.highContrast
             ? Solid(0xFF, 0xFF, 0xFF, 0xFF)
-            : Solid(0x3A, 0xFF, 0xFF, 0xFF));
+            : Solid(0x26, 0xFF, 0xFF, 0xFF));
         shelf.BorderThickness({ 1, 1, 1, 1 });
 
         auto row = Controls::StackPanel{};
@@ -352,7 +426,7 @@ namespace winrt::DockWMac::implementation
         row.VerticalAlignment(IsVertical() ? Xaml::VerticalAlignment::Center : Xaml::VerticalAlignment::Bottom);
         row.Margin(IsVertical()
             ? winrt::Microsoft::UI::Xaml::Thickness{ 0, DockEndPadding, 0, DockEndPadding }
-            : winrt::Microsoft::UI::Xaml::Thickness{ DockEndPadding, 0, DockEndPadding, 28 });
+            : winrt::Microsoft::UI::Xaml::Thickness{ DockEndPadding, 0, DockEndPadding, 22 });
 
         auto marker = [&]()
         {
@@ -382,26 +456,22 @@ namespace winrt::DockWMac::implementation
             }
 
             auto const& item = m_items[index];
-            auto button = Controls::Button{};
-            button.MinWidth(0);
-            button.MinHeight(0);
-            button.Width(ItemSlot);
-            button.Height(IsVertical() ? ItemSlot : 104);
-            button.Padding({ 0, 0, 0, 0 });
-            button.Background(Solid(0x00, 0x00, 0x00, 0x00));
-            button.BorderBrush(Solid(0x00, 0x00, 0x00, 0x00));
-            button.BorderThickness({ 0, 0, 0, 0 });
+            auto itemHost = Controls::Grid{};
+            itemHost.Width(ItemSlot);
+            itemHost.Height(IsVertical() ? ItemSlot : BottomItemHostHeight);
+            itemHost.Background(Solid(0x00, 0x00, 0x00, 0x00));
 
             auto transform = Media::CompositeTransform{};
             transform.CenterX(ItemSlot / 2.0);
-            transform.CenterY(IsVertical() ? ItemSlot / 2.0 : 92.0);
-            button.RenderTransform(transform);
-            button.RenderTransformOrigin({ 0.5f, IsVertical() ? 0.5f : 1.0f });
-            m_itemTransforms.push_back(transform);
-
+            transform.CenterY(IsVertical() ? ItemSlot / 2.0 : BottomCellHeight);
             auto cell = Controls::Grid{};
             cell.Width(ItemSlot);
-            cell.Height(IsVertical() ? ItemSlot : 96);
+            cell.Height(IsVertical() ? ItemSlot : BottomCellHeight);
+            cell.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
+            cell.VerticalAlignment(IsVertical() ? Xaml::VerticalAlignment::Center : Xaml::VerticalAlignment::Bottom);
+            cell.RenderTransform(transform);
+            cell.RenderTransformOrigin({ 0.5f, IsVertical() ? 0.5f : 1.0f });
+            m_itemTransforms.push_back(transform);
 
             auto glyph = Controls::Border{};
             const auto hasIcon = !item.iconPath.empty();
@@ -409,7 +479,8 @@ namespace winrt::DockWMac::implementation
             glyph.Height(IconSize);
             glyph.CornerRadius({ hasIcon ? 10.0 : 16.0, hasIcon ? 10.0 : 16.0, hasIcon ? 10.0 : 16.0, hasIcon ? 10.0 : 16.0 });
             glyph.HorizontalAlignment(Xaml::HorizontalAlignment::Center);
-            glyph.VerticalAlignment(Xaml::VerticalAlignment::Top);
+            glyph.VerticalAlignment(Xaml::VerticalAlignment::Bottom);
+            glyph.Margin({ 0, 0, 0, GlyphBottomInset });
             glyph.Background(hasIcon && !m_settings.highContrast
                 ? Solid(0x00, 0x00, 0x00, 0x00)
                 : item.running
@@ -461,12 +532,13 @@ namespace winrt::DockWMac::implementation
                 : Solid(0xFF, 0x60, 0xCD, 0xFF));
             cell.Children().Append(indicator);
 
-            button.Content(cell);
-            button.Click([this, item](winrt::Windows::Foundation::IInspectable const& sender, Xaml::RoutedEventArgs const&)
+            itemHost.Children().Append(cell);
+            itemHost.Tapped([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const& args)
             {
                 if (m_suppressNextClick)
                 {
                     m_suppressNextClick = false;
+                    args.Handled(true);
                     return;
                 }
 
@@ -474,8 +546,9 @@ namespace winrt::DockWMac::implementation
                 {
                     HandleItemClick(item, anchor);
                 }
+                args.Handled(true);
             });
-            button.RightTapped([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args)
+            itemHost.RightTapped([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::RightTappedRoutedEventArgs const& args)
             {
                 if (!m_actionHandler)
                 {
@@ -500,28 +573,28 @@ namespace winrt::DockWMac::implementation
                     args.Handled(true);
                 }
             });
-            button.PointerPressed([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
+            itemHost.PointerPressed([this, item](winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args)
             {
-                if (auto buttonElement = sender.try_as<Xaml::UIElement>())
+                if (auto hostElement = sender.try_as<Xaml::UIElement>())
                 {
-                    if (!args.GetCurrentPoint(buttonElement).Properties().IsLeftButtonPressed())
+                    if (!args.GetCurrentPoint(hostElement).Properties().IsLeftButtonPressed())
                     {
                         return;
                     }
-                    buttonElement.CapturePointer(args.Pointer());
+                    hostElement.CapturePointer(args.Pointer());
                 }
                 BeginDrag(item.id);
             });
-            button.PointerEntered([this, item](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+            itemHost.PointerEntered([this, item](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
             {
                 ShowPreviewForItem(item);
             });
-            button.PointerExited([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
+            itemHost.PointerExited([this](winrt::Windows::Foundation::IInspectable const&, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&)
             {
                 HidePreview();
             });
 
-            row.Children().Append(button);
+            row.Children().Append(itemHost);
         }
 
         if (m_dragTargetIndex && *m_dragTargetIndex == m_items.size())
@@ -533,6 +606,7 @@ namespace winrt::DockWMac::implementation
         root.Children().Append(row);
         Content(root);
         ResetItemTransforms();
+        ::DockWMac::platform::ApplyDockWindowTransparency(WindowHandle(), m_settings.highContrast);
         ::DockWMac::platform::ApplyDockWindowShape(
             WindowHandle(),
             m_settings.placement,

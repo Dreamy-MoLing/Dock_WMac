@@ -33,5 +33,14 @@ namespace DockWMac::platform
     DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     void ApplyDockWindowPlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
     void ApplyDockWindowAutoHidePlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height);
+    void ApplyDockWindowTransparency(HWND hwnd, bool highContrast);
     void ApplyDockWindowShape(HWND hwnd, DockPlacement placement, int32_t width, int32_t height, size_t visibleItemCount);
+    void ApplyDockWindowHoverShape(
+        HWND hwnd,
+        DockPlacement placement,
+        int32_t width,
+        int32_t height,
+        size_t visibleItemCount,
+        double hoverAxis,
+        bool hoverActive);
 }

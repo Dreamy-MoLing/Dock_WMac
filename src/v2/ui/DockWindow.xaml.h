@@ -39,6 +39,8 @@ namespace winrt::DockWMac::implementation
         void UpdateItemTransforms(
             winrt::Microsoft::UI::Xaml::Controls::Grid const& root,
             winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& args);
+        void UpdateItemTransformsAtAxis(double axis, double extent);
+        void UpdateHoverFromCursor();
         void ResetItemTransforms();
         void ShowWindowChooser(
             ::DockWMac::dock::DockItem const& item,
@@ -67,6 +69,8 @@ namespace winrt::DockWMac::implementation
         DockPreviewHandler m_previewHandler;
         DockPreviewHideHandler m_previewHideHandler;
         std::vector<winrt::Microsoft::UI::Xaml::Media::CompositeTransform> m_itemTransforms;
+        winrt::Microsoft::UI::Xaml::Controls::Grid m_contentRoot{ nullptr };
+        winrt::Microsoft::UI::Xaml::DispatcherTimer m_hoverTimer{ nullptr };
         std::wstring m_dragItemId;
         std::optional<size_t> m_dragTargetIndex;
         bool m_dragMoved{};
