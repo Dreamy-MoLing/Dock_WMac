@@ -15,6 +15,6 @@ engineering source of truth has moved to:
 - `docs/VALIDATION.md`
 - `docs/AI_WORKFLOW.md`
 
-The old brief described the v1 Qt implementation and is no longer current.
-Use v1 only as behavior reference while building the C++20, C++/WinRT, WinUI 3,
-Windows App SDK v2 line.
+The old Qt implementation has been removed from active repository context.
+Build the C++20, C++/WinRT, WinUI 3, Windows App SDK v2 line from the active
+docs and `src/v2/`.

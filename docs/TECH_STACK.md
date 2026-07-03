@@ -36,8 +36,8 @@ change that verifies Visual Studio 2022, restore, build, and runtime startup.
 
 ## Build Model
 
-The v2 entry is `Dock_WMac_v2.sln`. The v1 CMake build is archived under
-`legacy/qt-v1/` for historical reference only.
+The v2 entry is `Dock_WMac_v2.sln`. Root-level build, validation, and release
+work use this solution.
 
 Command-line build from a Developer PowerShell:
 

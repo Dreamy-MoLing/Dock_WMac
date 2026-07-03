@@ -38,14 +38,14 @@ The current provisional v1.0.0 Dock visual and motion baseline is captured in
 
 ## Do Not Drift
 
-- Do not extend the v1 Qt architecture for v2 product work.
+- Do not use the removed Qt implementation for v2 product work.
 - Do not add speculative layers, factories, or plugin systems.
 - Do not add full player, lyrics, Dock animation, or taskbar hiding before their
   roadmap phase.
 - Do not call Win32, COM, DWM, Shell APIs, or GSMTC from UI code.
 - Do not use private Apple APIs.
 - Do not add external lyric providers without explicit user opt-in.
-- Do not use `legacy/qt-v1/docs-archive/` as active requirements.
+- Do not use removed legacy archive material as active requirements.
 
 ## Documentation Rule
 

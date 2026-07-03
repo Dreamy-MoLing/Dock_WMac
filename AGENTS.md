@@ -4,9 +4,8 @@ This repository is a Windows-only Dock application. The active line is v2:
 C++20, C++/WinRT, WinUI 3, Windows App SDK Stable, MSVC, Visual Studio 2022,
 Windows 10 1809+, and Windows 11.
 
-The existing Qt6 Widgets + C++17 code is v1 historical reference only. Do not
-add new product features to the Qt architecture unless the user explicitly asks
-for v1 maintenance.
+The old Qt implementation has been removed from the active repository context.
+Do not use it for v2 discovery, planning, or implementation.
 
 ## Source of Truth
 
@@ -16,17 +15,16 @@ for v1 maintenance.
 - `docs/ARCHITECTURE.md` defines layer ownership and hard boundaries.
 - `docs/UX_SPEC.md` defines visible behavior.
 - `docs/TECH_STACK.md` defines the fixed technology stack.
-- `docs/MIGRATION.md` defines how v1 is used as reference.
+- `docs/MIGRATION.md` defines the legacy-removal state and v2 focus.
 - `docs/ROADMAP.md` defines staged delivery.
 - `docs/V1_RELEASE_SPEC.md` defines the v1.0.0 release target.
-- `docs/UI_MOTION_BASELINE.md` defines the provisional v1.0.0 Dock visual and
+- `docs/UI_MOTION_BASELINE.md` defines the v1.0.0 Dock visual and
   motion baseline confirmed through the browser prototype.
 - `docs/SYSTEM_API_RISKS.md` defines Windows API risk handling.
 - `docs/VALIDATION.md` defines acceptance checks.
 - `docs/AI_WORKFLOW.md` defines future agent workflow.
 - `.gitignore` controls which `docs/` files are tracked; unlisted docs ignored.
-- `legacy/qt-v1/docs-archive/`, `.claude/`, `.mimocode/`, and `graphify-out/`
-  are not authoritative for v2.
+- `.claude/`, `.mimocode/`, and `graphify-out/` are not authoritative for v2.
 
 ## Current Engineering Rule
 
@@ -67,8 +65,7 @@ toolset override:
 & "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64 /p:PlatformToolset=v145
 ```
 
-The old CMake and go-task files are archived under `legacy/qt-v1/`. Root-level
-build work should use `Dock_WMac_v2.sln`.
+Root-level build work must use `Dock_WMac_v2.sln`.
 
 CLI flags (headless):
   Dock_WMac_v2.exe --self-check
@@ -132,11 +129,12 @@ adopt a new framework without checking license and integration cost. Prefer
 native Windows behavior where it already provides the requested taskbar
 semantics.
 
-## v1 Reference Policy
+## Legacy Policy
 
-Use v1 to understand behavior, edge cases, and tests. Do not copy Qt ownership
-boundaries into v2. v1 is archived under `legacy/qt-v1/` and documented by
-`legacy/qt-v1/FREEZE.md`.
+Do not use the removed Qt implementation as v2 context. If an explicit recovery
+task needs the old source, use Git history or the local archive outside this
+workspace, then keep any findings out of active v2 docs unless they become
+formal v2 requirements.
 
 ## Workflow Tools
 

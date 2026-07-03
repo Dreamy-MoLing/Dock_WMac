@@ -1,8 +1,7 @@
 # Music Panel Development
 
 Dock_WMac v2 is Windows-only. The media panel is a post-v1.0.0 feature built on
-GSMTC through the `media/` layer, not a standalone player and not a v1 Qt
-feature.
+GSMTC through the `media/` layer, not a standalone player.
 
 ## Scope
 

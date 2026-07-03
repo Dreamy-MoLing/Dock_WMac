@@ -1,53 +1,37 @@
-# Migration
+# Legacy Removal
 
-Dock_WMac v2 is a Windows-only rewrite. The current Qt6 Widgets + C++17 code is
-v1 historical reference and must not drive new architecture decisions.
+Dock_WMac v2 is a Windows-only rewrite. The old Qt implementation is removed
+from the active repository context and must not drive v2 architecture or product
+decisions.
 
-## Current Decision
-
-The old source tree has been moved to `legacy/qt-v1/` so editors and future v2
-work do not keep treating Qt files as active code. The archive is reference-only
-and documented by `legacy/qt-v1/FREEZE.md`.
-
-Current layout:
+## Active Layout
 
 ```text
-legacy/qt-v1/   frozen Qt v1 implementation and old build files
-legacy/qt-v1/docs-archive/
-                stale plans and old research
-src/v2/         active v2 scaffold during preparation
+src/v2/         active v2 source
+docs/           active v2 product, architecture, UX, validation, and workflow docs
+legacy/         note for removed legacy archive context
 ```
 
-## What v1 Can Provide
+## Recovery Policy
 
-- Behavior examples for launch/switch/minimize decisions.
-- Edge cases for pinned items and running apps.
-- Test scenarios for DWM previews, hidden/cloaked windows, DPI, and taskbar
-  recovery.
-- Media and lyrics exploration notes from `legacy/qt-v1/docs-archive/`, only
-  after checking current v2 docs.
+The former source remains recoverable from Git history. A local non-active copy
+may exist outside the workspace for archival purposes, but it is not part of
+normal code discovery or agent context.
 
-## What v1 Must Not Provide
+Use recovered legacy material only when the user explicitly asks for legacy
+recovery or comparison. Future v2 behavior decisions should come from active v2
+docs, official Windows documentation, and runnable v2 validation.
 
-- Qt ownership boundaries.
+## What Legacy Must Not Provide
+
+- Ownership boundaries.
 - Widget-specific rendering patterns.
-- Direct UI calls into Win32, COM, DWM, or GSMTC.
-- Product state stored inside system adapters.
-- New feature work on the old architecture.
-
-## Migration Steps
-
-1. Keep v1 archived as reference while v2 scaffold and docs stabilize.
-2. Add v2 interfaces for `shell/`, `media/`, `lyrics/`, and `dock/` before
-   porting behavior.
-3. Port behavior with tests, not files wholesale.
-4. Replace old build, CI, and packaging after v2 can start and pass basic
-   validation.
-5. Archive obsolete planning docs after source migration.
+- Product requirements.
+- Test expectations unless they are promoted into active v2 validation docs.
+- Build, CI, or packaging behavior.
 
 ## Risk Controls
 
-- No directory moves in the same change as feature code.
 - No taskbar hiding until startup, shutdown, crash recovery, and manual restore
   validation exist.
 - No external lyric source until opt-in settings and network disclosure exist.

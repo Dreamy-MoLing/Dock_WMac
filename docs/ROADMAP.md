@@ -9,7 +9,7 @@ the next phase starts.
 - Define architecture boundaries.
 - Add Visual Studio 2022 WinUI 3 scaffold.
 - Start only an empty semi-transparent `DockWindow`.
-- Archive v1 as reference under `legacy/qt-v1/`.
+- Remove the old Qt implementation from active repository context.
 
 ## Phase 1 - v1.0.0 Taskbar Dock Release
 

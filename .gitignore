@@ -125,18 +125,10 @@ docs/*
 !docs/music-player/
 !docs/music-player/DEVELOPMENT.md
 !legacy/
-!legacy/qt-v1/
-!legacy/qt-v1/FREEZE.md
-!legacy/qt-v1/docs-archive/
-!legacy/qt-v1/docs-archive/**/*.md
-!legacy/qt-v1/docs-archive/**/*.yaml
-!legacy/qt-v1/resources/
-!legacy/qt-v1/resources/app.ico
-!legacy/qt-v1/resources/icons/
-!legacy/qt-v1/resources/icons/*.svg
-!legacy/qt-v1/scripts/
-!legacy/qt-v1/scripts/*.ps1
-legacy/qt-v1/tests/output/
+!legacy/README.md
+legacy/*
+!legacy/README.md
+*local-archive*/
 .superpower/
 
 # ===== Clangd / LSP =====
