@@ -28,6 +28,9 @@
     <ClInclude Include="app\App.xaml.h">
       <Filter>app</Filter>
     </ClInclude>
+    <ClInclude Include="dock\AppIdentityResolver.h">
+      <Filter>dock</Filter>
+    </ClInclude>
     <ClInclude Include="dock\DockModel.h">
       <Filter>dock</Filter>
     </ClInclude>
@@ -74,6 +77,9 @@
     <ClCompile Include="app\App.xaml.cpp">
       <Filter>app</Filter>
     </ClCompile>
+    <ClCompile Include="dock\AppIdentityResolver.cpp">
+      <Filter>dock</Filter>
+    </ClCompile>
     <ClCompile Include="dock\DockModel.cpp">
       <Filter>dock</Filter>
     </ClCompile>
@@ -117,11 +123,11 @@
     </Midl>
   </ItemGroup>
   <ItemGroup>
-    <None Include="app\App.xaml">
+    <ApplicationDefinition Include="app\App.xaml">
       <Filter>app</Filter>
-    </None>
-    <None Include="ui\DockWindow.xaml">
+    </ApplicationDefinition>
+    <Page Include="ui\DockWindow.xaml">
       <Filter>ui</Filter>
-    </None>
+    </Page>
   </ItemGroup>
 </Project>

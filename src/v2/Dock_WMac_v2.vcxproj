@@ -47,6 +47,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <UseWinUI>true</UseWinUI>
+    <DisableXbfGeneration>true</DisableXbfGeneration>
     <WindowsPackageType>None</WindowsPackageType>
     <AppxPackage>false</AppxPackage>
     <OutDir>$(SolutionDir)build\v2\$(Platform)\$(Configuration)\</OutDir>
@@ -95,6 +96,7 @@
     <ClInclude Include="app\App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
     </ClInclude>
+    <ClInclude Include="dock\AppIdentityResolver.h" />
     <ClInclude Include="dock\DockModel.h" />
     <ClInclude Include="dock\DockStateStore.h" />
     <ClInclude Include="infra\AppSettings.h" />
@@ -119,6 +121,7 @@
     <ClCompile Include="app\App.xaml.cpp">
       <DependentUpon>App.xaml</DependentUpon>
     </ClCompile>
+    <ClCompile Include="dock\AppIdentityResolver.cpp" />
     <ClCompile Include="dock\DockModel.cpp" />
     <ClCompile Include="dock\DockStateStore.cpp" />
     <ClCompile Include="infra\AppSettings.cpp" />
@@ -138,8 +141,16 @@
     <Midl Include="ui\DockWindow.idl" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app\App.xaml" />
-    <None Include="ui\DockWindow.xaml" />
+    <ApplicationDefinition Include="app\App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <XamlRuntime>$(DefaultXamlRuntime)</XamlRuntime>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Page Include="ui\DockWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <XamlRuntime>$(DefaultXamlRuntime)</XamlRuntime>
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CppWinRT" Version="2.0.250303.1" />
@@ -149,5 +160,12 @@
     <ProjectCapability Include="UseWinUI" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopySourceXamlToGeneratedOutput"
+          BeforeTargets="CopyGeneratedXaml"
+          Condition="'$(DisableXbfGeneration)' == 'true'">
+    <MakeDir Directories="$(XamlGeneratedOutputPath)app;$(XamlGeneratedOutputPath)ui" />
+    <Copy SourceFiles="app\App.xaml" DestinationFiles="$(XamlGeneratedOutputPath)app\App.xaml" />
+    <Copy SourceFiles="ui\DockWindow.xaml" DestinationFiles="$(XamlGeneratedOutputPath)ui\DockWindow.xaml" />
+  </Target>
   <ImportGroup Label="ExtensionTargets" />
 </Project>

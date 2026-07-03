@@ -54,6 +54,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $tests = Join-Path $PWD "build\v2\$env:PLATFORM\$env:CONFIGURATION\Dock_WMac_v2_tests.exe"
+          if (-not (Test-Path -LiteralPath $tests)) {
+            throw "Built test executable not found: $tests"
+          }
+          & $tests
+
           $exe = Join-Path $PWD "build\v2\$env:PLATFORM\$env:CONFIGURATION\Dock_WMac_v2.exe"
           if (-not (Test-Path -LiteralPath $exe)) {
             throw "Built executable not found: $exe"

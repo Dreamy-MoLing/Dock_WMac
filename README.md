@@ -20,8 +20,6 @@ This repository is in v2 preparation for the first formal release:
   launch, pin management, running app recognition, window switching,
   multi-window handling, DWM previews, ordering, persistence, and polished Dock
   UI/animation.
-- The existing Qt6 Widgets + C++17 implementation is v1 historical reference.
-- Do not continue feature work on the Qt architecture.
 - Do not introduce Electron, Qt, WPF, Avalonia, or WebView as the main UI stack.
 - Media panel, lyrics, and audio-reactive visuals are post-v1.0.0 extension
   tracks unless the user explicitly changes the release scope.
@@ -83,16 +81,13 @@ This repository is in v2 preparation for the first formal release:
 
 ```text
 Dock_WMac_v2.sln        Visual Studio 2022 solution for v2
-src/v2/                 C++20 + C++/WinRT + WinUI 3 scaffold
+src/v2/                 C++20 + C++/WinRT + WinUI 3 source
 docs/                   v2 product, architecture, UX, validation, and workflow docs
-legacy/qt-v1/           frozen Qt v1 reference archive
-legacy/qt-v1/docs-archive/
-                         stale v1 plans and old research
+legacy/                 short note for removed legacy archive context
 ```
 
-The old implementation has been archived under `legacy/qt-v1/`. Use it only as
-behavior reference; keep active v2 work under `src/v2/` until the v2 tree is
-expanded.
+The old Qt implementation is not part of the active workspace context. Keep
+active v2 work under `src/v2/`.
 
 ## Open and Build
 
@@ -123,10 +118,45 @@ verified with:
 & "C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" Dock_WMac_v2.sln /restore /p:Configuration=Debug /p:Platform=x64 /p:PlatformToolset=v145
 ```
 
-The current preparation checkpoint creates an empty semi-transparent
-`DockWindow`.
-It does not connect GSMTC, hide the taskbar, enumerate windows, or animate Dock
-items yet.
+Run the pure Dock model tests:
+
+```powershell
+build\v2\x64\Debug\Dock_WMac_v2_tests.exe
+```
+
+Run the app self-check:
+
+```powershell
+build\v2\x64\Debug\Dock_WMac_v2.exe --self-check
+```
+
+## Current Implementation Status
+
+Implemented in the active v2 line:
+
+- WinUI 3 Dock window creation and placement.
+- Basic Dock item rendering, hover magnification, animation, and drag ordering.
+- Top-level window enumeration and taskbar candidate filtering.
+- System taskbar pin reading from `.lnk` shortcuts.
+- Local Dock pin/unpin state, hidden system pins, persisted ordering, and JSON
+  state loading/saving.
+- Running app recognition through app identity, executable path, and pinned app
+  metadata.
+- Click decisions for launch, activate, foreground minimize, and multi-window
+  chooser routing.
+- DWM preview host plumbing, command-line self-check, and release folder
+  packaging.
+
+Not complete for v1.0.0 yet:
+
+- Full Windows app identity resolution for packaged apps, UWP wrappers,
+  launchers, Electron profile variants, and shortcut argument-specific
+  identities.
+- Native taskbar hide/restore policy and safe opt-in UX.
+- Finished multi-window chooser UI behavior.
+- v1.0.0 release packaging polish and installer/update story.
+- Media panel, lyrics, and audio-reactive visuals; these remain post-v1.0.0
+  extension tracks.
 
 ## Documentation
 
@@ -134,7 +164,7 @@ items yet.
 - `docs/ARCHITECTURE.md` - v2 layers and dependency boundaries.
 - `docs/UX_SPEC.md` - interaction and visual behavior.
 - `docs/TECH_STACK.md` - fixed technology choices and package policy.
-- `docs/MIGRATION.md` - v1-to-v2 migration plan.
+- `docs/MIGRATION.md` - legacy-removal and v2 focus notes.
 - `docs/ROADMAP.md` - staged delivery plan.
 - `docs/V1_RELEASE_SPEC.md` - v1.0.0 release behavior and acceptance.
 - `docs/UI_MOTION_BASELINE.md` - confirmed v1.0.0 Dock visual and motion
@@ -144,4 +174,3 @@ items yet.
 - `docs/AI_WORKFLOW.md` - rules for future AI-assisted development.
 
 When documents conflict, `AGENTS.md` and the files above define the v2 rewrite.
-Legacy archived docs are background only.

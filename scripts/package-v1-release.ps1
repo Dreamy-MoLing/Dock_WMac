@@ -34,7 +34,9 @@ if (Test-Path $appFolder) {
 }
 
 New-Item -ItemType Directory -Path $appFolder | Out-Null
-Copy-Item -Path (Join-Path $buildOut "*") -Destination $appFolder -Recurse -Force
+Get-ChildItem -LiteralPath $buildOut -Force |
+    Where-Object { $_.Name -notlike "Dock_WMac_v2_tests*" } |
+    Copy-Item -Destination $appFolder -Recurse -Force
 
 $licenses = Join-Path $appFolder "licenses"
 New-Item -ItemType Directory -Path $licenses | Out-Null

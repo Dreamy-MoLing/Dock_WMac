@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "ShellIntegration.h"
+#include "../dock/AppIdentityResolver.h"
 
 #include <gdiplus.h>
 
@@ -341,16 +342,6 @@ namespace DockWMac::shell
             return app;
         }
 
-        std::wstring PinnedAppIdentity(PinnedApp const& app)
-        {
-            return Lower(FirstNonEmpty({
-                app.appUserModelId,
-                app.targetPath,
-                app.linkPath,
-                app.name,
-            }));
-        }
-
         bool IsTaskbarClass(std::wstring_view className)
         {
             return className == L"Shell_TrayWnd" ||
@@ -383,8 +374,14 @@ namespace DockWMac::shell
                 return {};
             }
 
-            std::wstring title(static_cast<size_t>(length), L'\0');
-            GetWindowTextW(hwnd, title.data(), length + 1);
+            std::wstring title(static_cast<size_t>(length) + 1, L'\0');
+            const auto copied = GetWindowTextW(hwnd, title.data(), static_cast<int>(title.size()));
+            if (copied <= 0)
+            {
+                return {};
+            }
+
+            title.resize(static_cast<size_t>(copied));
             return title;
         }
 
@@ -563,7 +560,7 @@ namespace DockWMac::shell
         {
             if (auto app = ResolveShortcut(shortcut))
             {
-                auto id = PinnedAppIdentity(*app);
+                auto id = dock::IdentityForPinned(*app);
                 if (id.empty() || std::find(seen.begin(), seen.end(), id) != seen.end())
                 {
                     continue;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppIdentityResolver.h"
 #include "../shell/ShellTypes.h"
 
 namespace DockWMac::dock
@@ -55,9 +56,6 @@ namespace DockWMac::dock
         std::wstring itemId;
         HWND hwnd{};
     };
-
-    std::wstring IdentityForPinned(shell::PinnedApp const& app);
-    std::wstring IdentityForWindow(shell::WindowInfo const& window);
 
     std::vector<DockItem> BuildDockItems(
         std::vector<shell::PinnedApp> const& pinnedApps,

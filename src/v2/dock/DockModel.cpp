@@ -5,15 +5,6 @@ namespace DockWMac::dock
 {
     namespace
     {
-        std::wstring Lower(std::wstring value)
-        {
-            std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
-            {
-                return static_cast<wchar_t>(::towlower(ch));
-            });
-            return value;
-        }
-
         std::wstring FileName(std::wstring const& path)
         {
             if (path.empty())
@@ -70,25 +61,6 @@ namespace DockWMac::dock
             item.localPinned = item.localPinned || localPin;
             item.transientRunningOnly = false;
         }
-    }
-
-    std::wstring IdentityForPinned(shell::PinnedApp const& app)
-    {
-        return Lower(FirstNonEmpty({
-            app.appUserModelId,
-            app.targetPath,
-            app.linkPath,
-            app.name,
-        }));
-    }
-
-    std::wstring IdentityForWindow(shell::WindowInfo const& window)
-    {
-        return Lower(FirstNonEmpty({
-            window.appUserModelId,
-            window.executablePath,
-            window.title,
-        }));
     }
 
     std::vector<DockItem> BuildDockItems(
