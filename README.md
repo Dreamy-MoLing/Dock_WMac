@@ -105,16 +105,6 @@ build\v2\x64\Release\Dock_WMac_v2.exe --dump-resource-metrics
 状态诊断写入 `%LOCALAPPDATA%\Dock_WMac\diagnostics`。五分钟资源稳定性报告写入
 `artifacts\validation`。
 
-## 文档
-
-- [产品范围](docs/PRODUCT_SPEC.md)
-- [架构边界](docs/ARCHITECTURE.md)
-- [交互规范](docs/UX_SPEC.md)
-- [技术栈](docs/TECH_STACK.md)
-- [v1.0.0 发布标准](docs/V1_RELEASE_SPEC.md)
-- [验证标准](docs/VALIDATION.md)
-- [Windows API 风险](docs/SYSTEM_API_RISKS.md)
-
 ## 许可证
 
 Dock_WMac 使用 [MIT License](LICENSE)。参考项目仅用于行为、架构和风险研究；

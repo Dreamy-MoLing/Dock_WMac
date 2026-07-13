@@ -63,6 +63,7 @@ CMakeUserPresets.json
 *.swo
 
 # Local agent, specification-workflow, and code-index state
+/AGENTS.md
 /.agents/
 /.claude/
 /.codebase-memory/
@@ -75,6 +76,12 @@ CMakeUserPresets.json
 /graphify-out/
 /openspec/
 /*local-archive*/
+
+# Local-only design and development notes
+/VALIDATION.md
+/docs/
+/legacy/
+/prototypes/
 
 # Test output and temporary files
 /tests/output/
