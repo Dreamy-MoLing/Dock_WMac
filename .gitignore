@@ -1,137 +1,89 @@
-# ===== 构建产物 =====
-build/
-build-*/
-build-win/
-build-debug/
-artifacts/
-src/v2/obj/
+# Build, package, and compiler output
+/build/
+/build-*/
+/artifacts/
+/src/v2/obj/
+/src/v2/tests/build/
+/packages/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
 _CPack_Packages/
-*.zip
-
-# ===== 编译中间产物 =====
 *.o
 *.obj
-*.a
-*.so
-*.so.*
-*.dylib
-*.dll
+*.pch
+*.pdb
+*.ilk
+*.exp
 *.lib
+*.dll
 *.exe
 *.out
 *.app
+*.zip
 
-# ===== Qt 自动生成 =====
+# Generated source from inactive or auxiliary toolchains
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
 *.moc
 *_autogen/
 
-# ===== 用户隐私与配置 =====
-config.json
+# Runtime state and user-specific configuration
+/config.json
+/data/
+/logs/
 *.log
 *.log.old
+*.pid
 
-# 密钥/凭据
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
+# Credentials and local environment files
 .env
 .env.*
+*.pem
+*.key
+*.p12
+*.pfx
 
-# ===== IDE / 编辑器 =====
-.vscode/
-!.vscode/
-!.vscode/settings.json
-.idea/
-*.swp
-*.swo
-*~
-.project
-.cproject
-.settings/
+# IDE and language-server state
+/.vs/
+/.idea/
+/.vscode/*
+!/.vscode/settings.json
+/.cache/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
 *.code-workspace
 CMakeLists.txt.user*
 CMakeUserPresets.json
+*.swp
+*.swo
 
-# ===== OS 文件 =====
+# Local agent, specification-workflow, and code-index state
+/.agents/
+/.claude/
+/.codebase-memory/
+/.codex/
+/.hermes/
+/.mimocode/
+/.opencode/
+/.superpower/
+/.superpowers/
+/graphify-out/
+/openspec/
+/*local-archive*/
+
+# Test output and temporary files
+/tests/output/
+*.tmp
+*.bak
+*~
+
+# Operating-system metadata
 .DS_Store
 Thumbs.db
 desktop.ini
 ehthumbs.db
-
-# ===== Claude Code =====
-.claude/
-.mimocode/
-graphify-out/
-.superpowers/
-
-# ===== 脚本文件（不上传构建/辅助脚本）=====
-*.ps1
-*.sh
-*.bat
-*.cmd
-!scripts/validate-v1-resource-stability.ps1
-
-# ===== 图片与二进制资源 =====
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.ico
-*.svg
-
-# 例外：构建必需的资源文件
-!resources/app.ico
-
-# ===== 临时文件 =====
-*.tmp
-*.bak
-*.cache
-*.pid
-.hermes/
-
-# ===== Markdown 文档白名单 =====
-# 默认忽略智能体计划、临时分析和其他非权威 Markdown。
-*.md
-!README.md
-!AGENTS.md
-!VALIDATION.md
-!docs/PROJECT_BRIEF.md
-
-# ===== 内部文档与规划目录（不上传 GitHub）=====
-openspec/
-docs/*
-!docs/PROJECT_BRIEF.md
-!docs/PRODUCT_SPEC.md
-!docs/ARCHITECTURE.md
-!docs/UX_SPEC.md
-!docs/TECH_STACK.md
-!docs/MIGRATION.md
-!docs/ROADMAP.md
-!docs/V1_RELEASE_SPEC.md
-!docs/UI_MOTION_BASELINE.md
-!docs/SYSTEM_API_RISKS.md
-!docs/VALIDATION.md
-!docs/AI_WORKFLOW.md
-!docs/music-player/
-!docs/music-player/DEVELOPMENT.md
-!legacy/
-!legacy/README.md
-legacy/*
-!legacy/README.md
-*local-archive*/
-.superpower/
-
-# ===== Clangd / LSP =====
-.cache/
-tests/output/
