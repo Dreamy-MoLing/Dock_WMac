@@ -16,5 +16,7 @@ engineering source of truth has moved to:
 - `docs/AI_WORKFLOW.md`
 
 The old Qt implementation has been removed from active repository context.
-Build the C++20, C++/WinRT, WinUI 3, Windows App SDK v2 line from the active
-docs and `src/v2/`.
+Build the C++20, C++/WinRT, Windows App SDK v2 line from the active docs and
+`src/v2/`. The production Dock surface uses a native Win32 host with
+DirectComposition and Direct2D/DirectWrite; WinUI 3 is reserved for secondary
+app surfaces.

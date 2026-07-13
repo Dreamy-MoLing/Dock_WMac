@@ -11,6 +11,7 @@ namespace DockWMac::infra
         bool autoHide{ false };
         bool reducedMotion{ false };
         bool highContrast{ false };
+        bool lightTheme{ false };
         int32_t dockWidth{ 720 };
         int32_t dockHeight{ 96 };
     };

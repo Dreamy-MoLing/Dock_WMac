@@ -1,8 +1,0 @@
-namespace DockWMac
-{
-    [default_interface]
-    runtimeclass DockWindow : Microsoft.UI.Xaml.Window
-    {
-        DockWindow();
-    }
-}

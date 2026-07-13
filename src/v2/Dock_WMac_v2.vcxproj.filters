@@ -19,13 +19,19 @@
     <Filter Include="dock">
       <UniqueIdentifier>{4EAF429B-F6B2-44A2-9587-935540478ED2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="render">
+      <UniqueIdentifier>{03A40B37-B56F-44DF-A809-DCE80D46298B}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="app\SingleInstanceGuard.h">
       <Filter>app</Filter>
     </ClInclude>
-    <ClInclude Include="app\App.xaml.h">
+    <ClInclude Include="app\DockRuntime.h">
+      <Filter>app</Filter>
+    </ClInclude>
+    <ClInclude Include="app\DockSettingsActions.h">
       <Filter>app</Filter>
     </ClInclude>
     <ClInclude Include="dock\AppIdentityResolver.h">
@@ -46,14 +52,23 @@
     <ClInclude Include="infra\Logger.h">
       <Filter>infra</Filter>
     </ClInclude>
+    <ClInclude Include="infra\ResourceMetrics.h">
+      <Filter>infra</Filter>
+    </ClInclude>
     <ClInclude Include="infra\RuntimePaths.h">
       <Filter>infra</Filter>
     </ClInclude>
     <ClInclude Include="infra\SelfCheck.h">
       <Filter>infra</Filter>
     </ClInclude>
+    <ClInclude Include="platform\CursorTracker.h">
+      <Filter>platform</Filter>
+    </ClInclude>
     <ClInclude Include="platform\DockPlacement.h">
       <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="render\NativeDockHost.h">
+      <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="shell\DwmPreviewHost.h">
       <Filter>shell</Filter>
@@ -64,7 +79,10 @@
     <ClInclude Include="shell\ShellTypes.h">
       <Filter>shell</Filter>
     </ClInclude>
-    <ClInclude Include="ui\DockWindow.xaml.h">
+    <ClInclude Include="shell\WindowEventMonitor.h">
+      <Filter>shell</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\DockIconLayout.h">
       <Filter>ui</Filter>
     </ClInclude>
   </ItemGroup>
@@ -74,7 +92,7 @@
     <ClCompile Include="app\SingleInstanceGuard.cpp">
       <Filter>app</Filter>
     </ClCompile>
-    <ClCompile Include="app\App.xaml.cpp">
+    <ClCompile Include="app\DockRuntime.cpp">
       <Filter>app</Filter>
     </ClCompile>
     <ClCompile Include="dock\AppIdentityResolver.cpp">
@@ -95,14 +113,23 @@
     <ClCompile Include="infra\Logger.cpp">
       <Filter>infra</Filter>
     </ClCompile>
+    <ClCompile Include="infra\ResourceMetrics.cpp">
+      <Filter>infra</Filter>
+    </ClCompile>
     <ClCompile Include="infra\RuntimePaths.cpp">
       <Filter>infra</Filter>
     </ClCompile>
     <ClCompile Include="infra\SelfCheck.cpp">
       <Filter>infra</Filter>
     </ClCompile>
+    <ClCompile Include="platform\CursorTracker.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
     <ClCompile Include="platform\DockPlacement.cpp">
       <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="render\NativeDockHost.cpp">
+      <Filter>render</Filter>
     </ClCompile>
     <ClCompile Include="shell\DwmPreviewHost.cpp">
       <Filter>shell</Filter>
@@ -110,24 +137,8 @@
     <ClCompile Include="shell\ShellIntegration.cpp">
       <Filter>shell</Filter>
     </ClCompile>
-    <ClCompile Include="ui\DockWindow.xaml.cpp">
-      <Filter>ui</Filter>
+    <ClCompile Include="shell\WindowEventMonitor.cpp">
+      <Filter>shell</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Midl Include="app\App.idl">
-      <Filter>app</Filter>
-    </Midl>
-    <Midl Include="ui\DockWindow.idl">
-      <Filter>ui</Filter>
-    </Midl>
-  </ItemGroup>
-  <ItemGroup>
-    <ApplicationDefinition Include="app\App.xaml">
-      <Filter>app</Filter>
-    </ApplicationDefinition>
-    <Page Include="ui\DockWindow.xaml">
-      <Filter>ui</Filter>
-    </Page>
   </ItemGroup>
 </Project>

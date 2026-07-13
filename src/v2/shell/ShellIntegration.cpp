@@ -2,6 +2,7 @@
 #include "ShellIntegration.h"
 #include "../dock/AppIdentityResolver.h"
 
+#include <appmodel.h>
 #include <gdiplus.h>
 
 namespace DockWMac::shell
@@ -101,8 +102,7 @@ namespace DockWMac::shell
 
         std::wstring Lower(std::wstring value)
         {
-            std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
-            {
+            std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch) {
                 return static_cast<wchar_t>(::towlower(ch));
             });
             return value;
@@ -120,10 +120,8 @@ namespace DockWMac::shell
             return {};
         }
 
-        std::filesystem::path IconCachePath(
-            std::filesystem::path const& cacheDir,
-            std::wstring const& cacheKey,
-            std::wstring const& sourcePath)
+        std::filesystem::path IconCachePath(std::filesystem::path const& cacheDir, std::wstring const& cacheKey,
+                                            std::wstring const& sourcePath)
         {
             return cacheDir / (L"dock-v2-" + HexHash(cacheKey + L"|" + sourcePath) + L".png");
         }
@@ -142,12 +140,7 @@ namespace DockWMac::shell
                 flags |= SHGFI_USEFILEATTRIBUTES;
             }
 
-            if (!SHGetFileInfoW(
-                sourcePath.c_str(),
-                FILE_ATTRIBUTE_NORMAL,
-                &fileInfo,
-                sizeof(fileInfo),
-                flags))
+            if (!SHGetFileInfoW(sourcePath.c_str(), FILE_ATTRIBUTE_NORMAL, &fileInfo, sizeof(fileInfo), flags))
             {
                 return std::nullopt;
             }
@@ -158,7 +151,8 @@ namespace DockWMac::shell
         bool TryIconFromSystemImageList(int imageIndex, int imageListKind, IconHandle& icon)
         {
             IImageList* imageList{};
-            if (FAILED(SHGetImageList(imageListKind, IID_IImageList, reinterpret_cast<void**>(&imageList))) || !imageList)
+            if (FAILED(SHGetImageList(imageListKind, IID_IImageList, reinterpret_cast<void**>(&imageList))) ||
+                !imageList)
             {
                 return false;
             }
@@ -178,12 +172,8 @@ namespace DockWMac::shell
         bool TryLegacyFileIcon(std::wstring const& sourcePath, IconHandle& icon)
         {
             SHFILEINFOW fileInfo{};
-            if (!SHGetFileInfoW(
-                sourcePath.c_str(),
-                FILE_ATTRIBUTE_NORMAL,
-                &fileInfo,
-                sizeof(fileInfo),
-                SHGFI_ICON | SHGFI_LARGEICON))
+            if (!SHGetFileInfoW(sourcePath.c_str(), FILE_ATTRIBUTE_NORMAL, &fileInfo, sizeof(fileInfo),
+                                SHGFI_ICON | SHGFI_LARGEICON))
             {
                 return false;
             }
@@ -232,8 +222,8 @@ namespace DockWMac::shell
                 return {};
             }
 
-            return std::filesystem::path{ appData } /
-                L"Microsoft" / L"Internet Explorer" / L"Quick Launch" / L"User Pinned" / L"TaskBar";
+            return std::filesystem::path{ appData } / L"Microsoft" / L"Internet Explorer" / L"Quick Launch" /
+                   L"User Pinned" / L"TaskBar";
         }
 
         std::wstring FileStem(std::filesystem::path const& path)
@@ -277,10 +267,8 @@ namespace DockWMac::shell
             }
 
             std::wstring expanded(32767, L'\0');
-            const auto size = ExpandEnvironmentStringsW(
-                path.c_str(),
-                expanded.data(),
-                static_cast<DWORD>(expanded.size()));
+            const auto size =
+                ExpandEnvironmentStringsW(path.c_str(), expanded.data(), static_cast<DWORD>(expanded.size()));
             if (size == 0 || size > expanded.size())
             {
                 return path;
@@ -331,7 +319,7 @@ namespace DockWMac::shell
             PinnedApp app;
             app.name = FileStem(path);
             app.linkPath = path.wstring();
-            app.targetPath = target;
+            app.targetPath = ExpandEnvironmentPath(target);
             app.arguments = arguments;
             app.appUserModelId = ShortcutAppUserModelId(link.get());
             app.iconPath = ShortcutIconPath(link.get());
@@ -344,19 +332,14 @@ namespace DockWMac::shell
 
         bool IsTaskbarClass(std::wstring_view className)
         {
-            return className == L"Shell_TrayWnd" ||
-                className == L"Shell_SecondaryTrayWnd" ||
-                className == L"DV2ControlHost" ||
-                className == L"MsgrIMEWindowClass";
+            return className == L"Shell_TrayWnd" || className == L"Shell_SecondaryTrayWnd" ||
+                   className == L"DV2ControlHost" || className == L"MsgrIMEWindowClass";
         }
 
         bool IsHelperWindowClass(std::wstring_view className)
         {
-            return className == L"MSCTFIME UI" ||
-                className == L"IME" ||
-                className == L"Default IME" ||
-                className == L"ApplicationFrameInputSinkWindow" ||
-                className == L"Windows.UI.Core.CoreWindow";
+            return className == L"MSCTFIME UI" || className == L"IME" || className == L"Default IME" ||
+                   className == L"ApplicationFrameInputSinkWindow" || className == L"Windows.UI.Core.CoreWindow";
         }
 
         std::wstring WindowClass(HWND hwnd)
@@ -423,6 +406,30 @@ namespace DockWMac::shell
             return appId;
         }
 
+        std::wstring ProcessAppUserModelId(DWORD processId)
+        {
+            HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+            if (!process)
+            {
+                return {};
+            }
+
+            UINT32 length{};
+            auto result = GetApplicationUserModelId(process, &length, nullptr);
+            std::wstring appId;
+            if (result == ERROR_INSUFFICIENT_BUFFER && length > 1)
+            {
+                std::vector<wchar_t> buffer(length);
+                result = GetApplicationUserModelId(process, &length, buffer.data());
+                if (result == ERROR_SUCCESS)
+                {
+                    appId.assign(buffer.data());
+                }
+            }
+            CloseHandle(process);
+            return appId;
+        }
+
         bool IsCloaked(HWND hwnd)
         {
             BOOL cloaked{};
@@ -435,7 +442,7 @@ namespace DockWMac::shell
             std::wstring reason;
         };
 
-        WindowFilterResult EvaluateTaskbarCandidateWindow(HWND hwnd, std::wstring const& className, std::wstring const& title, LONG_PTR exStyle)
+        WindowFilterResult EvaluateTaskbarCandidateWindow(HWND hwnd, std::wstring const& className, LONG_PTR exStyle)
         {
             if (!IsWindow(hwnd))
             {
@@ -479,11 +486,6 @@ namespace DockWMac::shell
                 return { false, L"cloaked" };
             }
 
-            if (title.empty())
-            {
-                return { false, L"empty-title" };
-            }
-
             return { true, L"included" };
         }
 
@@ -511,7 +513,7 @@ namespace DockWMac::shell
             info.title = WindowTitle(hwnd);
             info.className = WindowClass(hwnd);
             info.exStyle = static_cast<LONG_PTR>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
-            auto const filter = EvaluateTaskbarCandidateWindow(hwnd, info.className, info.title, info.exStyle);
+            auto const filter = EvaluateTaskbarCandidateWindow(hwnd, info.className, info.exStyle);
             info.isTaskbarCandidate = filter.isTaskbarCandidate;
             info.filteredReason = filter.reason;
 
@@ -522,6 +524,10 @@ namespace DockWMac::shell
 
             info.executablePath = ProcessPath(processId);
             info.appUserModelId = WindowAppUserModelId(hwnd);
+            if (info.appUserModelId.empty())
+            {
+                info.appUserModelId = ProcessAppUserModelId(processId);
+            }
             info.iconPath = info.executablePath;
             info.minimized = IsIconic(hwnd) != FALSE;
             info.cloaked = IsCloaked(hwnd);
@@ -529,7 +535,7 @@ namespace DockWMac::shell
             context->windows->push_back(std::move(info));
             return TRUE;
         }
-    }
+    } // namespace
 
     std::vector<PinnedApp> ReadTaskbarPinnedItems()
     {
@@ -550,8 +556,7 @@ namespace DockWMac::shell
             shortcuts.push_back(entry.path());
         }
 
-        std::sort(shortcuts.begin(), shortcuts.end(), [](auto const& left, auto const& right)
-        {
+        std::sort(shortcuts.begin(), shortcuts.end(), [](auto const& left, auto const& right) {
             return Lower(left.filename().wstring()) < Lower(right.filename().wstring());
         });
 
@@ -597,13 +602,9 @@ namespace DockWMac::shell
             return false;
         }
 
-        auto result = ShellExecuteW(
-            nullptr,
-            L"open",
-            path.c_str(),
-            app.linkPath.empty() && !app.arguments.empty() ? app.arguments.c_str() : nullptr,
-            nullptr,
-            SW_SHOWNORMAL);
+        auto result = ShellExecuteW(nullptr, L"open", path.c_str(),
+                                    app.linkPath.empty() && !app.arguments.empty() ? app.arguments.c_str() : nullptr,
+                                    nullptr, SW_SHOWNORMAL);
         return reinterpret_cast<INT_PTR>(result) > 32;
     }
 
@@ -628,10 +629,18 @@ namespace DockWMac::shell
         return IsWindow(hwnd) && ShowWindow(hwnd, SW_MINIMIZE);
     }
 
-    std::wstring CacheIconForPath(
-        std::wstring const& sourcePath,
-        std::filesystem::path const& cacheDir,
-        std::wstring const& cacheKey)
+    bool RequestCloseWindow(HWND hwnd)
+    {
+        if (!IsWindow(hwnd))
+        {
+            return false;
+        }
+
+        return PostMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0) != FALSE;
+    }
+
+    std::wstring CacheIconForPath(std::wstring const& sourcePath, std::filesystem::path const& cacheDir,
+                                  std::wstring const& cacheKey)
     {
         if (sourcePath.empty() || cacheDir.empty())
         {
@@ -677,4 +686,4 @@ namespace DockWMac::shell
 
         return output.wstring();
     }
-}
+} // namespace DockWMac::shell

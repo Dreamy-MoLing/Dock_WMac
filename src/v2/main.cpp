@@ -1,6 +1,7 @@
 #include "pch.h"
-#include "app/App.xaml.h"
+#include "app/DockRuntime.h"
 #include "infra/DockStateDump.h"
+#include "infra/ResourceMetrics.h"
 #include "infra/SelfCheck.h"
 
 int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR commandLine, int)
@@ -14,10 +15,11 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR commandLine, int)
     {
         return ::DockWMac::infra::RunDockStateDump();
     }
-
-    winrt::Microsoft::UI::Xaml::Application::Start([](auto&&)
+    if (commandLine && std::wstring_view{ commandLine }.find(L"--dump-resource-metrics") != std::wstring_view::npos)
     {
-        winrt::make<winrt::DockWMac::implementation::App>();
-    });
-    return 0;
+        return ::DockWMac::infra::RunResourceMetricsDump();
+    }
+
+    ::DockWMac::app::DockRuntime runtime;
+    return runtime.Run();
 }

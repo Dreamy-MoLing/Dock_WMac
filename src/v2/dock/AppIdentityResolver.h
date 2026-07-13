@@ -6,4 +6,5 @@ namespace DockWMac::dock
 {
     std::wstring IdentityForPinned(shell::PinnedApp const& app);
     std::wstring IdentityForWindow(shell::WindowInfo const& window);
+    std::vector<std::wstring> ExecutableAliasesForPinned(shell::PinnedApp const& app);
 }

@@ -54,19 +54,25 @@ namespace DockWMac::platform
             DwmSetWindowAttribute(hwnd, borderColorAttribute, &noBorder, sizeof(noBorder));
         }
 
+        BOOL CALLBACK FindPrimaryMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM parameter)
+        {
+            MONITORINFO info{ sizeof(info) };
+            if (GetMonitorInfoW(monitor, &info) && (info.dwFlags & MONITORINFOF_PRIMARY) != 0)
+            {
+                *reinterpret_cast<HMONITOR*>(parameter) = monitor;
+                return FALSE;
+            }
+            return TRUE;
+        }
+
         constexpr int32_t DockItemExtent = 66;
         constexpr int32_t DockItemGap = 10;
         constexpr int32_t DockEndPadding = 34;
         constexpr int32_t DockShelfMargin = 14;
         constexpr int32_t DockShelfThickness = 47;
         constexpr int32_t DockShelfRadius = 18;
-        constexpr int32_t DockCellHeight = 72;
-        constexpr int32_t DockRowBottomMargin = 22;
         constexpr int32_t DockIconSize = 56;
-        constexpr int32_t DockGlyphBottomInset = 8;
         constexpr double DockMaxMagnification = 1.68;
-        constexpr double DockHoverLift = 12.0;
-        constexpr double DockActiveLift = 6.0;
         constexpr int32_t RegionPad = 4;
 
         int32_t DockItemsLength(HWND hwnd, size_t visibleItemCount)
@@ -147,6 +153,21 @@ namespace DockWMac::platform
             accessibility.reducedMotion = clientAreaAnimation == FALSE;
         }
 
+        auto const systemWindow = GetSysColor(COLOR_WINDOW);
+        accessibility.lightTheme =
+            (GetRValue(systemWindow) * 299 + GetGValue(systemWindow) * 587 + GetBValue(systemWindow) * 114) >= 128000;
+        try
+        {
+            auto const background = winrt::Windows::UI::ViewManagement::UISettings{}.GetColorValue(
+                winrt::Windows::UI::ViewManagement::UIColorType::Background);
+            accessibility.lightTheme =
+                (background.R * 299 + background.G * 587 + background.B * 114) >= 128000;
+        }
+        catch (...)
+        {
+            // The system color fallback remains valid when UISettings is unavailable.
+        }
+
         return accessibility;
     }
 
@@ -158,7 +179,18 @@ namespace DockWMac::platform
             dpi = USER_DEFAULT_SCREEN_DPI;
         }
 
-        return MulDiv(value, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+        return ScaleForDpi(dpi, value);
+    }
+
+    HMONITOR PrimaryMonitor()
+    {
+        HMONITOR primary{};
+        EnumDisplayMonitors(nullptr, nullptr, FindPrimaryMonitor, reinterpret_cast<LPARAM>(&primary));
+        if (!primary)
+        {
+            primary = MonitorFromPoint({}, MONITOR_DEFAULTTOPRIMARY);
+        }
+        return primary;
     }
 
     void ApplyDockWindowSwitcherBehavior(HWND hwnd)
@@ -185,7 +217,7 @@ namespace DockWMac::platform
 
     DockRect CalculateDockRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
     {
-        auto monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+        auto monitor = PrimaryMonitor();
         MONITORINFO info{ sizeof(info) };
         if (!GetMonitorInfoW(monitor, &info))
         {
@@ -193,51 +225,20 @@ namespace DockWMac::platform
         }
 
         const auto margin = ScaleForWindow(hwnd, 12);
-        const auto workWidth = static_cast<int32_t>(info.rcWork.right - info.rcWork.left);
-        const auto workHeight = static_cast<int32_t>(info.rcWork.bottom - info.rcWork.top);
-
-        DockRect rect{ 0, 0, width, height };
-        switch (placement)
-        {
-        case DockPlacement::Left:
-            rect.x = info.rcWork.left + margin;
-            rect.y = info.rcWork.top + (workHeight - height) / 2;
-            break;
-        case DockPlacement::Right:
-            rect.x = info.rcWork.right - width - margin;
-            rect.y = info.rcWork.top + (workHeight - height) / 2;
-            break;
-        case DockPlacement::Bottom:
-        default:
-            rect.x = info.rcWork.left + (workWidth - width) / 2;
-            rect.y = info.rcWork.bottom - height - margin;
-            break;
-        }
-        return rect;
+        return CalculateDockRectForWorkArea(
+            { info.rcWork.left, info.rcWork.top,
+              info.rcWork.right - info.rcWork.left, info.rcWork.bottom - info.rcWork.top },
+            placement,
+            width,
+            height,
+            margin);
     }
 
     DockRect CalculateDockAutoHideRect(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
     {
         const auto triggerThickness = ScaleForWindow(hwnd, 8);
         auto rect = CalculateDockRect(hwnd, placement, width, height);
-
-        switch (placement)
-        {
-        case DockPlacement::Left:
-            rect.width = triggerThickness;
-            break;
-        case DockPlacement::Right:
-            rect.x += rect.width - triggerThickness;
-            rect.width = triggerThickness;
-            break;
-        case DockPlacement::Bottom:
-        default:
-            rect.y += rect.height - triggerThickness;
-            rect.height = triggerThickness;
-            break;
-        }
-
-        return rect;
+        return CalculateDockAutoHideRectFromDockRect(rect, placement, triggerThickness);
     }
 
     void ApplyDockWindowPlacement(HWND hwnd, DockPlacement placement, int32_t width, int32_t height)
@@ -309,7 +310,13 @@ namespace DockWMac::platform
         SuppressDwmBorder(hwnd);
     }
 
-    void ApplyDockWindowShape(HWND hwnd, DockPlacement placement, int32_t width, int32_t height, size_t visibleItemCount)
+    void ApplyDockWindowShape(
+        HWND hwnd,
+        DockPlacement placement,
+        int32_t width,
+        int32_t height,
+        size_t visibleItemCount,
+        DockLayerKind layer)
     {
         if (!hwnd)
         {
@@ -323,11 +330,9 @@ namespace DockWMac::platform
         const auto endPadding = ScaleForWindow(hwnd, DockEndPadding);
         const auto itemExtent = ScaleForWindow(hwnd, DockItemExtent);
         const auto itemGap = ScaleForWindow(hwnd, DockItemGap);
-        const auto cellHeight = ScaleForWindow(hwnd, DockCellHeight);
-        const auto rowBottom = ScaleForWindow(hwnd, DockRowBottomMargin);
         const auto maxIcon = ScaleForWindow(hwnd, static_cast<int32_t>(std::ceil(DockIconSize * DockMaxMagnification)));
-        const auto maxLift = ScaleForWindow(hwnd, static_cast<int32_t>(std::ceil(DockHoverLift + DockActiveLift)));
         const auto pad = ScaleForWindow(hwnd, RegionPad);
+        const auto indicatorPad = ScaleForWindow(hwnd, 24);
 
         RegionHandle region{ CreateRectRgn(0, 0, 0, 0) };
         if (!region.value)
@@ -358,17 +363,18 @@ namespace DockWMac::platform
             right = (std::min)(width, left + shelfThickness);
         }
 
-        AddRoundRect(region.value, left, top, right, bottom, shelfRadius * 2);
+        if (layer == DockLayerKind::Combined || layer == DockLayerKind::Shelf)
+        {
+            AddRoundRect(region.value, left, top, right, bottom, shelfRadius * 2);
+        }
 
-        if (visibleItemCount > 0)
+        if (visibleItemCount > 0 && (layer == DockLayerKind::Combined || layer == DockLayerKind::Icons))
         {
             if (placement == DockPlacement::Bottom)
             {
                 const auto railLeft = (std::max)(0, (width - railLength) / 2);
-                const auto cellTop = height - rowBottom - cellHeight;
-                const auto glyphBottom = cellTop + cellHeight - ScaleForWindow(hwnd, DockGlyphBottomInset);
-                const auto iconTop = glyphBottom - maxIcon - maxLift - pad;
-                const auto iconBottom = glyphBottom + pad;
+                const auto iconTop = top - maxIcon - pad;
+                const auto iconBottom = (std::min)(height, top + indicatorPad + pad);
 
                 for (size_t index = 0; index < visibleItemCount; ++index)
                 {
@@ -386,18 +392,13 @@ namespace DockWMac::platform
             else
             {
                 const auto railTop = (std::max)(0, (height - railLength) / 2);
-                const auto cellLeft = placement == DockPlacement::Left
-                    ? width - rowBottom - cellHeight
-                    : rowBottom;
-                const auto glyphEdge = placement == DockPlacement::Left
-                    ? cellLeft + cellHeight - ScaleForWindow(hwnd, DockGlyphBottomInset)
-                    : cellLeft + ScaleForWindow(hwnd, DockGlyphBottomInset);
+                const auto tangentEdge = placement == DockPlacement::Left ? left : right;
                 const auto iconLeft = placement == DockPlacement::Left
-                    ? glyphEdge - maxIcon - maxLift - pad
-                    : glyphEdge - pad;
+                    ? tangentEdge - maxIcon - pad
+                    : tangentEdge - indicatorPad - pad;
                 const auto iconRight = placement == DockPlacement::Left
-                    ? glyphEdge + pad
-                    : glyphEdge + maxIcon + maxLift + pad;
+                    ? tangentEdge + indicatorPad + pad
+                    : tangentEdge + maxIcon + pad;
 
                 for (size_t index = 0; index < visibleItemCount; ++index)
                 {

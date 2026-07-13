@@ -11,6 +11,7 @@ namespace DockWMac::shell
     bool LaunchPinnedApp(PinnedApp const& app);
     bool ActivateWindow(HWND hwnd);
     bool MinimizeWindow(HWND hwnd);
+    bool RequestCloseWindow(HWND hwnd);
     std::wstring CacheIconForPath(
         std::wstring const& sourcePath,
         std::filesystem::path const& cacheDir,

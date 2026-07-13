@@ -3,9 +3,9 @@
 Status: provisional v1.0.0 Dock UI baseline, confirmed by user on 2026-07-01.
 
 This document captures the visual and interaction baseline for the
-`v1.0.0 Taskbar Dock Release`. It is a design/behavior reference for the WinUI
-implementation, not a request to add Electron, Qt, WPF, Avalonia, or WebView to
-the product.
+`v1.0.0 Taskbar Dock Release`. It is a design/behavior reference for the native
+Dock compositor implementation, not a request to add Electron, Qt, WPF,
+Avalonia, WebView, or XAML-based Dock chrome to the product.
 
 ## Preview Artifact
 
@@ -22,8 +22,9 @@ Open:
 http://127.0.0.1:8765/index.html
 ```
 
-The prototype is a temporary visual communication artifact. The production app
-remains C++20, C++/WinRT, WinUI 3, and Windows App SDK.
+The prototype is a temporary visual communication artifact. The production Dock
+surface uses a native Win32 host with DirectComposition and Direct2D/DirectWrite.
+WinUI 3 is reserved for secondary app surfaces.
 
 ## Chosen Direction
 
@@ -41,6 +42,10 @@ Use the Fluent / Acrylic direction as the v1.0.0 baseline.
 - Use a Fluent-style translucent Acrylic shelf.
 - The background rail is half-height relative to the icons, like a low shelf
   behind the icon row.
+- Render the shelf and the animated icon row as separate compositor layers in a
+  single native Dock host. The shelf layer owns only the low rounded rail; the
+  icon layer owns hover magnification, indicators, pointer input, and drag
+  sorting.
 - Keep the shelf subtle. It should support the icons, not look like a full
   rounded toolbar.
 - The icon backgrounds should be as transparent as possible. Avoid visible
@@ -79,8 +84,18 @@ height, so focus is visible without looking like hover is stuck.
 - Hover magnification is localized to nearby icons.
 - The curve should be smooth and predictable; the current prototype uses a
   cosine-like falloff.
+- Bottom placement: each icon rises and scales along its vertical centerline.
+  The fixed reference point is where that centerline meets the top edge of the
+  Dock shelf. At the highest hover pose, the icon's outer circle is tangent to
+  that shelf edge.
+- Left and right placement use the same rule rotated to the side: icons move
+  along the normal from the shelf edge, and the maximum pose is tangent to that
+  edge.
 - Non-hovered distant icons should not shift unpredictably.
-- Reduced-motion mode keeps the same states but removes most transition time.
+- Enter and exit are monotonic exponential eases with no overshoot. A frame
+  timer runs only until the terminal amount is reached and is then destroyed;
+  no animation timer remains active while the Dock is idle.
+- Reduced-motion mode keeps the same states and reaches them immediately.
 
 ## Drag Sorting
 
@@ -101,6 +116,8 @@ height, so focus is visible without looking like hover is stuck.
 - Multiple windows open a thumbnail group/chooser equivalent to Windows taskbar
   behavior.
 - Use DWM thumbnails in production through `shell/`.
+- Minimized windows remain eligible for Windows taskbar-style thumbnails.
+  Hover preview must not restore or activate the source window.
 - Do not show a custom "unavailable window" warning in the normal preview UI.
   Follow Windows default thumbnail behavior instead.
 - If a thumbnail cannot be obtained, degrade in the least surprising
@@ -118,9 +135,13 @@ For this baseline, do not add:
 
 ## Implementation Notes
 
-- The WinUI implementation should recreate the behavior and visual result, not
-  copy browser prototype code directly.
-- UI code must not call Win32, COM, DWM, Shell APIs, or GSMTC directly. Use the
-  documented v2 layer boundaries.
+- The native compositor implementation should recreate the behavior and visual
+  result, not copy browser prototype code directly.
+- UI view-model code must not call Win32, COM, DirectComposition, Direct2D,
+  DWM, Shell APIs, or GSMTC directly. Use the documented v2 layer boundaries
+  and render/platform adapters.
 - Keep all motion constants centralized enough to support reduced motion and
   later tuning, but do not build a speculative animation framework.
+- Keep hover interpolation as a pure bounded function and keep frame scheduling
+  inside the native render host so geometry can be unit-tested independently
+  from Win32 timer delivery.

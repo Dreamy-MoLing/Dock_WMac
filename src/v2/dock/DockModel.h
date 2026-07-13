@@ -35,6 +35,7 @@ namespace DockWMac::dock
     struct DockState
     {
         std::vector<std::wstring> order;
+        std::vector<shell::PinnedApp> importedTaskbarPins;
         std::vector<shell::PinnedApp> localPins;
         std::vector<std::wstring> hiddenSystemPins;
     };
@@ -43,11 +44,19 @@ namespace DockWMac::dock
     {
         None,
         Launch,
+        LaunchNewInstance,
         ActivateWindow,
         MinimizeWindow,
+        CloseWindow,
+        CloseAllWindows,
         ShowWindowChooser,
         PinToDock,
         UnpinFromDock,
+        ToggleAutoHide,
+        PlaceBottom,
+        PlaceLeft,
+        PlaceRight,
+        ExitDock,
     };
 
     struct DockAction
@@ -57,10 +66,16 @@ namespace DockWMac::dock
         HWND hwnd{};
     };
 
+    bool ApplyImportedTaskbarPins(
+        DockState& state,
+        std::vector<shell::PinnedApp> importedPins);
+
     std::vector<DockItem> BuildDockItems(
         std::vector<shell::PinnedApp> const& pinnedApps,
         std::vector<shell::WindowInfo> const& windows,
         DockState const& state);
 
     DockAction DecideClickAction(DockItem const& item);
+
+    bool MoveDockItem(std::vector<DockItem>& items, size_t fromIndex, size_t toIndex);
 }

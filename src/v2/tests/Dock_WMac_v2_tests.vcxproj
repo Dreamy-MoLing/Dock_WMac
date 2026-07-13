@@ -80,9 +80,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="..\app\DockSettingsActions.h" />
     <ClInclude Include="..\dock\AppIdentityResolver.h" />
     <ClInclude Include="..\dock\DockModel.h" />
+    <ClInclude Include="..\platform\DockPlacement.h" />
     <ClInclude Include="..\shell\ShellTypes.h" />
+    <ClInclude Include="..\ui\DockIconLayout.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DockModelTests.cpp" />

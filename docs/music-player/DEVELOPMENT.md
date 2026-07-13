@@ -26,7 +26,8 @@ GSMTC through the `media/` layer, not a standalone player.
 ```text
 media/   GSMTC discovery, session selection, playback snapshot, commands
 lyrics/  LRC parsing, txt fallback, local matching, cache
-ui/      WinUI media panel and lyric visual rendering
+ui/      media and lyric view models plus render descriptions
+render/  Dock-attached media panel and lyric visuals in the native compositor
 infra/   paths, logging, config, error handling
 ```
 
@@ -48,8 +49,8 @@ not reduce player controls.
 
 ## Visual Direction
 
-- Panel: compact, polished WinUI surface that expands sideways from the Dock
-  and remains visually connected to the Dock bar.
+- Panel: compact, polished native compositor surface that expands sideways from
+  the Dock and remains visually connected to the Dock bar.
 - Lyrics: upward fading flame/fog-like layer.
 - Audio visuals: smooth waves or energy flow, not a basic bar meter.
 - Color may be seeded from artwork.

@@ -182,6 +182,7 @@ namespace DockWMac::infra
             root.SetNamedValue(L"generatedAt", StringValue(TimestampIsoLike()));
             root.SetNamedValue(L"dockStatePath", StringValue(paths.dockStateFile));
             root.SetNamedValue(L"systemTaskbarPinnedItems", PinnedAppArray(systemPinned));
+            root.SetNamedValue(L"importedTaskbarPins", PinnedAppArray(dockState.importedTaskbarPins));
             root.SetNamedValue(L"localPins", PinnedAppArray(dockState.localPins));
             root.SetNamedValue(L"hiddenSystemPins", StringArray(dockState.hiddenSystemPins));
             root.SetNamedValue(L"enumeratedWindows", WindowArray(diagnosticWindows));

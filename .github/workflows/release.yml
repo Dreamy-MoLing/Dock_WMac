@@ -54,17 +54,47 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          function Invoke-CheckedProcess {
+            param(
+              [string] $Path,
+              [string[]] $Arguments
+            )
+
+            $startParams = @{
+              FilePath = $Path
+              Wait = $true
+              PassThru = $true
+              WindowStyle = 'Hidden'
+            }
+            if ($Arguments.Count -gt 0) {
+              $startParams.ArgumentList = $Arguments
+            }
+
+            $process = Start-Process @startParams
+            if ($process.ExitCode -ne 0) {
+              throw "$Path $($Arguments -join ' ') exited $($process.ExitCode)"
+            }
+          }
+
           $tests = Join-Path $PWD "build\v2\$env:PLATFORM\$env:CONFIGURATION\Dock_WMac_v2_tests.exe"
           if (-not (Test-Path -LiteralPath $tests)) {
             throw "Built test executable not found: $tests"
           }
-          & $tests
+          Invoke-CheckedProcess -Path $tests -Arguments @()
 
           $exe = Join-Path $PWD "build\v2\$env:PLATFORM\$env:CONFIGURATION\Dock_WMac_v2.exe"
           if (-not (Test-Path -LiteralPath $exe)) {
             throw "Built executable not found: $exe"
           }
-          & $exe --self-check
+          Invoke-CheckedProcess -Path $exe -Arguments @("--self-check")
+
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { $shortSha }
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Package app folder
         shell: pwsh
@@ -74,20 +104,18 @@ jobs:
             -Configuration $env:CONFIGURATION `
             -Platform $env:PLATFORM `
             -PlatformToolset $env:PLATFORM_TOOLSET `
-            -MSBuildPath $env:MSBUILD_PATH
+            -MSBuildPath $env:MSBUILD_PATH `
+            -Version $env:RELEASE_VERSION
 
-      - name: Compress release artifact
+      - name: Record release artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $shortSha = "${{ github.sha }}".Substring(0, 7)
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { $shortSha }
-          $zipName = "Dock_WMac-$version-windows-x64.zip"
+          $zipName = "Dock_WMac-$env:RELEASE_VERSION-windows-x64.zip"
           $zipPath = Join-Path (Join-Path $PWD "artifacts\release") $zipName
-          if (Test-Path -LiteralPath $zipPath) {
-            Remove-Item -LiteralPath $zipPath -Force
+          if (-not (Test-Path -LiteralPath $zipPath)) {
+            throw "Release zip not found: $zipPath"
           }
-          Compress-Archive -Path "artifacts\release\Dock_WMac\*" -DestinationPath $zipPath -Force
           "RELEASE_ZIP=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

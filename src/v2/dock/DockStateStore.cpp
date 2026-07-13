@@ -23,6 +23,20 @@ namespace DockWMac::dock
             return winrt::to_string(value);
         }
 
+        std::filesystem::path TempPathFor(std::filesystem::path const& path)
+        {
+            auto temp = path;
+            temp += L".tmp";
+            return temp;
+        }
+
+        std::filesystem::path BackupPathFor(std::filesystem::path const& path)
+        {
+            auto backup = path;
+            backup += L".bak";
+            return backup;
+        }
+
         winrt::hstring HString(std::wstring const& value)
         {
             return winrt::hstring{ value };
@@ -111,40 +125,96 @@ namespace DockWMac::dock
             }
             return array;
         }
+
+        winrt::Windows::Data::Json::JsonObject DockStateJson(DockState const& state)
+        {
+            winrt::Windows::Data::Json::JsonObject json;
+            json.SetNamedValue(L"order", ToJsonArray(state.order));
+            json.SetNamedValue(L"importedTaskbarPins", ToJsonArray(state.importedTaskbarPins));
+            json.SetNamedValue(L"localPins", ToJsonArray(state.localPins));
+            json.SetNamedValue(L"hiddenSystemPins", ToJsonArray(state.hiddenSystemPins));
+            return json;
+        }
+
+        std::optional<DockState> TryLoadDockState(std::filesystem::path const& path)
+        {
+            if (!std::filesystem::exists(path))
+            {
+                return std::nullopt;
+            }
+
+            try
+            {
+                auto json = winrt::Windows::Data::Json::JsonObject::Parse(winrt::to_hstring(ReadFile(path)));
+                DockState state;
+                state.order = StringArray(json, L"order");
+                state.importedTaskbarPins = PinnedArray(json, L"importedTaskbarPins");
+                state.localPins = PinnedArray(json, L"localPins");
+                state.hiddenSystemPins = StringArray(json, L"hiddenSystemPins");
+                return state;
+            }
+            catch (...)
+            {
+                return std::nullopt;
+            }
+        }
+
+        void ReplaceFileWithTemp(std::filesystem::path const& tempPath, std::filesystem::path const& targetPath)
+        {
+            if (MoveFileExW(
+                tempPath.c_str(),
+                targetPath.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                return;
+            }
+
+            std::error_code error;
+            std::filesystem::rename(tempPath, targetPath, error);
+            if (error)
+            {
+                std::filesystem::remove(tempPath, error);
+            }
+        }
     }
 
     DockState LoadDockState(std::filesystem::path const& path)
     {
-        DockState state;
-        if (!std::filesystem::exists(path))
+        if (auto state = TryLoadDockState(path))
         {
-            return state;
+            return *state;
         }
-
-        try
+        if (auto backup = TryLoadDockState(BackupPathFor(path)))
         {
-            auto json = winrt::Windows::Data::Json::JsonObject::Parse(winrt::to_hstring(ReadFile(path)));
-            state.order = StringArray(json, L"order");
-            state.localPins = PinnedArray(json, L"localPins");
-            state.hiddenSystemPins = StringArray(json, L"hiddenSystemPins");
+            return *backup;
         }
-        catch (...)
-        {
-            return {};
-        }
-        return state;
+        return {};
     }
 
     void SaveDockState(std::filesystem::path const& path, DockState const& state)
     {
         std::filesystem::create_directories(path.parent_path());
 
-        winrt::Windows::Data::Json::JsonObject json;
-        json.SetNamedValue(L"order", ToJsonArray(state.order));
-        json.SetNamedValue(L"localPins", ToJsonArray(state.localPins));
-        json.SetNamedValue(L"hiddenSystemPins", ToJsonArray(state.hiddenSystemPins));
+        auto const tempPath = TempPathFor(path);
+        auto const backupPath = BackupPathFor(path);
+        auto const json = DockStateJson(state);
 
-        std::ofstream output{ path, std::ios::binary | std::ios::trunc };
+        std::ofstream output{ tempPath, std::ios::binary | std::ios::trunc };
         output << ToUtf8(std::wstring{ json.Stringify() });
+        output.close();
+        if (!output)
+        {
+            std::error_code cleanupError;
+            std::filesystem::remove(tempPath, cleanupError);
+            return;
+        }
+
+        std::error_code error;
+        if (std::filesystem::exists(path, error))
+        {
+            std::filesystem::copy_file(path, backupPath, std::filesystem::copy_options::overwrite_existing, error);
+        }
+
+        ReplaceFileWithTemp(tempPath, path);
     }
 }

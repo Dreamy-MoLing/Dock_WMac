@@ -1,7 +1,0 @@
-<Window
-    x:Class="DockWMac.DockWindow"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="DockWindow">
-    <Grid Background="Transparent" />
-</Window>

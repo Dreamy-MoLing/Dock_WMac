@@ -7,8 +7,9 @@ the next phase starts.
 
 - Refresh v2 documents.
 - Define architecture boundaries.
-- Add Visual Studio 2022 WinUI 3 scaffold.
-- Start only an empty semi-transparent `DockWindow`.
+- Add Visual Studio 2022 C++20/C++/WinRT project scaffolding.
+- Establish the production Dock surface direction: native Win32 non-activating
+  popup host with DirectComposition and Direct2D/DirectWrite rendering.
 - Remove the old Qt implementation from active repository context.
 
 ## Phase 1 - v1.0.0 Taskbar Dock Release
@@ -22,9 +23,11 @@ the next phase starts.
   recovery.
 - Dock model: pinned/running merge, durable Dock pin state, ordering
   persistence, running indicators, and Windows-default click decisions.
-- Dock UI: polished Dock-style surface, hover magnification, drag sorting,
+- Dock UI: native compositor Dock surface, hover magnification, drag sorting,
   predictable auto-hide, multi-window preview/chooser, and graceful fallback
   states.
+- Resource profile: low idle memory and CPU, stable handle/thread counts,
+  bounded caches, and no persistent helper process for core taskbar behavior.
 - Release: unpackaged Win32 + Windows App SDK bootstrapper packaging and clean
   Windows 10/11 validation.
 

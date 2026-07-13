@@ -79,6 +79,7 @@ graphify-out/
 *.sh
 *.bat
 *.cmd
+!scripts/validate-v1-resource-stability.ps1
 
 # ===== 图片与二进制资源 =====
 *.png
